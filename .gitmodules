@@ -1,0 +1,3 @@
+[submodule "eskv-pong"]
+	path = eskv-pong
+	url = https://github.com/spillz/eskv-pong
