@@ -2044,7 +2044,7 @@ function damagePlayer(state, numHitPoints) {
     if (hitPointsPrev > 0) {
         state.player.damageDisplayTimer = damageDisplayDuration;
         if(lastController!=null) {
-            lastController.vibrate(0.5, 0.5, damageDisplayDuration*1000);
+            lastController.vibrate(0.5, 0.5, 250);
         }
     }
 
