@@ -455,6 +455,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                 children: [
                     new eskv.Label({
                         text:'Fill alpha',
+                        fontSize: '0.02ah',
                     }),
                     new eskv.Slider({
                         id: 'scFillAlpha',
@@ -473,6 +474,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                 children: [
                     new eskv.Label({
                         text:'Stroke alpha',
+                        fontSize: '0.02ah',
                     }),
                     new eskv.Slider({
                         id: 'scStrokeAlpha',
@@ -489,6 +491,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                 children: [
                     new eskv.Label({
                         text:'Stroke thickness',
+                        fontSize: '0.02ah',
                     }),
                     new eskv.Slider({
                         id: 'scStrokeWidth',
@@ -507,6 +510,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                 children: [
                     new eskv.Label({
                         text:'Closed',
+                        fontSize: '0.02ah',
                     }),
                     new eskv.CheckBox({
                         id: 'scClosed',
@@ -527,6 +531,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                         id: 'scEdit',
                         text: 'Edit',
                         group: 'scGroupMode',
+                        fontSize: '0.02ah',
                         disable: (ShapeConfig)=>{
                             return ShapeConfig.shape===null
                         },
@@ -541,6 +546,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                         id: 'scMove',
                         text: 'Move',
                         group: 'scGroupMode',
+                        fontSize: '0.02ah',
                         disable: (ShapeConfig)=>{
                             return ShapeConfig.shape===null
                         },
@@ -559,6 +565,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                     new eskv.Button({
                         id: 'scStackUp',
                         text: 'Up',
+                        fontSize: '0.02ah',
                         disable: (ShapeConfig)=>{
                             return ShapeConfig.shape===null
                         },
@@ -579,6 +586,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                     new eskv.Button({
                         id: 'scStackDown',
                         text: 'Down',
+                        fontSize: '0.02ah',
                         disable: (ShapeConfig)=>{
                             return ShapeConfig.shape===null
                         },
@@ -598,6 +606,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                     new eskv.Button({
                         id: 'scTrash',
                         text: 'Trash',
+                        fontSize: '0.02ah',
                         disable: (ShapeConfig)=>{
                             return ShapeConfig.shape===null
                         },
@@ -649,23 +658,28 @@ class QCommand extends eskv.GridLayout {
             }),
             new eskv.Button({
                 text:'Rect',
+                disable: true,
             }),
             new eskv.Button({
                 text:'Arc',
+                disable: true,
             }),
             new eskv.Button({
                 text:'Circle',
+                disable: true,
             }),
             new eskv.Label({
                 text:'Mode'
             }),
             new eskv.Button({
                 text:'Select',
-                group: 'mode'
+                group: 'mode',
+                disable: true,
             }),
             new eskv.Button({
                 text:'Edit',
-                group: 'mode'
+                group: 'mode',
+                disable: true,
             }),
             new eskv.Widget(),
             new eskv.Widget(),
@@ -674,15 +688,19 @@ class QCommand extends eskv.GridLayout {
             }),
             new eskv.Button({
                 text:'New',
+                disable: true,
             }),
             new eskv.Button({
                 text:'Load',
+                disable: true,
             }),
             new eskv.Button({
                 text:'Save',
+                disable: true,
             }),
             new eskv.Button({
                 text:'Export',
+                disable: true,
             }),
         ]
     }
