@@ -359,40 +359,52 @@ class QPointRef {
     }
 }
 
+/**
+ * `QShape` is the base class for all drawing shapes in QuikDraw. QShape inherits from `Array` and 
+ * `Widget`, and the positional data (x,y,w,h) for the `Widget`, represening the bounded rect of the 
+ * shape is stored in the first 4 elements of the array. A QShape then packs 2D-vector data into 
+ * element 4 onwards of the Array representing a sequence of nodes. A node itself is a subsequence of 
+ * multiple `QPoint` where each point has (x, y, type) attributes. The first point in each node
+ * is interpreted as the main point of the node and the remaining points are child control points (e.g.,
+ * the control points of a Bezier curve). All of the node data is packed 
+ * into the flat 1D array in this way in an attempt to extract the best performance out of the JIT 
+ * compiler in modern browsers. The `QShape` class provides helper methods to be able to add, read, 
+ * and write data to individual nodes and points. Additionally is has fill color, stroke colors, and 
+ * stroke width properties that implementing shapes should apply in their overridden `draw` method. 
+ */
 class QShape extends eskv.Widget {
+    /** QuikDraw assigned identified of the shape */
     id = 'Shape';
-    focus = false;
-    /** @type {string|null} */
+    /** @type {string|null} Stroke color of the shape*/
     lineColor = 'yellow';
-    /** @type {string|null} */
+    /** @type {string|null} Fill color of the shape*/
     fillColor = 'gray';
-    /** @type {number} */
+    /** @type {number} Line width of the shape*/
     lineWidth = 0.1;
-    /** @type {'Edit'|'Move'} */
-    mode = 'Edit';
-    /** @type {Array<'line'|'break'>} */
-    nodeTypes = [];
+    /** @type {number} Number of points per node*/
     _ptsPerNode = 1;
     get nodeLength() {
         return (this.length-nodeOffset)/(pointVecSize*this._ptsPerNode);
     }
     /**
-     * 
+     * Returns the points in the node that are relevant to the type of the node's 
+     * type (defined in the `type` of the first `QPoint` of the node). Shapes should
+     * override the default behavior.
      * @param {number} nodeNum 
      * @returns {QPointRef[]}
      */
     getExtraControlPoints(nodeNum) {
-        let pt = this.getNode(nodeNum);
-        switch(pt[0].type) {
+        let n = this.getNode(nodeNum);
+        switch(n[0].type) {
             case ptTypeQuadratic:
-                return pt.slice(1,2);
+                return n.slice(1,2);
             case ptTypeBezier:
-                return pt.slice(1);
+                return n.slice(1);
         }
         return [];
     }
     /**
-     * 
+     * Rolls to the next valid type for the Node (as contained in the first `QPoint` of the node)
      * @param {number} nodeNum 
      */
     nextType(nodeNum) {
@@ -403,31 +415,23 @@ class QShape extends eskv.Widget {
         else if(pt.type===ptTypeBezier) pt.type=ptTypeLine;
     }
     /**
-     * 
-     * @param {number} startInd 
+     * Iterator that yields an array of `QPointRef`s for each node in the QShape's node sequence. 
+     * @param {number} startNode node to start from
+     * @yields {QPointRef[]} 
      */
-    *iterNodes(startInd=0) {
-        for(let i=startInd;i<this.nodeLength;i++) {
+    *iterNodes(startNode=0) {
+        for(let i=startNode;i<this.nodeLength;i++) {
             yield this.getNode(i);
         }
     }
+    /**
+     * Remove all nodes from the `QShape`.
+     */
     clearNodes() {
         this.length = nodeOffset;
     }
     /**
-     * 
-     * @param {number} nodeNum
-     */
-    deleteNode(nodeNum) {
-        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
-        let delta = this._ptsPerNode*pointVecSize;
-        for(let i=offset;i<this.length-delta;++i) {
-            this[i] = this[i+delta];
-        }
-        this.length -= delta;
-    }
-    /**
-     * 
+     * Returns a reference to a specified point in a specified node. 
      * @param {number} nodeNum 
      * @param {number} ptNum 
      * @returns {QPointRef}
@@ -437,7 +441,7 @@ class QShape extends eskv.Widget {
         return new QPointRef(this, offset)
     }
     /**
-     * 
+     * Returns an array of references to the points in a specified node.
      * @param {number} nodeNum 
      * @returns {QPointRef[]}
      */
@@ -448,7 +452,7 @@ class QShape extends eskv.Widget {
         return result;
     }
     /**
-     * 
+     * Overwrites the points in a specified node. This will throw an error if the array of points is too show.
      * @param {number} nodeNum 
      * @param {QPoint[]|QPointRef[]} points 
      * @returns 
@@ -463,13 +467,27 @@ class QShape extends eskv.Widget {
         }
     }
     /**
-     * 
-     * @param {QPoint[]|QPointRef[]} points 
+     * Delete a node from the shape
+     * @param {number} nodeNum position to remove node at
+     */
+    deleteNode(nodeNum) {
+        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
+        let delta = this._ptsPerNode*pointVecSize;
+        for(let i=offset;i<this.length-delta;++i) {
+            this[i] = this[i+delta];
+        }
+        this.length -= delta;
+    }
+    /**
+     * Appends a node to the shape. Note this will error if `points` is too short 
+     * for the expected number of points per node.
+     * @param {QPoint[]|QPointRef[]} points array of points defining the node
      * @returns 
      */
     appendNode(points) {
-        let offset = nodeOffset+this.nodeLength*this._ptsPerNode*pointVecSize;
-        this.length += this._ptsPerNode*pointVecSize;
+        const delta = this._ptsPerNode*pointVecSize;
+        let offset = nodeOffset+this.nodeLength*delta;
+        this.length += delta;
         for(let i=0;i<this._ptsPerNode;++i) {
             const p = points[i];
             this[offset] = p.x;
@@ -479,16 +497,18 @@ class QShape extends eskv.Widget {
         }
     }
     /**
-     * 
+     * Inserts a node into the shape at position `nodeNum`. Note this will error if `points` is too short 
+     * for the expected number of points per node.
      * @param {number} nodeNum 
      * @param {QPoint[]|QPointRef[]} points 
      * @returns 
      */
     insertNode(nodeNum, points) {
-        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
-        this.length += this._ptsPerNode*pointVecSize;
-        for(let i = this.length-1-this._ptsPerNode-pointVecSize; i>=offset; i--) {
-            this[i+this._ptsPerNode+pointVecSize] = this[i];
+        const delta = this._ptsPerNode*pointVecSize;
+        let offset = nodeOffset+nodeNum*delta;
+        this.length += delta;
+        for(let i = this.length-1-delta; i>=offset; i--) {
+            this[i+delta] = this[i];
         }
         for(let i=0;i<this._ptsPerNode;++i) {
             const p = points[i];
@@ -599,31 +619,26 @@ class QShapeStack extends eskv.BoxLayout {
                         if(w.id!==object.id && w.press) w.press=false;    
                     }
                     let sc = app.shapeConfig;
-                    if(sc.shape) sc.shape.focus = false;
                     let w = app.drawing.findById(object.shape.id);
                     if(w instanceof QShape) {
                         sc.shape = w;
-                        w.focus = true;
                         app.controlSurface.shape = w;
                     }
                 }
             }
         }));
         let sc = /**@type {QDraw} */(QDraw.get()).shapeConfig;
-        if(sc.shape) sc.shape.focus = false;
         sc.shape = data;
-        data.focus = true;
         return false;
     }
     /**@type {import("../eskv/lib/modules/widgets.js").EventCallback} */
     onShapeRemoved(event, object, data) {
         if(!(data instanceof QShape)) return false;
         let sh = this.children.find((w)=>{if('shape' in w) return w.shape===data})
-        let sc = /**@type {QDraw} */(QDraw.get()).shapeConfig;
+        let sc = QDraw.get().shapeConfig;
         if(sc.shape===data) {
-            sc.shape.focus = false;
             sc.shape = null; 
-            app.controlSurface.shape = null;
+            QDraw.get().controlSurface.shape = null;
         }
         if(sh) this.removeChild(sh);
         return false;
