@@ -6,6 +6,16 @@ let Vec2 = eskv.Vec2;
 let Rect = eskv.Rect;
 let Color = eskv.color.Color
 
+const nodeOffset = 4; //offset from the end of the widget position array (widget base class is Array)
+const pointVecSize = 3; //x,y,type
+const ptTypeLine = 0;
+const ptTypeBreak = 1;
+const ptTypeQuadratic = 2;
+const ptTypeBezier = 3;
+const ptTypeControl = 4;
+const ptTypeGradient = 5;
+/**@typedef {ptTypeLine|ptTypeBreak|ptTypeQuadratic|ptTypeBezier|ptTypeControl|ptTypeGradient} ptType*/
+
 
 /**
  * Modes:
@@ -31,282 +41,85 @@ let Color = eskv.color.Color
 Modes: draw (add new nodes), edit (change or edit existing nodes), move (entire shape)
 */
 
-class QControlPoint extends eskv.Widget {
-    hints = {};
-    /**@type {'line'|'break'|'quadratic'|'bezier'|'control'} */
-    type = 'line';
-    /**@type {boolean} */
-    movable = true;
-    /**@type {boolean} */
-    _moving = false;
-    _changedFocus = false;
-    /**@type {string} */
-    color = 'rgba(255,255,255,0.5)';
-    /**@type {string} */
-    colorC = 'rgba(255,255,100,0.5)';
-    /**@tpye {string} */
-    colorA = 'rgba(255,255,255,0.9)';
-    /**@type {QGeometricNode?} */
-    node;
-    /**@type {number} */
-    index = 0;
-    /**
-     * @param {Object|null} props 
-     */
-    constructor(props=null) {
-        super();
-        if(props) {
-            this.updateProperties(props)
-        }
-    }
-    /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
-    on_touch_down(event, object, touch) {
-        if(this.movable && this.collideRadius(touch.rect, this.w/2)) {
-            touch.grab(this);
-            if(this.parent instanceof QGeometric) {
-                let ind = this.parent.nodes.findIndex((n)=>n===this.node);
-                if(ind !== this.parent.focalInd) {
-                    this.parent.focalInd = ind;
-                    this._changedFocus = true;
-                } else {
-                    this._changedFocus = false;
-                }
-            } 
-            return true
-        }
-        return false;
-    }
-    /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
-    on_touch_move(event, object, touch) {
-        if(!this.parent) return false;
-        if(touch.grabbed===this) {
-            if(this.movable) {
-                this._moving = true;
-                if(this.parent.collide(touch.rect)) {
-                    this.center_x = touch.rect.center_x;
-                    this.center_y = touch.rect.center_y;
-                    let pt = this.node?.points[this.index];
-                    if(pt) {
-                        pt.x = this.center_x;
-                        pt.y = this.center_y;        
-                    }
-                } else {
-                    if(this.node && this.index===0) this.node.destroy();
-                    touch.ungrab();
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-    /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
-    on_touch_up(event, object, touch) {
-        if(touch.grabbed===this) {
-            touch.ungrab();
-            if(!this._moving && this.index===0 && !this._changedFocus &&
-                this.parent instanceof QGeometric && this.parent.focalInd>=0 &&
-                this.parent.nodes[this.parent.focalInd]===this.node) {
-                this.node.nextType();
-            }
-            this._moving = false;
-            this._changedFocus = false;
-            return true;
-        }
-        return false;
-    }
-    draw() {
-        let ctx = eskv.App.get().ctx;
-        if(!ctx) return;
-        if(!this.node) return;
-        let hasFocus = this.parent instanceof QGeometric && this.parent.focalInd>=0 && this.parent.nodes[this.parent.focalInd]===this.node;
-        if(!hasFocus && this.index>0) return;
-        ctx.beginPath();
-        ctx.fillStyle = (hasFocus && this.index===0)? this.colorA : this.color;
-        if(this.type==='line') {
-            ctx.moveTo(this.x, this.bottom);
-            ctx.lineTo(this.right, this.bottom);
-            ctx.lineTo(this.center_x, this.y);
-            ctx.lineTo(this.x, this.bottom);
-        } else if (this.type==='break') {
-            ctx.rect(this.x, this.y, this.w, this.h);
-        } else if (this.type==='quadratic') {
-            ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
-        } else if (this.type==='bezier') {
-            ctx.strokeStyle = this.colorC;
-            ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
-            ctx.stroke();
-        } else if (this.type==='control') {
-            ctx.fillStyle = this.colorC;
-            ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
-        }
-        ctx.fill();    
-    }
-}
-
-/**@typedef {'line'|'break'|'bezier'|'quadratic'} QNodeType */
-
-/**A geometric shape is an array of nodes that describe how the 
- * parts of the shape join together
+/**
+ * The control surface sit atop of the `QDrawing` object and handles
+ * the interace with the entire drawing or selected shapes with in. This eliminates
+ * the need for state tracking of control nodes inside of individual widgets (saving
+ * both memory and redundant code) and centralizes touch/mouse/keyboard inputs.
+ * The QControlSurface will request the needed control points
+ * from the `QDrawing` or selected `QShape`, and the displayed control points will be 
+ * mode dependant (editing, moving etc.)
  */
-class QGeometricNode {
-    /**
-     * 
-     * @param {QGeometric} shape Shape this node belongs to
-     * @param {eskv.Vec2} point the point location of this node 
-     * @param {boolean} active type of node to add
-     * @param {QNodeType} type type of node to add
-     */
-    constructor(shape, point, active=true, type='line') {
-        /** @type {QGeometric?} */
-        this.shape = shape;
-        /** @type {eskv.Vec2[]} */
-        this.points = [point, new Vec2(point), new Vec2(point)];
-        /** @type {QControlPoint[]} */
-        this.controls = [];
-        /** @type {QNodeType} */
-        this._type = type;
-        /** @type  {boolean} */
-        this._active = active;
-
-        this.active = this._active;
-        this.type = this._type;
-    }
-    /**
-     * Remove excess controls 
-     */
-    _removeControls() {
-        while(this.controls.length>0) {
-            let c = this.controls.pop();
-            if(c && c.parent) c.parent.removeChild(c);
-        }
-    }
-    /**
-     * Add controls 
-     * @param {number} n number of controls needed
-     */
-    _addControls(n) {
-        let i = 0;
-        while(this.controls.length<n) {
-            let type = i===0?this.type:'control';
-            let c = new QControlPoint({
-                    type: type, 
-                    node: this, index: i,
-                    w: 0.5, h:0.5,
-                    center_x: this.points[i].x, center_y: this.points[i].y,
-                });
-            this.controls.push(c);
-            if(this.shape) this.shape.addChild(c);
-            i++;
-        }
-    }
-    destroy() {
-        if(this.shape) {
-            this._removeControls();
-            this.shape.nodes = this.shape.nodes.filter((c)=>c!==this);
-            this.shape.focalInd = this.shape.nodes.length-1;
-        }
-    }
-    nextType() {
-        /**@type {Object.<QNodeType,QNodeType>} */
-        let next={'line':'break', 'break':'quadratic', 'quadratic':'bezier', 'bezier':'line'};
-        this.type = next[this.type];
-    }
-    get active() {return this._active}
-    set active(value) {
-        this._active = value;
-        if(value) this.type = this.type;
-        else this._removeControls();
-    }
-    get type() {return this._type};
-    set type(value) {
-        this._type = value;
-        if(!this.active) return;
-        let map={'line':1, 'break':1, 'quadratic':2, 'bezier':3};
-        this._removeControls()
-        this._addControls(map[value])
-    };
-    /**
-     * Drawing the node
-     * @param {CanvasRenderingContext2D} ctx 
-     */
-    draw(ctx) {
-        let p0 = this.points[0]
-        switch(this.type) {
-            case 'line':
-                ctx.lineTo(p0.x, p0.y);
-                break;
-            case 'break':
-                ctx.moveTo(p0.x, p0.y);
-                break;
-            case 'quadratic':
-                ctx.quadraticCurveTo(this.points[1].x, this.points[1].y, p0.x, p0.y);
-                break;
-            case 'bezier':
-                ctx.bezierCurveTo(this.points[1].x, this.points[1].y, this.points[2].x, this.points[2].y, p0.x, p0.y);
-                break;            
-        }
-    }
-}
-
-class QShape extends eskv.Widget {
-    id = 'Shape';
-    focus = false;
-    /** @type {string|null} */
-    lineColor = 'yellow';
-    /** @type {string|null} */
-    fillColor = 'gray';
-    /** @type {number} */
-    lineWidth = 0.1;
-    /** @type {'Edit'|'Move'} */
+class QControlSurface extends eskv.Widget {
+    /**@type {QShape|null} if shape is null then the drawing is the active object*/
+    shape = null;
+    focalNode = -1;
+    /**@type {'Edit'|'Move'} */
     mode = 'Edit';
-}
-
-class QGeometric extends QShape {
-    focalInd = -1;
-    hints = {x:0, y:0, w:1, h:1};
-    pointRadius = 0.25;
-    /** @type {QGeometricNode[]} Points that can be traced out by the user */
-    nodes = [];
-    /** @type {number} */
-    touchedPt = -1;
-    /** @type {boolean} */
-    modifyPt = false;
-    /** @type {Set<number>} */
-    breaks = new Set();
-    /** @type {boolean} */
-    close = true;
     /** @type {eskv.Vec2} */
-    _oldPos = new Vec2([0,0]);
-    constructor(props) {
-        super();
-        if(props!==null) {
-            this.updateProperties(props);
+    _oldPos = new eskv.Vec2([0,0]);
+    updatePoints(showControl=true) {
+        if(!this.shape) {
+            this.children = [];
+            return;
+        } 
+        let ch = [];
+        let i = 0;
+        for(let n of this.shape.iterNodes()) {
+            ch.push(new QControlPoint({
+                w:1, h:1, x:n[0].x-0.5, y:n[0].y-0.5,
+                nodeNum:i,
+                index:0,
+                type:n[0].type,
+            }));
+            i++;                
         }
-        this.id = 'Geometric'
-    }
-    clear() {
-        this.touchedPt = -1;
-        this.nodes = [];
-        this.breaks = new Set();    
-    }
-    on_focus(event, object, value) {
-        for(let n of this.nodes) {
-            n.active = this.focus;
+        if(this.focalNode>=0 && showControl && this.mode==='Edit') {
+            let j = 1;
+            for(let pt of this.shape.getExtraControlPoints(this.focalNode)) {
+                ch.push(new QControlPoint({
+                    w:1,h:1,x:pt.x-0.5,y:pt.y-0.5,
+                    nodeNum:this.focalNode,
+                    index:j,
+                    type:pt.type,
+                }));
+                j++;
+            }
         }
-        this.focalInd = this.focus?this.nodes.length-1:-1;
+        this.children = ch;
+    }
+    on_mode(event, object, value) {
+        this.focalNode = -1;
+        this.updatePoints();
+    }
+    on_shape(event, object, value) {
+        this.focalNode = -1;
+        if(this.shape===null) {
+            this.children = [];
+        } else {
+            const ch = [];
+            let i = 0;
+            this.updatePoints();
+        }
     }
     /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
     on_touch_down(event, object, touch) {
-        if(!this.focus) return false;
+        if(!this.shape) return false;
         if(super.on_touch_down(event, object, touch)) return true;
         if(this.mode==='Edit' && this.collide(touch.rect)) {
-            let n = new QGeometricNode(this, touch.rect.center, true, 'line');
-            if(this.focalInd>=0) this.nodes = [...this.nodes.slice(0,this.focalInd+1),n,...this.nodes.slice(this.focalInd+1)];
-            else this.nodes.push(n);
-            this.focalInd++;
-            n.controls[0]._moving = true;
-            n.controls[0]._changedFocus = true;
-            touch.grab(n.controls[0]);
+            let p = new QPoint(touch.rect.center_x, touch.rect.center_y, ptTypeLine);
+            let parr = [p,new QPoint(p.x, p.y, ptTypeControl), new QPoint(p.x,p.y,ptTypeControl)]
+            if(this.focalNode>=0) {
+                this.shape.insertNode(this.focalNode+1, parr);
+                this.focalNode++;
+            } else {
+                this.shape.appendNode(parr);
+                this.focalNode = this.shape.nodeLength-1;
+            }
+            this.updatePoints();
+            let c = /**@type {QControlPoint} */(this.children[this.focalNode]);
+            touch.grab(c);
+            c._changedFocus = true;
             return true;
         }
         if(this.mode==='Move' && this.collide(touch.rect)) {
@@ -318,12 +131,12 @@ class QGeometric extends QShape {
     }
     /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
     on_touch_move(event, object, touch) {
-        if(touch.grabbed===this) {
+        if(touch.grabbed===this && this.shape) {
             if(this.mode==='Move') {
                 let delta = touch.rect.pos.sub(this._oldPos);
-                for(let n of this.nodes) {
-                    for(let i=0;i<n.points.length;i++) {
-                        n.points[i] = n.points[i].add(delta);
+                for(let n of this.shape.iterNodes()) {
+                    for(let p of n) {
+                        [p.x, p.y] = p.pos.add(delta);
                     }
                 }
                 for(let c of this.children) {
@@ -343,26 +156,409 @@ class QGeometric extends QShape {
         }
         return false;
     }
+}
 
-    
+/**
+ * Points are interactable widgets that live on the `QControlSurface`
+ * and allow the user to modify the positional state of the drawing 
+ * and its shapes.
+ */
+class QControlPoint extends eskv.Widget {
+    hints = {};
+    /**@type {ptType} */
+    type = ptTypeLine;
+    /**@type {boolean} */
+    movable = true;
+    /**@type {boolean} */
+    _moving = false;
+    _changedFocus = false;
+    /**@type {string} */
+    color = 'rgba(255,255,255,0.5)';
+    /**@type {string} */
+    colorC = 'rgba(255,255,100,0.5)';
+    /**@tpye {string} */
+    colorA = 'rgba(255,255,255,0.9)';
+    /**@type {number} */
+    nodeNum;
+    /**@type {number} */
+    index = 0;
+    /**
+     * @param {Object|null} props 
+     */
+    constructor(props=null) {
+        super();
+        if(props) {
+            this.updateProperties(props)
+        }
+    }
+    /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
+    on_touch_down(event, object, touch) {
+        if(this.movable && this.collideRadius(touch.rect, this.w/2)) {
+            touch.grab(this);
+            if(this.parent instanceof QControlSurface && this.parent.shape) {
+                if(this.nodeNum !== this.parent.focalNode) {
+                    this.parent.focalNode = this.nodeNum;
+                    this._changedFocus = true;
+                } else {
+                    this._changedFocus = false;
+                }
+            } 
+            return true
+        }
+        return false;
+    }
+    /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
+    on_touch_move(event, object, touch) {
+        if(!(this.parent instanceof QControlSurface)) return false;
+        if(touch.grabbed===this) {
+            if(this.movable && this.parent.shape) {
+                this._moving = true;
+                if(this.parent.collide(touch.rect)) {
+                    this.center_x = touch.rect.center_x;
+                    this.center_y = touch.rect.center_y;
+                    let pt = this.parent.shape.getNodePoint(this.nodeNum, this.index);
+                    if(pt) {
+                        pt.x = this.center_x;
+                        pt.y = this.center_y;        
+                    }
+                } else {
+                    if(this.nodeNum>=0 && this.index===0) {
+                        this.parent.shape.deleteNode(this.nodeNum);
+                        this.parent.focalNode = -1;
+                        this.parent.updatePoints();
+                    }
+                    touch.ungrab();
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+    /**@type {(event:string, object:eskv.Widget, touch:eskv.input.Touch)=>boolean} */
+    on_touch_up(event, object, touch) {
+        if(touch.grabbed===this) {
+            let cs = QDraw.get().controlSurface;
+            touch.ungrab();
+            if(!this._moving && this.index===0 && !this._changedFocus &&
+                cs.shape && cs.focalNode>=0 &&
+                cs.focalNode===this.nodeNum) {
+                cs.shape.nextType(this.nodeNum);
+            }
+            this._moving = false;
+            this._changedFocus = false;
+            cs.updatePoints();
+            return true;
+        }
+        return false;
+    }
     draw() {
-        let ctx = eskv.App.get().ctx;
+        let ctx = QDraw.get().ctx;
+        if(!ctx) return;
+        let cs = QDraw.get().controlSurface;
+        let hasFocus =  cs.focalNode>=0 && cs.focalNode===this.nodeNum;
+        let type = this.type;
+        ctx.beginPath();
+        ctx.fillStyle = (hasFocus && this.index===0)? this.colorA : this.color;
+        if(type===ptTypeLine) {
+            ctx.moveTo(this.x, this.bottom);
+            ctx.lineTo(this.right, this.bottom);
+            ctx.lineTo(this.center_x, this.y);
+            ctx.closePath();
+        } else if (type===ptTypeBreak) {
+            ctx.rect(this.x, this.y, this.w, this.h);
+        } else if (type===ptTypeQuadratic) {
+            ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
+        } else if (type===ptTypeBezier) {
+            ctx.strokeStyle = this.colorC;
+            ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
+            ctx.closePath();
+            ctx.stroke();
+        } else if (type===ptTypeControl) {
+            ctx.fillStyle = this.colorC;
+            ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
+        }
+        ctx.fill();    
+    }
+}
+
+class QPoint extends Array {
+    /**
+     * 
+     * @param {number} x 
+     * @param {number} y 
+     * @param {number} type 
+     */
+    constructor(x, y, type) {
+        super();
+        this[0] = x;
+        this[1] = y;
+        this[2] = type;
+    }
+    /**@type {eskv.Vec2} */
+    get pos() {
+        return new eskv.Vec2([this.x, this.y])
+    }
+    /**@type {number} */
+    get x() {
+        return this[0];
+    }
+    /**@type {number} */
+    get y() {
+        return this[1];
+    }
+    /**@type {number} */
+    get type() {
+        return this[2];
+    }
+    set x(val) {
+        this[0] = val;
+    }
+    set y(val) {
+        this[1] = val;
+    }
+    set type(val) {
+        this[2] = val;
+    }
+}
+
+
+class QPointRef {
+    /**
+     * 
+     * @param {QShape} shape 
+     * @param {number} offset 
+     */
+    constructor(shape, offset) {
+        this.shape = shape;
+        this.offset = offset;
+    }
+    /**@type {eskv.Vec2} */
+    get pos() {
+        return new eskv.Vec2([this.x, this.y])
+    }
+    /**@type {number} */
+    get x() {
+        return this.shape[this.offset];
+    }
+    /**@type {number} */
+    get y() {
+        return this.shape[this.offset+1];
+    }
+    /**@type {number} */
+    get type() {
+        return this.shape[this.offset+2];
+    }
+    set x(val) {
+        this.shape[this.offset] = val;
+    }
+    set y(val) {
+        this.shape[this.offset+1] = val;
+    }
+    set type(val) {
+        this.shape[this.offset+2] = val;
+    }
+}
+
+class QShape extends eskv.Widget {
+    id = 'Shape';
+    focus = false;
+    /** @type {string|null} */
+    lineColor = 'yellow';
+    /** @type {string|null} */
+    fillColor = 'gray';
+    /** @type {number} */
+    lineWidth = 0.1;
+    /** @type {'Edit'|'Move'} */
+    mode = 'Edit';
+    /** @type {Array<'line'|'break'>} */
+    nodeTypes = [];
+    _ptsPerNode = 1;
+    get nodeLength() {
+        return (this.length-nodeOffset)/(pointVecSize*this._ptsPerNode);
+    }
+    /**
+     * 
+     * @param {number} nodeNum 
+     * @returns {QPointRef[]}
+     */
+    getExtraControlPoints(nodeNum) {
+        let pt = this.getNode(nodeNum);
+        switch(pt[0].type) {
+            case ptTypeQuadratic:
+                return pt.slice(1,2);
+            case ptTypeBezier:
+                return pt.slice(1);
+        }
+        return [];
+    }
+    /**
+     * 
+     * @param {number} nodeNum 
+     */
+    nextType(nodeNum) {
+        const pt = this.getNodePoint(nodeNum, 0);
+        if(pt.type===ptTypeLine) pt.type=ptTypeBreak;
+        else if(pt.type===ptTypeBreak) pt.type=ptTypeQuadratic;
+        else if(pt.type===ptTypeQuadratic) pt.type=ptTypeBezier;
+        else if(pt.type===ptTypeBezier) pt.type=ptTypeLine;
+    }
+    /**
+     * 
+     * @param {number} startInd 
+     */
+    *iterNodes(startInd=0) {
+        for(let i=startInd;i<this.nodeLength;i++) {
+            yield this.getNode(i);
+        }
+    }
+    clearNodes() {
+        this.length = nodeOffset;
+    }
+    /**
+     * 
+     * @param {number} nodeNum
+     */
+    deleteNode(nodeNum) {
+        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
+        let delta = this._ptsPerNode*pointVecSize;
+        for(let i=offset;i<this.length-delta;++i) {
+            this[i] = this[i+delta];
+        }
+        this.length -= delta;
+    }
+    /**
+     * 
+     * @param {number} nodeNum 
+     * @param {number} ptNum 
+     * @returns {QPointRef}
+     */
+    getNodePoint(nodeNum, ptNum=0) {
+        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize + ptNum*pointVecSize;
+        return new QPointRef(this, offset)
+    }
+    /**
+     * 
+     * @param {number} nodeNum 
+     * @returns {QPointRef[]}
+     */
+    getNode(nodeNum) {
+        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
+        let result = [];
+        for(let i=0;i<this._ptsPerNode;++i) result.push(new QPointRef(this,offset+i*pointVecSize));
+        return result;
+    }
+    /**
+     * 
+     * @param {number} nodeNum 
+     * @param {QPoint[]|QPointRef[]} points 
+     * @returns 
+     */
+    setNode(nodeNum, points) {
+        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
+        for(let p of points) {
+            this[offset] = p.x;
+            this[offset+1] = p.y;
+            this[offset+2] = p.type;
+            offset+=pointVecSize;
+        }
+    }
+    /**
+     * 
+     * @param {QPoint[]|QPointRef[]} points 
+     * @returns 
+     */
+    appendNode(points) {
+        let offset = nodeOffset+this.nodeLength*this._ptsPerNode*pointVecSize;
+        this.length += this._ptsPerNode*pointVecSize;
+        for(let i=0;i<this._ptsPerNode;++i) {
+            const p = points[i];
+            this[offset] = p.x;
+            this[offset+1] = p.y;
+            this[offset+2] = p.type;
+            offset+=pointVecSize;
+        }
+    }
+    /**
+     * 
+     * @param {number} nodeNum 
+     * @param {QPoint[]|QPointRef[]} points 
+     * @returns 
+     */
+    insertNode(nodeNum, points) {
+        let offset = nodeOffset+nodeNum*this._ptsPerNode*pointVecSize;
+        this.length += this._ptsPerNode*pointVecSize;
+        for(let i = this.length-1-this._ptsPerNode-pointVecSize; i>=offset; i--) {
+            this[i+this._ptsPerNode+pointVecSize] = this[i];
+        }
+        for(let i=0;i<this._ptsPerNode;++i) {
+            const p = points[i];
+            this[offset] = p.x;
+            this[offset+1] = p.y;
+            this[offset+2] = p.type;
+            offset+=pointVecSize;
+        }
+    }
+}
+
+class QGeometric extends QShape {
+    hints = {x:0, y:0, w:1, h:1};
+    pointRadius = 0.25;
+    close = true;
+    /** @type {eskv.Vec2} */
+    _oldPos = new Vec2([0,0]);
+    _ptsPerNode = 3;
+    constructor(props) {
+        super();
+        if(props!==null) {
+            this.updateProperties(props);
+        }
+        this.id = 'Geometric'
+    }
+    clear() {
+        this.touchedPt = -1;
+        this.nodes = [];
+        this.breaks = new Set();    
+    }
+    /**
+     * 
+     * @param {CanvasRenderingContext2D} ctx 
+     * @param {QPointRef[]} points 
+     */
+    drawNode(ctx, points) {
+        let p0 = points[0]
+        switch(p0.type) {
+            case ptTypeLine:
+                ctx.lineTo(p0.x, p0.y);
+                break;
+            case ptTypeBreak:
+                ctx.moveTo(p0.x, p0.y);
+                break;
+            case ptTypeQuadratic:
+                ctx.quadraticCurveTo(points[1].x, points[1].y, p0.x, p0.y);
+                break;
+            case ptTypeBezier:
+                ctx.bezierCurveTo(points[1].x, points[1].y, points[2].x, points[2].y, p0.x, p0.y);
+                break;
+        }
+    }
+    draw() {
+        let ctx = QDraw.get().ctx;
         if(!ctx) return;
         //Draw the lines connecting points
         ctx.lineWidth = this.lineWidth;    
         if(this.lineColor) ctx.strokeStyle = this.lineColor;
         if(this.fillColor) ctx.fillStyle = this.fillColor;
-        if(this.nodes.length>0 && (this.lineColor!==null||this.fillColor!==null)) {
+        if(this.nodeLength>0 && (this.lineColor!==null||this.fillColor!==null)) {
             ctx.beginPath();
-            if(this.nodes.length>0) {
-                let p = this.nodes[0].points[0];
+            if(this.nodeLength>0) {
+                let p = this.getNodePoint(0,0);
                 ctx.moveTo(p.x, p.y);
             } 
-            for(let n of this.nodes.slice(1)) {
-                n.draw(ctx);
+            for(let n of this.iterNodes(1)) {
+                this.drawNode(ctx, n);
             }
-            if(this.close && this.nodes.length>0) {
-                this.nodes[0].draw(ctx);
+            if(this.close && this.nodeLength>0) {
+                this.drawNode(ctx, this.getNode(0));
                 ctx.closePath();
             }
             if(this.lineColor) ctx.stroke();
@@ -397,7 +593,7 @@ class QShapeStack extends eskv.BoxLayout {
             group:'stackShape',
             press: true,
             on_press: (event,object,data) => {
-                let app = /**@type {QDraw}*/(QDraw.get());
+                let app = QDraw.get();
                 if(data && object.group) {
                     for(let w of object.parent.iterByPropertyValue('group',object.group)) {
                         if(w.id!==object.id && w.press) w.press=false;    
@@ -408,6 +604,7 @@ class QShapeStack extends eskv.BoxLayout {
                     if(w instanceof QShape) {
                         sc.shape = w;
                         w.focus = true;
+                        app.controlSurface.shape = w;
                     }
                 }
             }
@@ -426,6 +623,7 @@ class QShapeStack extends eskv.BoxLayout {
         if(sc.shape===data) {
             sc.shape.focus = false;
             sc.shape = null; 
+            app.controlSurface.shape = null;
         }
         if(sh) this.removeChild(sh);
         return false;
@@ -536,10 +734,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                             return ShapeConfig.shape===null
                         },
                         on_press: (event, object, data)=> {
-                            if(!this.shape) return;
-                            if(data) {
-                                this.shape.mode = 'Edit';
-                            }
+                            if(data) QDraw.get().controlSurface.mode = 'Edit';
                         }
                     }),
                     new eskv.ToggleButton({
@@ -551,10 +746,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                             return ShapeConfig.shape===null
                         },
                         on_press: (event, object, data)=> {
-                            if(!this.shape) return;
-                            if(data) {
-                                this.shape.mode = 'Move';
-                            }
+                            if(data) QDraw.get().controlSurface.mode = 'Move';
                         }
                     }),
                 ]
@@ -612,7 +804,7 @@ class QShapeConfigArea extends eskv.BoxLayout {
                         },
                         on_press: (event, object, data)=> {
                             if(!this.shape) return;
-                            let drawing = eskv.App.get().findById('Drawing');
+                            let drawing = QDraw.get().findById('Drawing');
                             if(drawing instanceof QDrawing) drawing.removeChild(this.shape);
                         }
                     }),
@@ -623,12 +815,12 @@ class QShapeConfigArea extends eskv.BoxLayout {
     /** @type {import("../eskv/lib/modules/widgets.js").EventCallback} */
     on_shape(event, object, data) {
         if(data!==null) {
-            if(data.fillColor) this.findById('scFillAlpha').value = eskv.color.Color.fromString(data.fillColor).a;
-            if(data.lineColor) this.findById('scStrokeAlpha').value = eskv.color.Color.fromString(data.lineColor).a;
-            this.findById('scStrokeWidth').value = data.lineWidth;
-            this.findById('scEdit').press = data.mode==='Edit';
-            this.findById('scMove').press = data.mode==='Move';
-            if('close' in data) this.findById('scClosed').check = data.close;    
+            if(data.fillColor) /**@type {eskv.Slider}*/(this.findById('scFillAlpha')).value = eskv.color.Color.fromString(data.fillColor).a;
+            if(data.lineColor) /**@type {eskv.Slider}*/(this.findById('scStrokeAlpha')).value = eskv.color.Color.fromString(data.lineColor).a;
+            /**@type {eskv.Slider}*/(this.findById('scStrokeWidth')).value = data.lineWidth;
+            /**@type {eskv.ToggleButton}*/(this.findById('scEdit')).press = QDraw.get().controlSurface.mode==='Edit';
+            /**@type {eskv.ToggleButton}*/(this.findById('scMove')).press = QDraw.get().controlSurface.mode==='Move';
+            if('close' in data) /**@type {eskv.CheckBox}*/(this.findById('scClosed')).check = data.close;    
         }
         return false;
     }
@@ -652,8 +844,9 @@ class QCommand extends eskv.GridLayout {
                     });
                     geo.id = geo.id+this.shapeNum;
                     this.shapeNum++;
-                    let drawing = eskv.App.get().findById('Drawing');
-                    drawing?.addChild(geo);        
+                    let app = QDraw.get();
+                    app.drawing.addChild(geo);
+                    app.controlSurface.shape = geo;
                 }
             }),
             new eskv.Button({
@@ -731,7 +924,7 @@ class QPalette extends eskv.GridLayout {
                 let sColor = color.scale(0.8).toString();
                 this.addChild(new eskv.Button({text:'', bgColor:bgColor, selectColor:sColor, outlineColor:'black',
                     on_press: (event, object, value) => {
-                        let shape = /**@type {QDraw}*/(eskv.App.get()).shapeConfig.shape;
+                        let shape = /**@type {QDraw}*/(QDraw.get()).shapeConfig.shape;
                         if(!shape) return;
                         if(this.affects==="fill") {
                             shape.fillColor = bgColor;
@@ -745,7 +938,7 @@ class QPalette extends eskv.GridLayout {
         this.addChild(new eskv.Button({ //Clear out color
             text: 'X',
             on_press: (event, object, value)=>{
-                let shape = /**@type {QDraw}*/(eskv.App.get()).shapeConfig.shape;
+                let shape = QDraw.get().shapeConfig.shape;
                 if(!shape) return;
                 if(this.affects==="fill") {
                     shape.fillColor = null;
@@ -757,7 +950,7 @@ class QPalette extends eskv.GridLayout {
         this.addChild(new eskv.Button({ //Toggle mode between fill and stroke 
             text: 'F',
             on_press: (event,object,value)=>{
-                let shape = /**@type {QDraw}*/(eskv.App.get()).shapeConfig.shape;
+                let shape = QDraw.get().shapeConfig.shape;
                 if(shape) {
                     object.text = object.text==="F"? "S":"F";
                     this.affects = object.text==="F"? "fill": "stroke";    
@@ -768,7 +961,7 @@ class QPalette extends eskv.GridLayout {
             text: '',
             bgColor: 'black',
             on_press: (event, object, value)=>{
-                let shape = /**@type {QDraw}*/(eskv.App.get()).shapeConfig.shape;
+                let shape = QDraw.get().shapeConfig.shape;
                 if(shape) {
                     if(this.affects==="fill") {
                         shape.fillColor = 'rgba(0,0,0,1)';
@@ -782,7 +975,7 @@ class QPalette extends eskv.GridLayout {
             text: '',
             bgColor: 'white',
             on_press: (event, object, value)=>{
-                let shape = /**@type {QDraw}*/(eskv.App.get()).shapeConfig.shape;
+                let shape = QDraw.get().shapeConfig.shape;
                 if(!shape) return;
                 if(this.affects==="fill") {
                     shape.fillColor = 'rgba(255,255,255,1)';
@@ -798,28 +991,32 @@ class QPalette extends eskv.GridLayout {
 class QDraw extends eskv.App { 
     drawing = new QDrawing({
         hints: {x:0.2, y:0.0, w:0.8, h:0.8},
-        });
+    });
+    controlSurface = new QControlSurface({
+        hints: {x:0.2, y:0.0, w:0.8, h:0.8},
+    })
     shapeConfig = new QShapeConfigArea({ //Active shape config
             hints:{x:0,y:0,w:0.2,h:0.4},
             bgColor: 'blue',
-        });
+    });
     shapeStack = new QShapeStack({ //Shape stack (a layer stack)
             // hints:{x:0,y:0.4,w:0.2,h:0.6},
             hints:{x:0,y:0,w:1,h:null},
             bgColor: 'gray',
-        });
+    });
     palette = new QPalette({ //Color palette
             hints:{x:0.2,y:0.8,w:0.4,h:0.2},
-        });
+    });
     commands = new QCommand({ //Commands
             numX: 5,
             hints:{x:0.6,y:0.8,w:0.4,h:0.2},        
             bgColor: 'blue',
-        });
+    });
     constructor() {
         super();
         this.baseWidget.children = [
             this.drawing,
+            this.controlSurface,
             this.shapeConfig,
             new eskv.ScrollView({
                 hints:{x:0,y:0.4,w:0.2,h:0.6},
@@ -833,6 +1030,9 @@ class QDraw extends eskv.App {
         ]
         this.drawing.bind('child_added', (event,object,data)=>this.shapeStack.onShapeAdded(event,object,data));
         this.drawing.bind('child_removed', (event,object,data)=>this.shapeStack.onShapeRemoved(event,object,data));    
+    }
+    static get() {
+        return /**@type  {QDraw}*/(eskv.App.get());
     }
 };
 let app = new QDraw();
