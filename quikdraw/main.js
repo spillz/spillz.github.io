@@ -14,7 +14,15 @@ const ptTypeQuadratic = 2;
 const ptTypeBezier = 3;
 const ptTypeControl = 4;
 const ptTypeGradient = 5;
-/**@typedef {ptTypeLine|ptTypeBreak|ptTypeQuadratic|ptTypeBezier|ptTypeControl|ptTypeGradient} ptType*/
+const ptTypeRect = 1;
+const ptTypeRoundedRect = 2;
+const ptTypeCircle = 2;
+const ptTypeCircleArc = 1;
+
+/**
+ * @typedef {ptTypeLine|ptTypeBreak|ptTypeQuadratic|ptTypeBezier
+ * |ptTypeControl|ptTypeGradient|ptTypeCircle|ptTypeCircleArc|ptTypeRect|ptTypeRoundedRect} ptType
+ * */
 
 
 /**
@@ -63,6 +71,7 @@ class QControlSurface extends eskv.Widget {
             this.children = [];
             return;
         } 
+        this.shape.updatedNodes();
         let ch = [];
         let i = 0;
         for(let n of this.shape.iterNodes()) {
@@ -106,8 +115,8 @@ class QControlSurface extends eskv.Widget {
     on_touch_down(event, object, touch) {
         if(!this.shape) return false;
         if(super.on_touch_down(event, object, touch)) return true;
-        if(this.mode==='Edit' && this.collide(touch.rect)) {
-            let p = new QPoint(touch.rect.center_x, touch.rect.center_y, ptTypeLine);
+        if(this.mode==='Edit' && this.collide(touch.rect) && this.shape.nodeLength/this.shape.maxNodes<1) {
+            let p = new QPoint(touch.rect.center_x, touch.rect.center_y, this.shape.nodeDefault);
             let parr = [p,new QPoint(p.x, p.y, ptTypeControl), new QPoint(p.x,p.y,ptTypeControl)]
             if(this.focalNode>=0) {
                 this.shape.insertNode(this.focalNode+1, parr);
@@ -143,6 +152,7 @@ class QControlSurface extends eskv.Widget {
                     c.pos = c.pos.add(delta);
                 }
                 this._oldPos = touch.rect.pos;
+                this.shape.updatedNodes();
             }
             return true;
         }
@@ -221,6 +231,7 @@ class QControlPoint extends eskv.Widget {
                         pt.x = this.center_x;
                         pt.y = this.center_y;        
                     }
+                    this.parent.shape.updatedNodes();
                 } else {
                     if(this.nodeNum>=0 && this.index===0) {
                         this.parent.shape.deleteNode(this.nodeNum);
@@ -268,6 +279,7 @@ class QControlPoint extends eskv.Widget {
             ctx.rect(this.x, this.y, this.w, this.h);
         } else if (type===ptTypeQuadratic) {
             ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
+            ctx.closePath();
         } else if (type===ptTypeBezier) {
             ctx.strokeStyle = this.colorC;
             ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
@@ -276,6 +288,7 @@ class QControlPoint extends eskv.Widget {
         } else if (type===ptTypeControl) {
             ctx.fillStyle = this.colorC;
             ctx.arc(this.center_x, this.center_y, this.w/2, this.h/2, 2*Math.PI);
+            ctx.closePath();
         }
         ctx.fill();    
     }
@@ -360,11 +373,11 @@ class QPointRef {
 }
 
 /**
- * `QShape` is the base class for all drawing shapes in QuikDraw. QShape inherits from `Array` and 
- * `Widget`, and the positional data (x,y,w,h) for the `Widget`, represening the bounded rect of the 
- * shape is stored in the first 4 elements of the array. A QShape then packs 2D-vector data into 
- * element 4 onwards of the Array representing a sequence of nodes. A node itself is a subsequence of 
- * multiple `QPoint` where each point has (x, y, type) attributes. The first point in each node
+ * `QShape` is the base class for all drawing shapes in QuikDraw. QShape inherits 
+ * `Widget` and `Array`, and the positional data (x,y,w,h) for the `Widget`, represening the bounded rect of the 
+ * shape is stored in the first 4 elements of the array. A QShape then packs nodes as vector data 
+ * into element 4 onwards of the Array data. A node itself is a subsequence of 
+ * multiple `QPoint` where each point has (x, y, type) numeric attributes. The first point in each node
  * is interpreted as the main point of the node and the remaining points are child control points (e.g.,
  * the control points of a Bezier curve). All of the node data is packed 
  * into the flat 1D array in this way in an attempt to extract the best performance out of the JIT 
@@ -383,10 +396,19 @@ class QShape extends eskv.Widget {
     lineWidth = 0.1;
     /** @type {number} Number of points per node*/
     _ptsPerNode = 1;
+    /** @type {boolean} Closes the path if true (connecting breaks)*/
+    close = true;
+    /** @type {ptType} Default node type added when user clicks*/
+    nodeDefault = ptTypeLine;
+    /** @type {number} Maximum number of nodes allowed, -1 if unlimited */
+    maxNodes = -1;
     get nodeLength() {
         return (this.length-nodeOffset)/(pointVecSize*this._ptsPerNode);
     }
-    /**
+    /** Notification that node information may have been updated */
+    updatedNodes() {
+    }
+        /**
      * Returns the points in the node that are relevant to the type of the node's 
      * type (defined in the `type` of the first `QPoint` of the node). Shapes should
      * override the default behavior.
@@ -394,13 +416,6 @@ class QShape extends eskv.Widget {
      * @returns {QPointRef[]}
      */
     getExtraControlPoints(nodeNum) {
-        let n = this.getNode(nodeNum);
-        switch(n[0].type) {
-            case ptTypeQuadratic:
-                return n.slice(1,2);
-            case ptTypeBezier:
-                return n.slice(1);
-        }
         return [];
     }
     /**
@@ -408,11 +423,6 @@ class QShape extends eskv.Widget {
      * @param {number} nodeNum 
      */
     nextType(nodeNum) {
-        const pt = this.getNodePoint(nodeNum, 0);
-        if(pt.type===ptTypeLine) pt.type=ptTypeBreak;
-        else if(pt.type===ptTypeBreak) pt.type=ptTypeQuadratic;
-        else if(pt.type===ptTypeQuadratic) pt.type=ptTypeBezier;
-        else if(pt.type===ptTypeBezier) pt.type=ptTypeLine;
     }
     /**
      * Iterator that yields an array of `QPointRef`s for each node in the QShape's node sequence. 
@@ -520,24 +530,221 @@ class QShape extends eskv.Widget {
     }
 }
 
+class QText extends QShape {
+    _ptsPerNode = 1;
+    id = 'Text';
+    /**@type {ptType} */
+    nodeDefault = ptTypeRect;
+    maxNodes = 2;
+    constructor(props={}) {
+        super();
+        this.updateProperties(props)
+        this.addChild(new eskv.TextInput({text:'Text', hints:{}}));
+    }
+    on_lineColor(event, object, value) {
+        const c = /**@type {eskv.TextInput}*/(this._children[0]);
+        c.color = this.lineColor??'white';
+    }
+    on_fillColor(event, object, value) {
+        const c = /**@type {eskv.TextInput}*/(this._children[0]);
+        c.bgColor = this.fillColor;
+    }
+    updatedNodes() {
+        let child = this._children[0];
+        if(this.nodeLength>0) [child.x, child.y] = this.getNodePoint(0,0).pos;
+        if(this.nodeLength>1) [child.w, child.h] = this.getNodePoint(1,0).pos.sub(this.getNodePoint(0,0).pos);
+    }
+}
+
+
+class QRectangle extends QShape {
+    hints = {x:0, y:0, w:1, h:1};
+    _ptsPerNode = 2;
+    id = 'Rectangle';
+    /**@type {ptType} */
+    nodeDefault = ptTypeRect;
+    maxNodes = 2;
+    /**
+     * Returns the points in the node that are relevant to the type of the node's 
+     * type (defined in the `type` of the first `QPoint` of the node). Shapes should
+     * override the default behavior.
+     * @param {number} nodeNum 
+     * @returns {QPointRef[]}
+     */
+    getExtraControlPoints(nodeNum) {
+        if(nodeNum>0) return [];
+        let n = this.getNode(nodeNum);
+        switch(n[0].type) {
+            case ptTypeRoundedRect:
+                return n.slice(1);
+        }
+        return []
+    }
+    /**
+     * Rolls to the next valid type for the Node (as contained in the first `QPoint` of the node)
+     * @param {number} nodeNum 
+     */
+    nextType(nodeNum) {
+        if(nodeNum==0) {
+            const pt = this.getNodePoint(nodeNum, 0);
+            if(pt.type===ptTypeRect) pt.type=ptTypeRoundedRect;
+            else if(pt.type===ptTypeRoundedRect) pt.type=ptTypeRect;
+        }
+    }
+    draw() {
+        let ctx=QDraw.get().ctx;
+        if(!ctx) return;
+        if(this.nodeLength<2) return;
+        if(!this.fillColor && !this.lineColor) return;
+        if(this.getNodePoint(0,0).type===ptTypeRoundedRect) {
+            const radius = this.getNodePoint(0,1).pos.dist(this.getNodePoint(0,0).pos);
+            const [x,y] = this.getNodePoint(0,0).pos;
+            const [width, height] = this.getNodePoint(1,0).pos.sub(this.getNodePoint(0,0).pos);
+            ctx.beginPath();
+            if(this.fillColor) ctx.fillStyle = this.fillColor;
+            if(this.lineColor) ctx.strokeStyle = this.lineColor;
+            ctx.lineWidth = this.lineWidth;
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.arc(x + width - radius, y + radius, radius, 1.5 * Math.PI, 2 * Math.PI);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.arc(x + width - radius, y + height - radius, radius, 0, 0.5 * Math.PI);
+            ctx.lineTo(x + radius, y + height);
+            ctx.arc(x + radius, y + height - radius, radius, 0.5 * Math.PI, Math.PI);
+            ctx.lineTo(x, y + radius);
+            ctx.arc(x + radius, y + radius, radius, Math.PI, 1.5 * Math.PI);
+            if(this.close) ctx.closePath();
+            ctx.fill()
+            ctx.stroke();
+        } else {
+            const [x,y] = this.getNodePoint(0,0).pos;
+            const [width, height] = this.getNodePoint(1,0).pos.sub(this.getNodePoint(0,0).pos);
+            ctx.beginPath();
+            if(this.fillColor) ctx.fillStyle = this.fillColor;
+            if(this.lineColor) ctx.strokeStyle = this.lineColor;
+            ctx.lineWidth = this.lineWidth;
+            ctx.rect(x, y, width, height);
+            if(this.close) ctx.closePath();
+            ctx.fill()
+            ctx.stroke();
+
+        }
+    }
+}
+
+class QCircle extends QShape {
+    hints = {x:0, y:0, w:1, h:1};
+    _ptsPerNode = 2;
+    id = 'Circle';
+    /**@type {ptType}*/
+    nodeDefault = ptTypeCircle;
+    maxNodes = 2;
+    /**
+     * Returns the points in the node that are relevant to the type of the node's 
+     * type (defined in the `type` of the first `QPoint` of the node). Shapes should
+     * override the default behavior.
+     * @param {number} nodeNum 
+     * @returns {QPointRef[]}
+     */
+    getExtraControlPoints(nodeNum) {
+        if(nodeNum==0) return [];
+        let n = this.getNode(nodeNum);
+        switch(n[0].type) {
+            case ptTypeCircleArc:
+                return n.slice(1);
+        }
+        return []
+    }
+    /**
+     * Rolls to the next valid type for the Node (as contained in the first `QPoint` of the node)
+     * @param {number} nodeNum 
+     */
+    nextType(nodeNum) {
+        if(nodeNum===1) {
+            const pt = this.getNodePoint(nodeNum, 0);
+            if(pt.type===ptTypeCircle) pt.type=ptTypeCircleArc;
+            else if(pt.type===ptTypeCircleArc) pt.type=ptTypeCircle;
+        }
+    }
+    draw() {
+        let ctx=QDraw.get().ctx;
+        if(!ctx) return;
+        if(this.nodeLength<2) return;
+        if(!this.fillColor && !this.lineColor) return;
+        if(this.getNodePoint(1,0).type===ptTypeCircleArc) {
+            ctx.beginPath();
+            const [x,y] = this.getNodePoint(0,0).pos;
+            const radius = this.getNodePoint(1,0).pos.dist(this.getNodePoint(0,0).pos);
+            const [dxs,dys] = this.getNodePoint(1,0).pos.sub(this.getNodePoint(0,0).pos);
+            const [dxe,dye] = this.getNodePoint(1,1).pos.sub(this.getNodePoint(0,0).pos);
+            const arcStart = Math.atan2(dys, dxs);
+            const arcEnd = Math.atan2(dye, dxe);
+            if(this.fillColor) ctx.fillStyle = this.fillColor;
+            if(this.lineColor) ctx.strokeStyle = this.lineColor;
+            ctx.lineWidth = this.lineWidth;
+            ctx.arc(x, y, radius, arcStart, arcEnd);
+            if(this.close) ctx.closePath();
+            ctx.fill()
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            const [x,y] = this.getNodePoint(0,0).pos;
+            const radius = this.getNodePoint(1,0).pos.dist(this.getNodePoint(0,0).pos);
+            if(this.fillColor) ctx.fillStyle = this.fillColor;
+            if(this.lineColor) ctx.strokeStyle = this.lineColor;
+            ctx.lineWidth = this.lineWidth;
+            ctx.arc(x, y, radius, 0, 2*Math.PI);
+            if(this.close) ctx.closePath();
+            ctx.fill()
+            ctx.stroke();
+
+        }
+    }
+}
+
+
+
 class QGeometric extends QShape {
     hints = {x:0, y:0, w:1, h:1};
-    pointRadius = 0.25;
+    /**If true, closes the path (joining starting and ending node) */
     close = true;
     /** @type {eskv.Vec2} */
     _oldPos = new Vec2([0,0]);
     _ptsPerNode = 3;
+    id = 'Geometric'
     constructor(props) {
         super();
         if(props!==null) {
             this.updateProperties(props);
         }
-        this.id = 'Geometric'
     }
-    clear() {
-        this.touchedPt = -1;
-        this.nodes = [];
-        this.breaks = new Set();    
+    /**
+     * Returns the points in the node that are relevant to the type of the node's 
+     * type (defined in the `type` of the first `QPoint` of the node). Shapes should
+     * override the default behavior.
+     * @param {number} nodeNum 
+     * @returns {QPointRef[]}
+     */
+    getExtraControlPoints(nodeNum) {
+        let n = this.getNode(nodeNum);
+        switch(n[0].type) {
+            case ptTypeQuadratic:
+                return n.slice(1,2);
+            case ptTypeBezier:
+                return n.slice(1);
+        }
+        return [];
+    }
+    /**
+     * Rolls to the next valid type for the Node (as contained in the first `QPoint` of the node)
+     * @param {number} nodeNum 
+     */
+    nextType(nodeNum) {
+        const pt = this.getNodePoint(nodeNum, 0);
+        if(pt.type===ptTypeLine) pt.type=ptTypeBreak;
+        else if(pt.type===ptTypeBreak) pt.type=ptTypeQuadratic;
+        else if(pt.type===ptTypeQuadratic) pt.type=ptTypeBezier;
+        else if(pt.type===ptTypeBezier) pt.type=ptTypeLine;
     }
     /**
      * 
@@ -581,8 +788,8 @@ class QGeometric extends QShape {
                 this.drawNode(ctx, this.getNode(0));
                 ctx.closePath();
             }
-            if(this.lineColor) ctx.stroke();
             if(this.fillColor) ctx.fill();
+            if(this.lineColor) ctx.stroke();
         }
     }
 }
@@ -841,6 +1048,19 @@ class QShapeConfigArea extends eskv.BoxLayout {
     }
 }
 
+function addShape(shapeType) {
+    let geo = new shapeType({
+        hints: {x:0, y:0, w:1, h:1},
+    });
+    let app = QDraw.get();
+    geo.id = geo.id+app.commands.shapeNum;
+    app.commands.shapeNum++;
+    app.controlSurface.mode = 'Edit';
+    app.drawing.addChild(geo);
+    app.controlSurface.shape = geo;
+
+}
+
 class QCommand extends eskv.GridLayout {
     shapeNum = 1;
     constructor(properties) {
@@ -852,29 +1072,19 @@ class QCommand extends eskv.GridLayout {
             }),
             new eskv.Button({
                 text:'Shape',
-                on_press: (event, object, data) => {
-                    let geo = new QGeometric({
-                        editing: true,
-                        hints: {x:0, y:0, w:1, h:1},
-                    });
-                    geo.id = geo.id+this.shapeNum;
-                    this.shapeNum++;
-                    let app = QDraw.get();
-                    app.drawing.addChild(geo);
-                    app.controlSurface.shape = geo;
-                }
+                on_press: (event, object, data) => addShape(QGeometric),
             }),
             new eskv.Button({
                 text:'Rect',
-                disable: true,
-            }),
-            new eskv.Button({
-                text:'Arc',
-                disable: true,
+                on_press: (event, object, data) => addShape(QRectangle),
             }),
             new eskv.Button({
                 text:'Circle',
-                disable: true,
+                on_press: (event, object, data) => addShape(QCircle),
+            }),
+            new eskv.Button({
+                text:'Text',
+                on_press: (event, object, data) => addShape(QText),
             }),
             new eskv.Label({
                 text:'Mode'
@@ -1005,19 +1215,21 @@ class QPalette extends eskv.GridLayout {
 
 class QDraw extends eskv.App { 
     drawing = new QDrawing({
-        hints: {x:0.2, y:0.0, w:0.8, h:0.8},
+        hints: {x:0.0, y:0.0, w:1.0, h:1.0},
+//        hints: {x:0.2, y:0.0, w:0.8, h:0.8},
     });
     controlSurface = new QControlSurface({
-        hints: {x:0.2, y:0.0, w:0.8, h:0.8},
+        hints: {x:0.0, y:0.0, w:1.0, h:1.0},
+//        hints: {x:0.2, y:0.0, w:0.8, h:0.8},
     })
     shapeConfig = new QShapeConfigArea({ //Active shape config
             hints:{x:0,y:0,w:0.2,h:0.4},
-            bgColor: 'blue',
+            bgColor: 'rgb(45,45,45)',
     });
     shapeStack = new QShapeStack({ //Shape stack (a layer stack)
             // hints:{x:0,y:0.4,w:0.2,h:0.6},
             hints:{x:0,y:0,w:1,h:null},
-            bgColor: 'gray',
+            bgColor: 'rgb(45,45,45)',
     });
     palette = new QPalette({ //Color palette
             hints:{x:0.2,y:0.8,w:0.4,h:0.2},
@@ -1025,10 +1237,40 @@ class QDraw extends eskv.App {
     commands = new QCommand({ //Commands
             numX: 5,
             hints:{x:0.6,y:0.8,w:0.4,h:0.2},        
-            bgColor: 'blue',
+            bgColor: 'rgb(45,45,45)',
     });
     constructor() {
         super();
+        this.baseWidget.children = [
+            new eskv.ScrollView({
+                bgColor: 'rgb(45,45,45)',
+                hints:{x:0.2, y:0.0, w:0.8, h:0.8},
+                children: [
+                    new eskv.Widget({
+                        x:0,
+                        y:0,
+                        w:40,
+                        h:30,
+                        bgColor:'black',
+                        children: [
+                            this.drawing,
+                            this.controlSurface,        
+                        ]
+                    })
+                ]
+            }),
+            this.shapeConfig,
+            new eskv.ScrollView({
+                hints:{x:0,y:0.4,w:0.2,h:0.6},
+                scrollW: false,
+                children: [
+                    this.shapeStack,
+                ]
+            }),
+            this.palette,
+            this.commands,
+        ]
+/*
         this.baseWidget.children = [
             this.drawing,
             this.controlSurface,
@@ -1043,6 +1285,8 @@ class QDraw extends eskv.App {
             this.palette,
             this.commands,
         ]
+ */
+
         this.drawing.bind('child_added', (event,object,data)=>this.shapeStack.onShapeAdded(event,object,data));
         this.drawing.bind('child_removed', (event,object,data)=>this.shapeStack.onShapeRemoved(event,object,data));    
     }
