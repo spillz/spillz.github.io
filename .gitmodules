@@ -6,4 +6,4 @@
 	url = https://github.com/spillz/eskv
 [submodule "puzzlekingdom"]
 	path = puzzlekingdom
-	url = ./puzzlekingdom
+	url = https://github.com/spillz/puzzlekingdom
