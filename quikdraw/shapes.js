@@ -825,30 +825,43 @@ export class QGeometric extends QShape {
         const node = this.getNode(nodeNum);
         let pt = node[0];
         if(pt.type===ptTypeQuadratic) {
-            let nn1 = nodeNum>0? nodeNum-1:this.nodeLength-1;
-            let nn2 = nn1>0? nn1-1:this.nodeLength-1;
+            const nn1 = nodeNum>0? nodeNum-1:this.nodeLength-1;
+            const nn2 = nn1>0? nn1-1:this.nodeLength-1;
             const pt1 = this.getNodePoint(nn1, 0);
-            const pt2 = this.getNodePoint(nn1, 1);
+            const pta = this.getNodePoint(nn2, 0);
+            const ptb = this.getNodePoint(nn1, 1);
+            const ptc = this.getNodePoint(nn1, 2);
+            const pt2 = pt1.type === ptTypeBezier? ptc :
+                        pt1.type === ptTypeQuadratic? ptb :
+                        pta;
             const d2 = pt2.pos.sub(pt1.pos);
-            let alpha = 1.25;
+            const dist2 = pt2.pos.dist(pt1.pos);
+            const dist1 = pt.pos.dist(pt1.pos);
+            const alpha = dist2>0 ? 0.5*dist1/dist2 : 0;
             const cp1 = this.getNodePoint(nodeNum,1);
             const cp2 = this.getNodePoint(nodeNum,2);
             cp1.pos = pt1.pos.sub(d2.scale(alpha)) ;
             cp2.pos = cp1.pos; 
 
         } else if(pt.type===ptTypeBezier) {
-            // this.setupControlPoints(nodeNum);
-            let nn1 = nodeNum>0? nodeNum-1:this.nodeLength-1;
-            let nn2 = nn1>0? nn1-1:this.nodeLength-1;
+            const nn1 = nodeNum>0? nodeNum-1:this.nodeLength-1;
+            const nn2 = nn1>0? nn1-1:this.nodeLength-1;
             const pt1 = this.getNodePoint(nn1, 0);
-            const pt2 = this.getNodePoint(nn2, 0);
+            const pta = this.getNodePoint(nn2, 0);
+            const ptb = this.getNodePoint(nn1, 1);
+            const ptc = this.getNodePoint(nn1, 2);
+            const pt2 = pt1.type === ptTypeBezier? ptc :
+                        pt1.type === ptTypeQuadratic? ptb :
+                        pta;
             const d2 = pt2.pos.sub(pt1.pos);
-            let alpha = 0.25;
+            const dist2 = pt2.pos.dist(pt1.pos);
+            const dist1 = pt.pos.dist(pt1.pos);
+            const alpha1= dist2>0? dist1/dist2/3 : 0;
+            const alpha2 = dist2>0? dist1/dist2*2/3: 0;
             const cp1 = this.getNodePoint(nodeNum,1);
             const cp2 = this.getNodePoint(nodeNum,2);
-            cp1.pos = pt1.pos.sub(d2.scale(alpha)) 
-            const d1 = cp1.pos.sub(pt.pos);
-            cp2.pos = pt.pos.add(d1.scale(alpha)) 
+            cp1.pos = pt1.pos.sub(d2.scale(alpha1)) ;
+            cp2.pos = pt1.pos.sub(d2.scale(alpha2)) ;
         }
     }
     /**
