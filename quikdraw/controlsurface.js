@@ -186,7 +186,7 @@ export class QControlSurface extends eskv.Widget {
         this._touchingSelection = null;
         this._selectionModified = false;
         if(super.on_touch_down(event, object, touch)) return true;
-        if(touch.nativeEvent instanceof TouchEvent && touch.nativeEvent.touches.length>1) {
+        if(touch.nativeEvent && touch.nativeEvent instanceof TouchEvent && touch.nativeEvent.touches.length>1) {
             touch.grab(QDraw.get().drawingScrollView);
             return true;
         }
