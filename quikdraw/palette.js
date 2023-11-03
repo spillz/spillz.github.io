@@ -47,8 +47,8 @@ function palettePicker(e, o, v) {
                 text: line.trim(),
                 on_press: (e, o, v) => {
                     const qpalette = QDraw.get().palette.customPalette
-                    const palFile = './palettes/'+o.text;
-                    fetchGimpPalette(palFile).then((palette)=>qpalette.setup(palette));
+                    const id = `QDraw/Palette/Library/${o.text}`;
+                    fetchGimpPaletteFromLibrary(id).then((palette)=>qpalette.setup(palette, id));
                     loader.close();
                 }
             }));
@@ -59,6 +59,13 @@ function palettePicker(e, o, v) {
 
 
 class PaletteColor {
+    /**
+     * Representation of a color on the palette
+     * @param {number} r 
+     * @param {number} g 
+     * @param {number} b 
+     * @param {string} name 
+     */
     constructor(r, g, b, name) {
         this.r = r;
         this.g = g;
@@ -75,11 +82,72 @@ class GimpPalette {
         this.comments = "";
         this.colors = [];
     }
-
-    addColor(color) {
-        this.colors.push(color);
+    static fromGimpString(text) {
+        const palette = new GimpPalette();
+        const lines = text.split('\n');
+        for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+            if (line.startsWith("GIMP")) {
+                palette.type = "Gimp palette";
+            } else if (line.startsWith("Name:")) {
+                palette.name = line.split("Name:")[1].trim();
+            } else if (line.startsWith("Columns:")) {
+                palette.columns = parseInt(line.split("Columns:")[1].trim(), 10);
+            } else if (line.startsWith("#")) {
+                palette.comments = line.slice(1).trim();
+            } else {
+                const parts = line.split(/\s+/);
+                const r = parseInt(parts[0], 10);
+                const g = parseInt(parts[1], 10);
+                const b = parseInt(parts[2], 10);
+                const name = parts.slice(3).join(' ');
+                const color = new PaletteColor(r, g, b, name);
+                palette.addColor(color);
+            }
+        }
+        return palette;
     }
-
+    toGimpString() {
+        let text='GIMP\n';
+        text+=`Name: ${this.name}\n`
+        text+=`Columns: ${this.name}\n`
+        for(let c of this.colors) {
+            text+= `${c.r} ${c.g} ${c.b} ${c.name}\n`
+        }
+    }
+    static fromData(data) {
+        return new GimpPalette().deserialize(data);
+    }
+    serialize() {
+        const data = {}
+        data['type'] = this.type;
+        data['name'] = this.name;
+        data['columns'] = this.columns;
+        data['comments'] = this.comments;
+        data['colors'] = [];
+        for(let c of this.colors) {
+            data['colors'].push({r:c.r, g:c.g, b:c.b, name:c.name});
+        }
+        return data;
+    }
+    deserialize(data) {
+        this.type = data['type'];
+        this.name = data['name'];
+        this.columns = data['columns'];
+        this.comments = data['comments'];
+        this.colors = Array(data['colors'].length);
+        for(let i=0; i<data['colors'].length; ++i) {
+            this.colors[i] = new PaletteColor(data['colors'][i]['r'], data['colors'][i]['g'], data['colors'][i]['b'], data['colors'][i]['name']);
+        }        
+    }
+    /**
+     * 
+     * @param {PaletteColor} color 
+     */
+    addColor(color) {
+        this.colors.push(new PaletteColor(color.r, color.g, color.b, color.name));
+    }
     get rows() {
         return Math.ceil(this.colors.length/this.columns);
     }
@@ -87,35 +155,18 @@ class GimpPalette {
 
 /**
  * 
- * @param {string} filePath 
+ * @param {string} paletteId The unique identifier of the palette
  * @returns 
  */
-async function fetchGimpPalette(filePath) {
+async function fetchGimpPaletteFromLibrary(paletteId) {
+    const prefix = 'QDraw/Palette/Library/';
+    if(!paletteId.startsWith(prefix)) {
+        throw Error(`Palette ID ${paletteId} is not a valid palette library prefix`);
+    }
+    const filePath = './palettes/'+paletteId.slice(prefix.length)
     const response = await fetch(filePath);
     const text = await response.text();
-    const lines = text.split('\n');
-    const palette = new GimpPalette();
-    for (let line of lines) {
-        line = line.trim();
-        if (!line) continue;
-        if (line.startsWith("GIMP")) {
-            palette.type = "Gimp palette";
-        } else if (line.startsWith("Name:")) {
-            palette.name = line.split("Name:")[1].trim();
-        } else if (line.startsWith("Columns:")) {
-            palette.columns = parseInt(line.split("Columns:")[1].trim(), 10);
-        } else if (line.startsWith("#")) {
-            palette.comments = line.slice(1).trim();
-        } else {
-            const parts = line.split(/\s+/);
-            const r = parseInt(parts[0], 10);
-            const g = parseInt(parts[1], 10);
-            const b = parseInt(parts[2], 10);
-            const name = parts.slice(3).join(' ');
-            const color = new PaletteColor(r, g, b, name);
-            palette.addColor(color);
-        }
-    }
+    const palette = GimpPalette.fromGimpString(text);
     return palette;
 }
 
@@ -183,6 +234,8 @@ export class QCustomPalette extends eskv.BoxLayout {
     orientation = "vertical";
     /**@type {"fill"|"stroke"} */
     affects = "fill";
+    /**@type {string} */
+    id = 'QDraw/Palette/Custom';
     /**
      * 
      * @param {import("../eskv/lib/modules/widgets.js").BoxLayoutProperties|null} properties 
@@ -190,13 +243,39 @@ export class QCustomPalette extends eskv.BoxLayout {
     constructor(properties=null) {
         super();
         if(properties) this.updateProperties(properties)
-        let qpalette = this;
-        // fetchGimpPalette('./palettes/Android-icon-palette.gpl').then((palette)=>qpalette.setup(palette));
-        // fetchGimpPalette('./palettes/Grafxkid-2016-01-23-TLP.gpl').then((palette)=>qpalette.setup(palette));
-        fetchGimpPalette('./palettes/Windows-MFC-hexagonal.gpl').then((palette)=>qpalette.setup(palette));
-
+        this.onDrawing('QDraw/Palette/Custom/');
     }
-    setup(gimpPalette) {
+    /**
+     * 
+     * @param {string} paletteId 
+     */
+    onDrawing(paletteId) {
+        if(paletteId.startsWith('QDraw/Palette/Custom/')) {
+            const palData = localStorage.getItem(paletteId);
+            if(palData) {
+                const gimpPalette = new GimpPalette.fromData(palData);
+                if(gimpPalette) {
+                    this.setup(gimpPalette, paletteId);
+                    return;
+                }
+            }
+            paletteId = 'QDraw/Palette/Library/Windows-MFC-hexagonal.gpl';
+        }
+        if(paletteId.startsWith('QDraw/Palette/Library/')) {
+            let qpalette = this;
+            if(!paletteId) paletteId = 'QDraw/Palette/Library/Windows-MFC-hexagonal.gpl';
+            fetchGimpPaletteFromLibrary(paletteId)
+                .then((palette)=>qpalette.setup(palette, paletteId));
+        }
+    }
+    /**
+     * 
+     * @param {GimpPalette} gimpPalette 
+     * @param {string} id 
+     */
+    setup(gimpPalette, id) {
+        this.id = id;
+        QDraw.get().drawing.paletteId = id;
         let K = gimpPalette.columns;
         let N = gimpPalette.rows;
         let grid = new eskv.GridLayout({
@@ -213,15 +292,21 @@ export class QCustomPalette extends eskv.BoxLayout {
                 new eskv.Button({text:'Palette library', on_press:palettePicker}),
             ]
         });
+        this.layoutGridName = new eskv.BoxLayout({orientation:'horizontal', hints:{h:'0.04ah'},
+            children: [
+                new eskv.Label({text:'Name', align:'left', hints:{w:0.3}}),
+                new eskv.Label({text: id.slice(id.lastIndexOf('/')+1)}),
+            ]
+        });
         this.layoutGridNumColors = new eskv.BoxLayout({orientation:'horizontal', hints:{h:'0.04ah'},
             children: [
-                new eskv.Label({text:'Colors'}),
+                new eskv.Label({text:'Colors', align:'left', hints:{w:0.3}}),
                 new eskv.TextInput({text:''+gimpPalette.colors.length}),
             ]
         });
         this.layoutGridRows = new eskv.BoxLayout({orientation:'horizontal', hints:{h:'0.04ah'},
             children: [
-                new eskv.Label({text:'Rows'}),
+                new eskv.Label({text:'Rows', align:'left', hints:{w:0.3}}),
                 new eskv.TextInput({text:''+grid.numY}),
             ]
         });
@@ -234,6 +319,7 @@ export class QCustomPalette extends eskv.BoxLayout {
         }
         this.children = [
             this.grid,
+            this.layoutGridName,
             this.layoutGridNumColors,
             this.layoutGridRows,
             this.layoutFile,

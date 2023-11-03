@@ -19,6 +19,7 @@ export const ptTypeRect = 1;
 export const ptTypeRoundedRect = 2;
 export const ptTypeCircle = 2;
 export const ptTypeCircleArc = 1;
+export const ptTypeRubberBand = 1;
 export const ptTypeShapeMoverCenter = 10;
 export const ptTypeShapeSizerTopLeft = 11;
 export const ptTypeShapeSizerBottomRight = 12;

@@ -3,21 +3,22 @@ import * as eskv from "../eskv/lib/eskv.js";
 import { QShape, QPoint } from "./shapes.js";
 import { QDraw } from "./app.js";
 import { 
-ptTypeLine,
-ptTypeBreak,
-ptTypeQuadratic,
-ptTypeBezier,
-ptTypeControl,
-ptTypeGradient,
-ptTypeRect,
-ptTypeRoundedRect,
-ptTypeCircle,
-ptTypeCircleArc,
-ptTypeShapeMoverCenter,
-ptTypeShapeSizerTopLeft,
-ptTypeShapeSizerBottomRight,
-ptTypeShapeRotatorTopRight,
-ptTypeShapeRotatorBottomLeft,
+    ptTypeRubberBand,
+    ptTypeLine,
+    ptTypeBreak,
+    ptTypeQuadratic,
+    ptTypeBezier,
+    ptTypeControl,
+    ptTypeGradient,
+    ptTypeRect,
+    ptTypeRoundedRect,
+    ptTypeCircle,
+    ptTypeCircleArc,
+    ptTypeShapeMoverCenter,
+    ptTypeShapeSizerTopLeft,
+    ptTypeShapeSizerBottomRight,
+    ptTypeShapeRotatorTopRight,
+    ptTypeShapeRotatorBottomLeft,
 } from "./shapes.js";
 
 /** @typedef {import('./shapes.js').ptType} ptType */
@@ -35,10 +36,12 @@ ptTypeShapeRotatorBottomLeft,
  * mode dependant (editing, moving etc.)
  */
 export class QControlSurface extends eskv.Widget {
-    /**@type {QSelection} if shape is null then the drawing is the active object*/
+    /**@type {QSelection} collection of currently selected objects*/
     selection = [];
+    /**@type {QSelection} collection of objects bounded by the band*/
+    boxSelection = [];
     focalNode = -1;
-    /**@type {'Edit'|'Move'|'Band'} */
+    /**@type {'Edit'|'Move'|'Box'} */
     mode = 'Edit';
     /** @type {eskv.Vec2} */
     _oldPos = new eskv.Vec2([0,0]);
@@ -52,6 +55,7 @@ export class QControlSurface extends eskv.Widget {
         return 1.0;
     }
     updatePoints(keepControl=null) {
+        if(this.mode==='Box') return;
         if(this.selection.length===0) {
             this.children = [];
             return;
@@ -92,6 +96,10 @@ export class QControlSurface extends eskv.Widget {
         }
         const ch = [];
         let snum=0;
+        if(this.selection.length>1) {
+            this.children = [];
+            return;
+        }
         for(let s of this.selection) {
             let tx = s.getTransform();
             let xy = new DOMPoint(s.x, s.y);
@@ -160,7 +168,9 @@ export class QControlSurface extends eskv.Widget {
     }
     on_mode(event, object, value) {
         this.focalNode = -1;
+        if(this.mode==='Box') this.children = [];
         this.updatePoints();
+        this.updateBoxSelection();
     }
     on_selection(event, object, value) {
         this.focalNode = -1;
@@ -203,14 +213,33 @@ export class QControlSurface extends eskv.Widget {
                 return true;
             }
         }
-        if(this.mode === 'Band') {
+        if(this.mode === 'Box') {
             this._oldPos = touch.rect.pos;
-            this.focalNode = Math.max(this.children.length-1, 1);
-            this.updatePoints();
-            let c = /**@type {QControlPoint} */(this.children[this.focalNode]);
-            touch.grab(c);
-            c._changedFocus = true;
-            return true;
+            // this.focalNode = Math.max(this.children.length-1, 1);
+            // this.updatePoints();
+            if(this.children.length===0) {
+                const ch = [];
+                let cps = this.getControlPointScale();
+                let pt = touch.rect.center;
+                ch.push(new QControlPoint({
+                    w:cps, h:cps, x:pt.x-0.5*cps, y:pt.y-0.5*cps,
+                    nodeNum:0,
+                    index:0,
+                    type:ptTypeRubberBand,
+                }));
+                ch.push(new QControlPoint({
+                    w:cps, h:cps, x:pt.x-0.5*cps, y:pt.y-0.5*cps,
+                    nodeNum:1,
+                    index:0,
+                    type:ptTypeRubberBand,
+                }));
+                this.children = [...ch];
+                this.focalNode = 1;
+                let c = /**@type {QControlPoint} */(this.children[this.focalNode]);
+                touch.grab(c);
+                c._changedFocus = true;
+                return true;
+            }
         }
         if(this.mode==='Move') {
             for(let s of this.selection) {
@@ -242,7 +271,7 @@ export class QControlSurface extends eskv.Widget {
     }
     /**@type {eskv.Widget['on_touch_move']} */
     on_touch_move(event, object, touch) {
-        if(this.selection.length>=1 && this._touchingSelection) {
+        if(this.mode!=='Box' && this.selection.length>=1 && this._touchingSelection) {
             if(touch.grabbed===this && this.mode==='Move') {
                 let delta = touch.rect.pos.sub(this._oldPos);
                 for(let c of this.children) {
@@ -271,6 +300,7 @@ export class QControlSurface extends eskv.Widget {
     on_touch_up(event, object, touch) {
         if(touch.grabbed===this) {
             touch.ungrab();
+            if(this.mode==='Box') return true;
             if(this.selection.length>0 && !this._touchingSelection) {
                 this.selection = [];
                 this.updatePoints();
@@ -295,6 +325,54 @@ export class QControlSurface extends eskv.Widget {
             c[3] = cps;
         }
         super.layoutChildren();
+    }
+    /**@type {eskv.Widget['draw']} */
+    draw(app, ctx) {
+        if(this.mode==='Box' || this.mode=='Move') {
+            const oldDash = ctx.getLineDash();
+            ctx.setLineDash([0.2,0.1]); 
+            const oldLineWidth = ctx.lineWidth;               
+            ctx.lineWidth = 0.1*this.getControlPointScale();
+            if(this.selection.length>0) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(128,128,128,0.5)';
+                for(let sh of this.selection) {
+                    ctx.rect(sh.x, sh.y, sh.w, sh.h);
+                }
+                ctx.stroke();
+            }
+            if(this.mode==='Box') {
+                if(this.boxSelection.length>0) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(128,128,0,0.5)';
+                    for(let sh of this.boxSelection) {
+                        ctx.rect(sh.x, sh.y, sh.w, sh.h);
+                    }
+                    ctx.stroke();
+                }
+                if(this.children.length===2) {
+                    ctx.beginPath();
+                    const pt1 = /**@type {QControlPoint}*/this.children[0];
+                    const pt2 = /**@type {QControlPoint}*/this.children[1];
+                    ctx.strokeStyle = 'rgba(128,128,128,0.5)';
+                    ctx.rect(pt1.center_x, pt1.center_y, pt2.center_x-pt1.center_x, pt2.center_y-pt1.center_y);
+                    ctx.stroke();
+                }
+            }
+            ctx.setLineDash(oldDash);
+            ctx.lineWidth = oldLineWidth;
+        }
+    }
+    updateBoxSelection() {
+        if(this.mode==='Box' && this.children.length===2) {
+            const pt1 = /**@type {QControlPoint}*/this.children[0];
+            const pt2 = /**@type {QControlPoint}*/this.children[1];
+            const rect = new eskv.Rect([pt1.x, pt1.y, pt2.x-pt1.x, pt2.y-pt1.y]);
+            const ch = /**@type {QSelection}*/(QDraw.get().drawing.children);
+            this.boxSelection = ch.filter(sh=>rect.collide(sh));
+        } else {
+            this.boxSelection = [];
+        }
     }
 }
 
@@ -334,16 +412,23 @@ export class QControlPoint extends eskv.Widget {
     /**@type {eskv.Widget['on_touch_down']} */
     on_touch_down(event, object, touch) {
         let cs = QDraw.get().controlSurface;
-        if(cs.selection.length===1) {
+        if(cs.mode==='Box') {
+            if(this.movable && this.collide(touch.rect)) {
+                touch.grab(this);
+                if(this.nodeNum !== cs.focalNode) {
+                    cs.focalNode = this.nodeNum;
+                }
+                this._changedFocus = false;
+                return true
+            }
+        } else if(cs.selection.length===1) {
             let shape = cs.selection[0];
             if(this.movable && this.collide(touch.rect)) {
                 touch.grab(this);
                 if(this.nodeNum !== cs.focalNode) {
                     cs.focalNode = this.nodeNum;
-                    this._changedFocus = true;
-                } else {
-                    this._changedFocus = false;
                 }
+                this._changedFocus = false;
                 return true
             }    
         }
@@ -352,6 +437,13 @@ export class QControlPoint extends eskv.Widget {
     /**@type {eskv.Widget['on_touch_move']} */
     on_touch_move(event, object, touch) {
         let cs = QDraw.get().controlSurface;
+        if(cs.mode==='Box') {
+            console.log('moving point', this.center);
+            this.center_x = touch.rect.x;
+            this.center_y = touch.rect.y;
+            QDraw.get().controlSurface.updateBoxSelection();
+            return true;
+        }
         if(cs.selection.length===1) {
             let shape = cs.selection[0];
             if(touch.grabbed===this && this.movable) {
@@ -411,7 +503,7 @@ export class QControlPoint extends eskv.Widget {
         if(touch.grabbed===this) {
             touch.ungrab();
             let cs = QDraw.get().controlSurface;
-            if(cs.selection.length===1) {
+            if(cs.mode!=='Box' && cs.selection.length===1) {
                 let shape = cs.selection[0];
                 if(!this._moving && this.index===0 && !this._changedFocus &&
                     shape && cs.focalNode>=0 &&

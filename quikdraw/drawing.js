@@ -30,13 +30,15 @@ export class QGradient {
 
 export class QShapeStack extends eskv.BoxLayout {
     constructor(properties) {
+        //TODO: There's a problem here that the QShapeStack selection will sometimes get out of sync 
+        //with the QControlSurface selection if a selected item is removed
         super();
         this.stack = new eskv.BoxLayout({orientation: 'vertical', hints:{x:0,y:0,w:1,h:null}, paddingX:'1.0', order:'reverse'});
         this.controls = new eskv.BoxLayout({orientation: 'horizontal', hints: {h:'0.04ah'}, children: [
             new eskv.Button({ text: 'Top', 
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
-                    let sel = QDraw.get().controlSurface.selection;
+                    let sel = [...QDraw.get().controlSurface.selection];
                     for(let s of sel) {
                         const ind = drawing.children.findIndex(ds=>ds===s);
                         if(ind<drawing.children.length-1) {
@@ -44,12 +46,13 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, drawing.children.length);
                         }
                     }
+                    QDraw.get().controlSurface.selection = sel;
                 }
             }),
             new eskv.Button({ text: 'Up',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
-                    let sel = QDraw.get().controlSurface.selection;
+                    let sel = [...QDraw.get().controlSurface.selection];
                     for(let s of sel) {
                         const ind = drawing.children.findIndex(ds=>ds===s);
                         if(ind<drawing.children.length-1) {
@@ -57,12 +60,13 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, ind+1);    
                         }
                     }
+                    QDraw.get().controlSurface.selection = sel;
                 }
             }),
             new eskv.Button({ text: 'Down',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
-                    let sel = QDraw.get().controlSurface.selection;
+                    let sel = [...QDraw.get().controlSurface.selection];
                     for(let s of sel) {
                         const ind = drawing.children.findIndex(ds=>ds===s);
                         if(ind>0) {
@@ -70,12 +74,13 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, ind-1);    
                         }
                     }
+                    QDraw.get().controlSurface.selection = sel;
                 }
             }),
             new eskv.Button({ text: 'Bot.',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
-                    let sel = QDraw.get().controlSurface.selection;
+                    let sel = [...QDraw.get().controlSurface.selection];
                     for(let s of sel) {
                         const ind = drawing.children.findIndex(ds=>ds===s);
                         if(ind>0) {
@@ -83,6 +88,7 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, 0);    
                         }
                     }
+                    QDraw.get().controlSurface.selection = sel;
                 }
             }),
         ]});
@@ -165,6 +171,7 @@ export class QDrawing extends QGroup {
     lineDash = [0.1];
     lineWidth = 0.1;
     outlineColor = 'blue';
+    paletteId = '';
     constructor(properties) {
         super();
         if(properties) this.updateProperties(properties)
@@ -208,6 +215,7 @@ export class QDrawing extends QGroup {
         data['height'] = this.h;
         data['pixelsPerTile'] = this.pixelsPerTile;
         data['shapeNum'] = this.shapeNum;
+        data['paletteId'] = this.paletteId;
         // //TODO: Also dump data for images, gradients, canvas properties and anything else
         // data['children'] = ch;
         data['gradients'] = {}
@@ -223,6 +231,7 @@ export class QDrawing extends QGroup {
         drawView.h = data['height']??30;
         this.pixelsPerTile = data['pixelsPerTile']??64;
         this.shapeNum = data['shapeNum']??1;
+        this.paletteId = data['paletteId']??'';
         if('gradients' in data) {
             for(let gs in data['gradients']) {
                 let gr = new QGradient();
@@ -230,6 +239,7 @@ export class QDrawing extends QGroup {
                 this.gradientStore[gs] = gr;
             }    
         }
+        QDraw.get().palette.customPalette.onDrawing(this.paletteId);
     }
 }
 

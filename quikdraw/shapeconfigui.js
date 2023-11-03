@@ -611,10 +611,11 @@ export class QConfigArea extends eskv.BoxLayout {
                             on_press: (e,o,v) => {
                                 const dr = QDraw.get().drawing;
                                 const cs = QDraw.get().controlSurface
-                                let grpCh = cs.selection.map(c=>c);
-                                for(let c of grpCh) {
-                                    dr.removeChild(c);
-                                }
+                                const sel = new Set(cs.selection);
+                                const drwShapes = /**@type {import("./controlsurface.js").QSelection}*/(dr.children)
+                                const grpCh = drwShapes.filter(sh=>sel.has(sh));
+                                const drwCh = drwShapes.filter(sh=>!sel.has(sh));
+                                dr.children = drwCh;
                                 const grp = addShape(QGroup, false);
                                 grp.children = grpCh;
                                 grp.updateExtents();

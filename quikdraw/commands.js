@@ -1,6 +1,7 @@
 //@ts-check
 import * as eskv from "../eskv/lib/eskv.js";
 import { QDraw } from "./app.js";
+import { QControlSurface } from "./controlsurface.js";
 import { QShape, QGeometric, QCircle, QRectangle, QText } from "./shapes.js";
 
 /**
@@ -163,9 +164,17 @@ export class QCommandBar extends eskv.BoxLayout {
                             QDraw.get().controlSurface.selection = QDraw.get().drawing.children.map(c=>/**@type {QShape}*/(c));
                         },
                     }),
-                    new eskv.Button({text:'R. Band', 
+                    new eskv.Button({text:'Box', id:'Box', 
                         on_press: (e,o,v)=> {
-                            QDraw.get().controlSurface.mode = 'Band';
+                            if(o.text==='Box') {
+                                QDraw.get().controlSurface.mode = 'Box';
+                                o.text = 'Done';
+                            } else {
+                                const boxSel = QDraw.get().controlSurface.boxSelection;
+                                const sel = QDraw.get().controlSurface.selection;
+                                QDraw.get().controlSurface.selection = [...new Set([...sel, ...boxSel])];
+                                QDraw.get().controlSurface.mode = 'Move';
+                            }
                         },
                     }),
                     new eskv.Button({text:'None', 
@@ -173,7 +182,7 @@ export class QCommandBar extends eskv.BoxLayout {
                             QDraw.get().controlSurface.selection = [];
                         },
                     }),
-                    new eskv.Button({text:'Dup.', 
+                    new eskv.Button({text:'Dup', 
                         on_press: (e,o,v)=> {
                             let drawing = QDraw.get().drawing;
                             let sel = QDraw.get().controlSurface.selection;
@@ -227,5 +236,11 @@ export class QCommandBar extends eskv.BoxLayout {
             }),
 
         ];
+        const band = /**@type {eskv.Button}*/(this.findById('Box'));
+        QDraw.get().controlSurface.bind('mode', (e,o,v)=> {
+            if(/**@type {QControlSurface}*/(o).mode!=='Box') {
+                band.text = 'Box';
+            }
+        })
     }
 }
