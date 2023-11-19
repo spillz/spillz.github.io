@@ -261,9 +261,7 @@ const instructionsText = 'Objective: Get the highest score you can by forming 7 
 'Press any of the selected letters to reset the current word.\n\n'+
 'Scoring: Each word scores the sum of the tile values multiplied by the length of the word.\n\n'+
 'End game: The game ends when you have completed a word in all 7 rows in the letter stack '+
-'or you cannot form a valid word.\n\n'+
-'Progression: If you achieve the bronze star target value, you may progress to the next game';
-
+'or you cannot form a valid word.';
 
 class Instructions extends eskv.ModalView {
     hints = {w:0.8,center_x:0.5}
