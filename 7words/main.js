@@ -109,16 +109,21 @@ class Tile extends eskv.Widget {
         this.children = [
             new eskv.Label({
                 text: letter,
+                color: (app)=>app.colors['tileLetterText'],
                 fontSize: '0.8wh',
                 hints: {x:0,y:0,w:1,h:1},
             }),
             new eskv.Label({
                 text: ''+value,
+                color: (app)=>app.colors['tileLetterText'],
                 fontSize: '0.8wh',
                 hints: {x:0.67,y:0.67,w:.33,h:.33},
             })
         ]
         this.bgColor = SevenWordsApp.get().colors['tile'];
+        SevenWordsApp.get().bind('colors', (e,o,v)=>{
+            this.updateBgColor();
+        })
         this.letter = letter;
         this.value = value;
         this.gposX = x;
@@ -142,14 +147,17 @@ class Tile extends eskv.Widget {
         this.children[1].text = ''+value;
     }
 
-    on_active(event, object, value) {
+    updateBgColor() {
         let colors = SevenWordsApp.get().colors;
         this.bgColor = this.selected? colors['tileSelected']: this.active? colors['tile'] : colors['tileInactive'];
     }
 
+    on_active(event, object, value) {
+        this.updateBgColor();
+    }
+
     on_selected(event, object, value) {
-        let colors = SevenWordsApp.get().colors;
-        this.bgColor = this.selected? colors['tileSelected']: this.active? colors['tile'] : colors['tileInactive'];
+        this.updateBgColor();
     }
 
     on_gpos(event, object, value) {
@@ -252,16 +260,18 @@ class Star extends eskv.Widget {
 }
 
 
-
 const instructionsText = 'Objective: Get the highest score you can by forming 7 words in the letter stack. '+
 'Try to beat the bronze, silver, and gold target scores.\n\n'+
 'Play: For each row in the letter stack, use one or more letters in the current active row '+
 'and the free stack (top of screen) to form a word by touching the letter tiles in sequence. '+
 'A score prompt will show for a valid word, which you can press to score the word. '+
 'Press any of the selected letters to reset the current word.\n\n'+
+'Tile use: You do not have to use all letters in a row and any unused letters will move to the free stack'+
+'for use on futures rows.\\n\n'+
 'Scoring: Each word scores the sum of the tile values multiplied by the length of the word.\n\n'+
 'End game: The game ends when you have completed a word in all 7 rows in the letter stack '+
-'or you cannot form a valid word.';
+'or if you cannot form a valid word on any row.';
+
 
 class Instructions extends eskv.ModalView {
     hints = {w:0.8,center_x:0.5}
@@ -458,27 +468,32 @@ class ScoreBar extends eskv.BoxLayout {
                 ]
             }),
             new eskv.BoxLayout({
-                orientation: 'vertical',
+                orientation: 'horizontal',
                 children: [
-                    new eskv.Label({
-                        hints: {h:0.33},
-                        text: 'BEST',
-                        color: (app)=>app.colors['scoreText'],
-                        align: 'right',
-                        valign: 'bottom',
+                    new eskv.BoxLayout({
+                        orientation: 'vertical',
+                        children: [
+                            new eskv.Label({
+                                hints: {h:0.33},
+                                text: 'BEST',
+                                color: (app)=>app.colors['scoreText'],
+                                align: 'right',
+                                valign: 'bottom',
+                            }),
+                            new eskv.Label({
+                                hints: {h:0.67},
+                                text: (scorebar)=>''+scorebar.hiScore,
+                                color: (app)=>app.colors['scoreText'],
+                                align: 'right',
+                                valign: 'top',
+                            })    
+                        ]
                     }),
-                    new eskv.Label({
-                        hints: {h:0.67},
-                        text: (scorebar)=>''+scorebar.hiScore,
-                        color: (app)=>app.colors['scoreText'],
-                        align: 'right',
-                        valign: 'top',
-                    })    
+                    new MenuButton({id:'menubutton', hints:{h:'0.75h', w:'1wh'},
+                        on_press: (e,o,v)=>SevenWordsApp.get().board.showMenu(),
+                    }),            
                 ]
-            }),
-            new MenuButton({id:'menubutton', hints:{h:'0.75h', w:'1wh'},
-                on_press: (e,o,v)=>SevenWordsApp.get().board.showMenu(),
-            }),    
+            })
         ]
 
         try {
@@ -602,7 +617,7 @@ class MessageBar extends eskv.BoxLayout {
 class Board extends eskv.Widget {
     hints = {x:0, y:0, w:1, h:1};
     constructor() {
-        super();
+        super({bgColor: (app)=>app.colors['background']});
         this.scorebar = new ScoreBar();
         this.statusbar = new StatusBar();
         this.messagebar = new MessageBar();
@@ -639,7 +654,7 @@ class Board extends eskv.Widget {
         this.gameOver = false;
 
         eskv.rand.setSeed(this.scorebar.gameId>0?this.scorebar.gameId:Date.now());
-        const cons = eskv.rand.chooseN(tileSet, boardSize*(boardSize+1)/2);
+        const cons = eskv.rand.chooseN(tileSet, (boardSize-1)*boardSize/2);
         const vow = eskv.rand.chooseN(vowelSet, 3 + boardSize);
         const target = cons.concat(vow).map(l => l[1]).reduce((prev,cur)=>prev+cur);
         this.scorebar.target = [3 * target, 4 * target, 5 * target];
@@ -665,7 +680,6 @@ class Board extends eskv.Widget {
 
         this.opyramid = this.pyramid.map(p => p.slice());
         this.ofree = this.free.slice();
-        this.bgColor = SevenWordsApp.get().colors['background'];
 
         this.firstStart = true;
     }
@@ -1139,7 +1153,8 @@ class SevenWordsApp extends eskv.App {
     constructor(words) {
         super();
         this.words = words;
-        this.colors = colors.loadTheme('default');
+        const themeName = localStorage.getItem('7Words/theme')??'beach';
+        this.colors = colors.loadTheme(themeName);
         this.board = new Board()
         this.baseWidget.children = [
             this.board
@@ -1147,7 +1162,7 @@ class SevenWordsApp extends eskv.App {
     }
     on_key_down(event, object, keyInfo) {
         if('Escape' in keyInfo.states && keyInfo.states['Escape']) {
-            if(this.board.instructions.parent!==null) this.board.removeChild(this.board.instructions, false);
+            if(this.board.instructions.parent!==null) this.board.instructions.close();
             if(this.board.menu.parent===null) this.board.showMenu();
             else this.board.hideMenu();
         }
@@ -1155,7 +1170,10 @@ class SevenWordsApp extends eskv.App {
     setNextTheme() {
         const themes = Object.keys(colors.themes);
         const ind = (themes.indexOf(this.colors['id'])+1)%themes.length;
-        if(ind>=0) this.colors = colors.loadTheme(themes[ind]);
+        if(ind>=0) {
+            this.colors = colors.loadTheme(themes[ind]);
+            localStorage.setItem('7Words/theme', themes[ind]);
+        }
     }
     /**
      * 

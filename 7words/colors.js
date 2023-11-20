@@ -9,24 +9,39 @@
  * @param {number} wgt 
  * @returns 
  */
-export function colorAvg(c1, c2, wgt) {
+function colorAvg(c1, c2, wgt) {
     return c1.map((a, index) => wgt * a + (1 - wgt) * c2[index]);
 }
 
+/**
+ * 
+ * @param {ColorVals} color 
+ */
+function convertColor(color) {
+    let i=0;
+    /**@type {ColorVals} */
+    const result = [0,0,0,0];
+    for(let c of color) {
+        result[i] = i<=2?Math.floor(c * 255): c;
+        i++;
+    }
+    return result;
+}
+
 const defaultTheme = {
-    'background': [0.7, 0.7, 0.9, 1],
-    'tile': [0.5, 0.5, 0.75, 1],
-    'tileSelected': [0, 0, 0.5, 1],
-    'tileInactive': [0.7, 0.7, 0.7, 1],
-    'tileLetterText': [0.9, 0.9, 0.9, 1],
-    'wordScoreBackground': [0, 0, 0.5, 1],
-    'wordScoreText': [0.9, 0.9, 0.9, 1],
-    'scoreText': [0.9, 0.9, 0.9, 1],
-    'checker': [0.8, 0.8, 0.9, 1],
-    'moveCandidates': [0.2, 0.3, 0.7, 1],
-    'menuButtonBackground': [0.5, 0.8, 0.7, 1],
-    'menuButtonForeground': [0.9, 0.9, 0.9, 1],
-    'menuButtonForegroundDisabled': [0.5, 0.5, 0.5, 1]
+    'background': convertColor([0.7, 0.7, 0.9, 1]),
+    'tile': convertColor([0.5, 0.5, 0.75, 1]),
+    'tileSelected': convertColor([0, 0, 0.5, 1]),
+    'tileInactive': convertColor([0.7, 0.7, 0.7, 1]),
+    'tileLetterText': convertColor([0.9, 0.9, 0.9, 1]),
+    'wordScoreBackground': convertColor([0, 0, 0.5, 1]),
+    'wordScoreText': convertColor([0.9, 0.9, 0.9, 1]),
+    'scoreText': convertColor([0.9, 0.9, 0.9, 1]),
+    'checker': convertColor([0.8, 0.8, 0.9, 1]),
+    'moveCandidates': convertColor([0.2, 0.3, 0.7, 1]),
+    'menuButtonBackground': convertColor([0.5, 0.8, 0.7, 1]),
+    'menuButtonForeground': convertColor([0.9, 0.9, 0.9, 1]),
+    'menuButtonForegroundDisabled': convertColor([0.5, 0.5, 0.5, 1])
 };
 
 
@@ -51,30 +66,17 @@ export const themes = {
     'beach': beachTheme
 };
 
-/**
- * 
- * @param {ColorVals} color 
- */
-function convertColor(color) {
-    let i=0;
-    /**@type {ColorVals} */
-    const result = [0,0,0,0];
-    for(let c of color) {
-        result[i] = i<=2?Math.floor(c * 255): c;
-        i++;
-    }
-    return result;
-}
 
 export function loadTheme(themeName) {
-    const theme = themes[themeName];
-    if (themeName === 'default') {
-        for (const key in theme) {
-            theme[key] = convertColor(theme[key]);
-        }
+    const themeBase = themes[themeName];
+
+    let theme = {};
+    for(let c in themeBase) {
+        theme[c] = themeBase[c];
     }
 
     theme['bronze'] = [205, 127, 50 , 1.0];
+    /**@type {ColorVals} */
     theme['silver'] = [208, 208, 208, 1.0];
     theme['gold'] = [255, 215, 0, 1.0];
 
