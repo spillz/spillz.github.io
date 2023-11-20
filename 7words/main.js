@@ -274,7 +274,7 @@ const instructionsText = 'Objective: Get the highest score you can by forming 7 
 
 
 class Instructions extends eskv.ModalView {
-    hints = {w:0.8,center_x:0.5}
+    hints = {w:0.8,h:0.8,center_x:0.5, center_y:0.5}
     constructor() {
         super();
         this.bgColor = 'rgba(0,0,0,0.5)';
@@ -320,7 +320,7 @@ class MenuButton extends eskv.BasicButton {
     }    
 }
 
-class MenuLabel extends eskv.Label {
+class MenuOption extends eskv.Label {
     active = true;
     value = -1;
     constructor(props = {}) {
@@ -349,13 +349,13 @@ class Menu extends eskv.ModalView {
         this.outlineColor = null;
 
         this.children = [
-            new MenuLabel({text: 'Restart Game', value:1}),
-            new MenuLabel({text: 'Next Game', value:2}),
-            new MenuLabel({text: 'Previous Game', value:3}),
-            new MenuLabel({text: 'Instructions', value:4}),
-            new MenuLabel({text: 'Leaderboard', value:5}),
-            new MenuLabel({text: 'Achievements', value:6}),
-            new MenuLabel({text: 'Theme', value:7}),
+            new MenuOption({text: 'Restart Game', value:1}),
+            new MenuOption({text: 'Next Game', value:2}),
+            new MenuOption({text: 'Previous Game', value:3}),
+            new MenuOption({text: 'Instructions', value:4}),
+            new MenuOption({text: 'Leaderboard', value:5}),
+            new MenuOption({text: 'Achievements', value:6}),
+            new MenuOption({text: 'Theme', value:7}),
         ]
     }
 
@@ -379,7 +379,7 @@ class Menu extends eskv.ModalView {
         super.on_touch_up(event, object, touch);
         if (this.collide(touch.rect)) {
             for (let c of this.children) {
-                if (c instanceof MenuLabel && c.collide(touch.rect) && c.active) {
+                if (c instanceof MenuOption && c.collide(touch.rect) && c.active) {
                     this.selection = c.value;
                     sounds.MENU.play();
                     return true;
@@ -490,7 +490,7 @@ class ScoreBar extends eskv.BoxLayout {
                         ]
                     }),
                     new MenuButton({id:'menubutton', hints:{h:'0.75h', w:'1wh'},
-                        on_press: (e,o,v)=>SevenWordsApp.get().board.showMenu(),
+                        on_press: (e,o,v)=>SevenWordsApp.get().showMenu(),
                     }),            
                 ]
             })
@@ -631,20 +631,11 @@ class Board extends eskv.Widget {
         // this.scorebar.bind('gameId', (e,o,v)=>this.messagebar.gameId=v);
         this.statusbar.wordLabel.bind('touch_down', (e,o,touch)=>this.confirmWord(this.statusbar, touch));
 
-        this.menu = new Menu();
-        this.menu.bind('selection', (e,o,v)=>this.menuChoice(this.menu,v));
-        this.scorebar.bind('gameId', (e,o,v)=>{
-            this.menu.uiUpdate(this.scorebar);
-            this.messagebar.gameId=v;
-        });
-        this.scorebar.bind('score', (e,o,v)=>this.menu.uiUpdate(this.scorebar));
-
         this.addChild(this.scorebar);
         this.addChild(this.statusbar);
         this.addChild(this.messagebar);
 
         this.blockGposUpdates = false;
-        this.instructions = new Instructions();
         this.activeRow = 0;
         this.scorebar.getStatus();
 
@@ -682,47 +673,6 @@ class Board extends eskv.Widget {
         this.ofree = this.free.slice();
 
         this.firstStart = true;
-    }
-
-    showMenu() {
-        this.menu.selection = -1;
-        this.menu.popup();
-    }
-    
-    hideMenu() {
-        this.menu.close();
-    }
-
-    menuChoice(menu, selection) {
-        switch (selection) {
-            case 1:
-                this.hideMenu();
-                this.restartGame();
-                break;
-            case 2:
-                this.hideMenu();
-                this.nextGame();
-                break;
-            case 3:
-                this.hideMenu();
-                this.prevGame();
-                break;
-            case 4:
-                this.hideMenu();
-                this.instructions.popup();
-                break;
-            case 5:
-                this.hideMenu();
-                break;
-            case 6:
-                this.hideMenu();
-                break;
-            case 7:
-                SevenWordsApp.get().setNextTheme();
-                this.hideMenu();
-                this.showMenu();
-                break;
-        }
     }
 
     pos2gpos(pos) {
@@ -769,7 +719,7 @@ class Board extends eskv.Widget {
 
         if(redraw) {
             eskv.rand.setSeed(this.scorebar.gameId>0?this.scorebar.gameId:Date.now());
-            const cons = eskv.rand.chooseN(tileSet, boardSize*(boardSize+1)/2);
+            const cons = eskv.rand.chooseN(tileSet, (boardSize-1)*(boardSize)/2);
             const vow = eskv.rand.chooseN(vowelSet, 3 + boardSize);
             const target = cons.concat(vow).map(l => l[1]).reduce((prev,cur)=>prev+cur);
             this.scorebar.target = [3 * target, 4 * target, 5 * target];
@@ -963,11 +913,6 @@ class Board extends eskv.Widget {
             [t.w, t.h] = [this.tileSize, this.tileSize];
         });
 
-        [this.menu.w,this.menu.h] = this.size;
-        [this.menu.x,this.menu.y] = this.pos;
-        [this.instructions.w, this.instructions.h] = this.size;
-        [this.instructions.x,this.instructions.y] = this.pos;
-
         if (this.firstStart) {
             this.firstStart = false;
         }
@@ -1147,24 +1092,68 @@ class Board extends eskv.Widget {
 }
 
 
-
-
 class SevenWordsApp extends eskv.App {
     constructor(words) {
         super();
         this.words = words;
+        this.instructions = new Instructions();
+        this.menu = new Menu();
+        this.menu.bind('selection', (e,o,v)=>this.menuChoice(this.menu,v));
         const themeName = localStorage.getItem('7Words/theme')??'beach';
         this.colors = colors.loadTheme(themeName);
-        this.board = new Board()
+        this.board = new Board();
+        this.board.scorebar.bind('gameId', (e,o,v)=>{
+            this.menu.uiUpdate(this.board.scorebar);
+            this.board.messagebar.gameId=v;
+        });
+        this.board.scorebar.bind('score', (e,o,v)=>SevenWordsApp.get().menu.uiUpdate(this.board.scorebar));
         this.baseWidget.children = [
             this.board
         ];
     }
+    showMenu() {
+        this.menu.selection = -1;
+        this.menu.popup();
+    }
+    hideMenu() {
+        this.menu.close();
+    }
+    menuChoice(menu, selection) {
+        switch (selection) {
+            case 1:
+                this.hideMenu();
+                this.board.restartGame();
+                break;
+            case 2:
+                this.hideMenu();
+                this.board.nextGame();
+                break;
+            case 3:
+                this.hideMenu();
+                this.board.prevGame();
+                break;
+            case 4:
+                this.hideMenu();
+                this.instructions.popup();
+                break;
+            case 5:
+                this.hideMenu();
+                break;
+            case 6:
+                this.hideMenu();
+                break;
+            case 7:
+                this.setNextTheme();
+                this.hideMenu();
+                this.showMenu();
+                break;
+        }
+    }
     on_key_down(event, object, keyInfo) {
         if('Escape' in keyInfo.states && keyInfo.states['Escape']) {
-            if(this.board.instructions.parent!==null) this.board.instructions.close();
-            if(this.board.menu.parent===null) this.board.showMenu();
-            else this.board.hideMenu();
+            if(this.instructions.parent!==null) this.instructions.close();
+            if(this.menu.parent===null) this.showMenu();
+            else this.hideMenu();
         }
     }
     setNextTheme() {
