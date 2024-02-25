@@ -254,6 +254,7 @@ export class SpriteSheetSelector extends TileMap {
 	activeCellIndex = -1;
 	/**@type {eskv.Vec2|null} */
 	activeCell = null;
+	_opos = new eskv.Vec2([0,0]);
     /**@type {eskv.Widget['draw']} */
 	draw(app, ctx) {
 		super.draw(app, ctx);
@@ -273,13 +274,14 @@ export class SpriteSheetSelector extends TileMap {
 	on_touch_down(evt, obj, touch) {
 		if(this.collide(touch.rect)) {
 			touch.grab(this);
+			this._opos = touch.pos;
 			return true;
 		}
 		return false;
 	}
 	/**@type {eskv.Widget['on_touch_move']} */
 	on_touch_move(evt, obj, touch) {
-		if(touch.grabbed===this) {
+		if(touch.grabbed===this && touch.pos.dist(this._opos)>=0.1) {
 			touch.grab(this.parent);
 			return true;
 		}
