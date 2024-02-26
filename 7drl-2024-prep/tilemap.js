@@ -239,25 +239,56 @@ export class TileMap extends eskv.Widget {
         if(this.spriteSheet===null) return;
         if (!this.spriteSheet.sheet.complete || this.spriteSheet.sheet.naturalHeight == 0) return;
 		const sw = Math.floor(this.spriteSheet.sheet.width/this.spriteSheet.spriteSize);
+		const sh = Math.floor(this.spriteSheet.sheet.height/this.spriteSheet.spriteSize);
+		const len = sw*sh;
         for(let x=0;x<this.tileW;x++) {
             for(let y=0;y<this.tileH;y++) {
-                const ind = this.get([x,y]);
-				const indY = Math.floor(ind/sw);
-				const indX = ind%sw;
-				if(ind>=0) this.spriteSheet.draw([indX,indY], x+this.x, y+this.y);
+                let ind = this.get([x,y]);
+				if(ind>=0) {
+					const flipped = Math.floor(ind/len/4)>0;
+					ind = ind%(len*4);
+					const angle = Math.floor(ind/len);
+					ind = ind%len;
+					const indY = Math.floor(ind/sw);
+					const indX = ind%sw;
+					if(!flipped && angle===0) {
+						this.spriteSheet.draw([indX,indY], x+this.x, y+this.y);
+					} else {
+						this.spriteSheet.drawRotated([indX,indY], x+this.x+0.5, y+this.y+0.5, angle*90, flipped, "center");
+					}	
+				}
             }
         }
     }
 }
 
 export class SpriteSheetSelector extends TileMap {
-	activeCellIndex = -1;
+	activeCellIndex = 0;
 	/**@type {eskv.Vec2|null} */
-	activeCell = null;
+	activeCell = new eskv.Vec2([0,0]);
 	_opos = new eskv.Vec2([0,0]);
+	angle = 0;
+	flipped = false;
     /**@type {eskv.Widget['draw']} */
 	draw(app, ctx) {
-		super.draw(app, ctx);
+        if(this.spriteSheet===null) return;
+        if (!this.spriteSheet.sheet.complete || this.spriteSheet.sheet.naturalHeight == 0) return;
+		const sw = Math.floor(this.spriteSheet.sheet.width/this.spriteSheet.spriteSize);
+        for(let x=0;x<this.tileW;x++) {
+            for(let y=0;y<this.tileH;y++) {
+                const ind = this.get([x,y]);
+				const indY = Math.floor(ind/sw);
+				const indX = ind%sw;
+				if(ind>=0) {
+					if(!this.flipped && this.angle===0) {
+						this.spriteSheet.draw([indX,indY], x+this.x, y+this.y);
+					} else {
+						this.spriteSheet.drawRotated([indX,indY], x+this.x+0.5, y+this.y+0.5, this.angle*90, this.flipped, "center");
+					}
+				}
+            }
+        }
+		// super.draw(app, ctx);
 		if(this.activeCell) {
 			const lw = ctx.lineWidth;
 			const style = ctx.strokeStyle;
@@ -305,6 +336,8 @@ export class TileMapPainter extends TileMap {
 	oldActiveCell = null; 
 	/**@type {eskv.Vec2|null} */
 	activeCell = null;
+	angle = 0;
+	flipped = false;
     /**@type {eskv.Widget['draw']} */
 	draw(app, ctx) {
 		super.draw(app, ctx);
@@ -350,19 +383,25 @@ export class TileMapPainter extends TileMap {
 	}
 	/**@type {eskv.Widget['on_touch_up']} */
 	on_touch_up(evt, obj, touch) {
-		if(touch.grabbed===this && this.activeCell) {
-			const pos = this.activeCell;
-			if(this.oldActiveCell) {
-				const x = Math.min(this.activeCell[0],this.oldActiveCell[0]);
-				const y = Math.min(this.activeCell[1],this.oldActiveCell[1]);
-				const w = Math.abs(this.activeCell[0]-this.oldActiveCell[0]); 
-				const h = Math.abs(this.activeCell[1]-this.oldActiveCell[1]);
-				const rect = new eskv.Rect([x,y,w+1,h+1]);
-				for(let pos of this.iterRect(rect)) {
-					this.set(pos, this.brush);
-				}
-			} else {
-				this.set(pos, this.brush);
+		if(touch.grabbed===this) {
+			if(this.activeCell && this.spriteSheet) {
+				const sw = Math.floor(this.spriteSheet.sheet.width/this.spriteSheet.spriteSize);
+				const sh = Math.floor(this.spriteSheet.sheet.height/this.spriteSheet.spriteSize);
+				const len = sw*sh;		
+				const brush = this.brush + len*this.angle + (this.flipped?4*len:0);
+				const pos = this.activeCell;
+				if(this.oldActiveCell) {
+					const x = Math.min(this.activeCell[0],this.oldActiveCell[0]);
+					const y = Math.min(this.activeCell[1],this.oldActiveCell[1]);
+					const w = Math.abs(this.activeCell[0]-this.oldActiveCell[0]); 
+					const h = Math.abs(this.activeCell[1]-this.oldActiveCell[1]);
+					const rect = new eskv.Rect([x,y,w+1,h+1]);
+					for(let pos of this.iterRect(rect)) {
+						this.set(pos, brush);
+					}
+				} else {
+					this.set(pos, brush);
+				}	
 			}
 			this.oldActiveCell = this.activeCell;
 			touch.ungrab();
