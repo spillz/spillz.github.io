@@ -63,18 +63,12 @@ export class SpriteSheetSelector extends eskv.sprites.TileMap {
 	}
     /**@type {eskv.Widget['draw']} */
 	draw(app, ctx) {
-        if(this.spriteSheet===null) return;
+        if(this.spriteSheet===null || this.spriteSheet.spriteSize<=0) return;
         if (!this.spriteSheet.sheet.complete || this.spriteSheet.sheet.naturalHeight == 0) return;
         const [tw, th] = this.tileDim;
-		// const sw = Math.floor(this.spriteSheet.sheet.width/this.spriteSheet.spriteSize);
+		super.draw(app, ctx);
+
 		if(this.activeCell!==null) {
-			for(let x=0;x<tw;x++) {
-				for(let y=0;y<th;y++) {
-					let ind = this.get([x,y]);
-					if(x===this.activeCell[0] && y===this.activeCell[1]) ind = eskv.sprites.packSpriteInfo(ind, this.flipped, this.angle, this.spriteSheet.len)
-					this.spriteSheet.drawIndexed(ctx, ind, x+this.x, y+this.y)
-				}
-			}
 			const lw = ctx.lineWidth;
 			const style = ctx.strokeStyle;
 			ctx.lineWidth = 1.0/this.spriteSheet.spriteSize;
@@ -84,14 +78,6 @@ export class SpriteSheetSelector extends eskv.sprites.TileMap {
 			ctx.stroke();
 			ctx.lineWidth = lw;
 			ctx.strokeStyle = style;	
-		} else {
-			for(let x=0;x<tw;x++) {
-				for(let y=0;y<th;y++) {
-					let ind = this.get([x,y]);
-					this.spriteSheet.drawIndexed(ctx, ind, x+this.x, y+this.y)
-				}
-			}
-	
 		}
 	}
 	/**@type {eskv.Widget['on_touch_down']} */

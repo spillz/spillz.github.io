@@ -59,21 +59,28 @@ class FPS extends eskv.Label {
     _counter = 0;
     _frames = 0;
     _worst = 300;
+    _tref = Date.now()
+    _badFrameCount = 0;
     /**@type {eskv.Label['update']} */
     update(app, millis) {
         super.update(app, millis);
-        this._counter+=millis;
+        const tref = Date.now()
+        this._counter += tref - this._tref;
         this._frames += 1;
-        const currentFPS = 1000/millis;
+        const currentFPS = 1000/(tref-this._tref);
+        this._tref= tref;
+        this._badFrameCount += currentFPS<50?1:0;
         if(currentFPS<this._worst) this._worst = currentFPS;
         if(this._counter>=1000) {
-            this.text = `FPS: ${Math.round(this._frames/this._counter*1000)} (worst: ${Math.round(this._worst)})` 
+            this.text = `FPS: ${Math.round(this._frames/this._counter*1000)} (worst: ${Math.round(this._worst)}, # >20ms: ${Math.round(this._badFrameCount)})`;
             this._counter = 0;
             this._frames = 0;
             this._worst = 300;
+            this._badFrameCount = 0;
         }
     }
 }
+
 eskv.App.registerClass('FPS', FPS, 'Label');
 
 
