@@ -14,9 +14,13 @@
     top:0;
     left:0;
     }
+    .eskvdiv { position:absolute }
+    .eskvdiv > * { position:absolute }
 </style>
 
 <!-- IMPORTANT: The ESKV App draws to a canvas that must be ID'd as canvas-->
-<canvas id="canvas"></canvas> 
+<div class="eskvdiv" id="eskvapp">
+    <canvas id="canvas"></canvas>
+</div>
 
 <script type="module" src="./main.js"></script>
