@@ -49,10 +49,8 @@ export class SpriteSheetSelector extends eskv.sprites.TileMap {
 	}
 	on_sheetLoaded(e, o, v) {
 		if(this.spriteSheet===null) return;
-		if(this.fullSheet) {
-			this.tileDim = new eskv.Vec2([this.spriteSheet.sw, this.spriteSheet.sh]);
-			this.initMap();	
-		}
+		this.tileDim = new eskv.Vec2([this.spriteSheet.sw, this.spriteSheet.sh]);
+		this.initMap();	
 	}
 	initMap() {
 		let i=0;
