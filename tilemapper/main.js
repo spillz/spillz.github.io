@@ -213,23 +213,23 @@ App:
             orientation: 'vertical'
             paddingX: '1'
             paddingY: '1'
-            FPS:
-                hints: {h:'1'}
-            Caption:
-                text: 'Animations'
-            AnimatorToolbar:
-                id:'animatortoolbar'
-                hints: {h:'1'}
-            Caption:
-                text: 'Autotiles'
-            AutotileToolbar:
-                id:'autotiletoolbar'
-                hints: {h:'1'}
-            Caption:
-                text: 'Tilestamps'
-            TilestampToolbar:
-                id:'tilestamptoolbar'
-                hints: {h:'1'}
+#            FPS:
+#                hints: {h:'1'}
+#            Caption:
+#                text: 'Animations'
+#            AnimatorToolbar:
+#                id:'animatortoolbar'
+#                hints: {h:'1'}
+#            Caption:
+#                text: 'Autotiles'
+#            AutotileToolbar:
+#                id:'autotiletoolbar'
+#                hints: {h:'1'}
+#            Caption:
+#                text: 'Tilestamps'
+#            TilestampToolbar:
+#                id:'tilestamptoolbar'
+#                hints: {h:'1'}
             Caption:
                 text: 'Spritesheet'
             ScrollView:
