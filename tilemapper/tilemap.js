@@ -14,7 +14,7 @@ export class SpriteSheetSelector extends eskv.sprites.TileMap {
 	_opos = new eskv.Vec2([0,0]);
 	angle = 0;
 	flipped = false;
-	fullSheet = false;
+	sheetDisplay = false;
 	/**
 	 * 
 	 * @param {Object|null} props 
@@ -44,13 +44,12 @@ export class SpriteSheetSelector extends eskv.sprites.TileMap {
 	on_spriteSheet(e, o, v) {
 		if(this.spriteSheet===null) return;
 		this.tileDim = new eskv.Vec2([this.spriteSheet.sw, this.spriteSheet.sh]);
-		this.initMap();
 		eskv.App.get().bind('sheetLoaded', (e,o,v)=>this.on_sheetLoaded());
 	}
 	on_sheetLoaded(e, o, v) {
 		if(this.spriteSheet===null) return;
 		this.tileDim = new eskv.Vec2([this.spriteSheet.sw, this.spriteSheet.sh]);
-		this.initMap();	
+		if(this.sheetDisplay) this.initMap();
 	}
 	initMap() {
 		let i=0;
@@ -118,6 +117,7 @@ export class TileMapPainter extends LayeredTileMap {
 	constructor(props = {}) {
 		super();
 		if(props) this.updateProperties(props);
+		eskv.App.get().bind('sheetLoaded', (e,o,v)=>this.clearCache());
 	}
 	get tileW() {
 		return this.tileDim[0];

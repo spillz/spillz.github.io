@@ -234,7 +234,7 @@ App:
                 text: 'Spritesheet'
             ScrollView:
                 SpriteSheetSelector:
-                    fullSheet: true
+                    sheetDisplay: true
                     flipped: painterui.painter.flipped
                     angle: painterui.painter.angle
                     hints: {w:null, h:null}
