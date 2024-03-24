@@ -6,15 +6,23 @@ import { QControlSurface } from "./controlsurface.js";
 import { QConfigArea } from "./shapeconfigui.js"; 
 import { QPalette } from "./palette.js";
 import { QCommandBar } from "./commands.js";
+import { QDataStore } from "./storage.js";
+
 
 export class QDraw extends eskv.App { 
     constructor() {
         super();
-        this.styling.add("Label", {fontSize: '0.02ah', hints:{h:'0.04ah'}});
-        this.styling.add("Button", {fontSize: '0.02ah', hints:{h:'0.04ah'}});
-        this.styling.add("ToggleButton", {fontSize: '0.02ah', hints:{h:'0.04ah'}});
-        this.styling.add("TextInput", {fontSize: '0.02ah', hints:{h:'0.04ah'}});
-        this.styling.add("Slider", {orientation: 'horizontal', hints:{h:'0.04ah'}});
+        this.store = new QDataStore('QuikDraw');
+        this.store.open();
+        eskv.App.rules.add("Label", {hints:{h:'0.04ah'}});
+        eskv.App.rules.add("Button", {hints:{h:'0.04ah'}});
+        eskv.App.rules.add("ToggleButton", {hints:{h:'0.04ah'}});
+        eskv.App.rules.add("TextInput", {hints:{h:'0.04ah'}});
+        eskv.App.rules.add("Slider", {orientation: 'horizontal', hints:{h:'0.04ah'}});
+
+        // this.prefDimH = -1;
+        // this.prefDimW = -1;
+        // this.tileSize = 64;
 
         this.drawing = new QDrawing({
             hints: {x:0.0, y:0.0, w:1.0, h:1.0},

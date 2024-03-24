@@ -133,9 +133,9 @@ export class QPointRef {
 export class QShape extends eskv.Widget {
     /** QuikDraw assigned identity of the shape */
     id = 'Shape';
-    /** @type {string|null} Stroke color of the shape*/
+    /** @type {null|string|CanvasGradient|CanvasPattern} Stroke color of the shape*/
     lineColor = 'yellow';
-    /** @type {string|null} Fill color of the shape*/
+    /** @type {null|string|CanvasGradient|CanvasPattern} Fill color of the shape*/
     fillColor = 'gray';
     /** @type {number} Line width of the shape*/
     lineWidth = 0.1;
@@ -147,11 +147,11 @@ export class QShape extends eskv.Widget {
     close = true;
     /** @type {number} Maximum number of nodes allowed, -1 if unlimited */
     maxNodes = -1;
-    /** @type {number} */
+    /** @type {number} x-axis Scaling transform applied to the shape (1 = unscaled)*/
     txScaleX = 1;
-    /** @type {number} */
+    /** @type {number} y-axis Scaling transform applied to the shape (1 = unscaled) */
     txScaleY = 1;
-    /** @type {number} */
+    /** @type {number} Rotation transform applied to the shape (radians, 0 = unrotated) */
     txAngle = 0;
     get nodeLength() {
         return (this.length-nodeOffset)/(pointVecSize*this._ptsPerNode);
@@ -540,11 +540,15 @@ export class QImage extends QShape {
     }
     on_lineColor(event, object, value) {
         const c = /**@type {eskv.TextInput}*/(this._children[0]);
-        c.color = this.lineColor??'white';
+        if (!(this.lineColor instanceof CanvasGradient) && !(this.lineColor instanceof CanvasPattern)) {
+            c.color = this.lineColor!==null? this.lineColor:'white';
+        }
     }
     on_fillColor(event, object, value) {
         const c = /**@type {eskv.TextInput}*/(this._children[0]);
-        c.bgColor = this.fillColor;
+        if (!(this.fillColor instanceof CanvasGradient) && !(this.fillColor instanceof CanvasPattern)) {
+            c.bgColor = this.fillColor;
+        }
     }
     updatedNodes() {
         super.updatedNodes();
@@ -579,11 +583,11 @@ export class QText extends QShape {
     }
     on_lineColor(event, object, value) {
         const c = /**@type {eskv.TextInput}*/(this._children[0]);
-        c.color = this.lineColor??'white';
+        c.color = typeof this.lineColor==='string'? this.lineColor : 'black';
     }
     on_fillColor(event, object, value) {
         const c = /**@type {eskv.TextInput}*/(this._children[0]);
-        c.bgColor = this.fillColor;
+        c.bgColor = typeof this.fillColor==='string'? this.fillColor: null;
     }
     updatedNodes() {
         super.updatedNodes();
@@ -806,7 +810,7 @@ export class QGeometric extends QShape {
         return this.getNodePoint(this.nodeLength-1,0).type;
     }
     /**
-     * Returns the points in the node that are relevant to the type of the node's 
+     * Returns the points in the node that are relevant to the node's 
      * type (defined in the `type` of the first `QPoint` of the node). Shapes should
      * override the default behavior.
      * @param {number} nodeNum 
@@ -863,6 +867,9 @@ export class QGeometric extends QShape {
             const cp2 = this.getNodePoint(nodeNum,2);
             cp1.pos = pt1.pos.sub(d2.scale(alpha1)) ;
             cp2.pos = pt1.pos.sub(d2.scale(alpha2)) ;
+        } else {
+            node[1].pos = pt.pos;
+            node[2].pos = pt.pos;    
         }
     }
     /**

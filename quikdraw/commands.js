@@ -2,6 +2,7 @@
 import * as eskv from "../eskv/lib/eskv.js";
 import { QDraw } from "./app.js";
 import { QControlSurface } from "./controlsurface.js";
+import { QDrawing } from "./drawing.js";
 import { QShape, QGeometric, QCircle, QRectangle, QText } from "./shapes.js";
 
 /**
@@ -17,7 +18,7 @@ export function addShape(shapeType, editMode=true) {
     app.drawing.shapeNum++;
     app.controlSurface.mode = editMode ? 'Edit' : 'Move';
     app.drawing.addChild(geo);
-    app.controlSurface.selection = [geo];
+    app.controlSurface.selection = new Set([geo]);
     return geo;
 }
 
@@ -34,6 +35,75 @@ export class QCommand {
     data = {};
 }
 
+/**
+ * @param {QShape} shape 
+ * @param {number} scale */
+export function exportShapeToPNG(shape, scale) {
+    const offscreen = new OffscreenCanvas(shape.w*scale, shape.h*scale);
+
+    const ctx = offscreen.getContext("2d");
+    if(!ctx) return;
+    ctx.scale(scale, scale);
+    ctx.translate(-shape.x, -shape.y);
+    shape._draw(QDraw.get(), ctx, 0);
+    if(QDraw.get().controlSurface.gridVisible) {
+        QDraw.get().controlSurface.drawGrid(QDraw.get(), ctx);
+    }
+
+    const dataURL = offscreen.convertToBlob().then(blob => {
+        const url = URL.createObjectURL(blob);
+    
+        // To prompt the user to download the image
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = shape.id+'.png';
+        a.click();
+    
+        URL.revokeObjectURL(url);
+    });    
+}
+
+function drawingExport(e,o,v) {
+    let exporter = new eskv.ModalView({
+        orientation: 'vertical',
+        hints: {x:0.3,y:0.3,w:0.4,h:0.4},
+    });
+    let box = new eskv.BoxLayout({hints:{x:0,y:0,w:1,h:null}, paddingX:'1.0'});
+    exporter.children = [box];
+
+    box.addChild(new eskv.Label({
+        text: 'Select an export format'
+    }));
+    box.addChild(new eskv.Button({
+        text: 'to PNG',
+        on_press: (e,o,v)=>{
+            const drawing = QDraw.get().drawing
+            exportShapeToPNG(drawing, drawing.pixelsPerTile);
+            exporter.close();
+        },
+    }));
+    box.addChild(new eskv.Button({
+        text: 'to JSON',
+        on_press: (e,o,v)=>{
+            const drawing = QDraw.get().drawing;
+            const json = JSON.stringify(drawing.serialize(), null, 2);
+            const blob = new Blob([json], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+
+            // To prompt the user to download the image
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = drawing.id+'-qdraw.json';
+            a.click();
+        
+            URL.revokeObjectURL(url);
+            exporter.close();
+        },
+    }));
+    exporter.popup();
+}
+
+
 function drawingSave(e, o, v) {
     let drawing = QDraw.get().drawing;
     let drawingKey = 'QDraw/'+drawing.id;
@@ -46,7 +116,7 @@ function drawingPicker(e, o, v) {
         hints: {x:0.3,y:0.3,w:0.4,h:0.4},
     });
     let scroll = new eskv.ScrollView({scrollW:false, hints:{x:0,y:0,w:1}});
-    let box = new eskv.BoxLayout({scrollW:false, hints:{x:0,y:0,w:1,h:null}, paddingX:'1.0'});
+    let box = new eskv.BoxLayout({hints:{x:0,y:0,w:1,h:null}, paddingX:'1.0'});
     loader.children = [scroll];
     scroll.children = [box];
 
@@ -77,7 +147,7 @@ function drawingPicker(e, o, v) {
                         let drawing = QDraw.get().drawing;
                         drawing.id = id;
                         drawing.deserialize(JSON.parse(data));    
-                        QDraw.get().controlSurface.selection = [];
+                        QDraw.get().controlSurface.selection = new Set();
                         QDraw.get().fitDrawingToView();
                         loader.close();
                     }        
@@ -98,30 +168,8 @@ function drawingPicker(e, o, v) {
     loader.popup();
 }
 
-/**
- * @param {QShape} shape 
- * @param {number} scale */
-export function exportShapeToPNG(shape, scale) {
-    const offscreen = new OffscreenCanvas(shape.w*scale, shape.h*scale);
-
-    const ctx = offscreen.getContext("2d");
-    if(!ctx) return;
-    ctx.scale(scale, scale);
-    ctx.translate(-shape.x, -shape.y);
-    shape._draw(QDraw.get(), ctx, 0);
-
-    const dataURL = offscreen.convertToBlob().then(blob => {
-        const url = URL.createObjectURL(blob);
-    
-        // To prompt the user to download the image
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = shape.id+'.png';
-        a.click();
-    
-        URL.revokeObjectURL(url);
-        document.removeChild(a);
-    });    
+class CommandButton extends eskv.Button {
+    sizeGroup = 'CommandButton';
 }
 
 export class QCommandBar extends eskv.BoxLayout {
@@ -132,23 +180,23 @@ export class QCommandBar extends eskv.BoxLayout {
             new eskv.Label({text: 'Insert', align:'left', fontSize:'0.015ah', hints:{h:'0.02ah'}}),
             new eskv.BoxLayout({orientation: 'horizontal', hints: {h:'0.04ah'},
                 children: [
-                    new eskv.Button({
+                    new CommandButton({
                         text:'Poly',
                         on_press: (event, object, data) => addShape(QGeometric),
                     }),
-                    new eskv.Button({
+                    new CommandButton({
                         text:'Rect',
                         on_press: (event, object, data) => addShape(QRectangle),
                     }),
-                    new eskv.Button({
+                    new CommandButton({
                         text:'Circle',
                         on_press: (event, object, data) => addShape(QCircle),
                     }),
-                    new eskv.Button({
+                    new CommandButton({
                         text:'Text',
                         on_press: (event, object, data) => addShape(QText),
                     }),
-                    new eskv.Button({
+                    new CommandButton({
                         text:'Image', 
                         disable: true,
                         on_press: (e,o,v)=> {},
@@ -159,12 +207,13 @@ export class QCommandBar extends eskv.BoxLayout {
             new eskv.Label({text:'Select', align:'left', fontSize:'0.015ah', hints:{h:'0.02ah'}}),
             new eskv.BoxLayout({orientation: 'horizontal', hints: {h:'0.04ah'},
                 children: [
-                    new eskv.Button({text:'All', 
+                    new CommandButton({text:'All', 
                         on_press: (e,o,v)=> {
-                            QDraw.get().controlSurface.selection = QDraw.get().drawing.children.map(c=>/**@type {QShape}*/(c));
+                            const ch = /**@type {QShape[]} */(QDraw.get().drawing.children);
+                            QDraw.get().controlSurface.selection = new Set(ch);
                         },
                     }),
-                    new eskv.Button({text:'Box', id:'Box', 
+                    new CommandButton({text:'Box', id:'Box', 
                         on_press: (e,o,v)=> {
                             if(o.text==='Box') {
                                 QDraw.get().controlSurface.mode = 'Box';
@@ -172,21 +221,21 @@ export class QCommandBar extends eskv.BoxLayout {
                             } else {
                                 const boxSel = QDraw.get().controlSurface.boxSelection;
                                 const sel = QDraw.get().controlSurface.selection;
-                                QDraw.get().controlSurface.selection = [...new Set([...sel, ...boxSel])];
+                                QDraw.get().controlSurface.selection = new Set([...sel, ...boxSel]);
                                 QDraw.get().controlSurface.mode = 'Move';
                             }
                         },
                     }),
-                    new eskv.Button({text:'None', 
+                    new CommandButton({text:'None', 
                         on_press: (e,o,v)=> {
-                            QDraw.get().controlSurface.selection = [];
+                            QDraw.get().controlSurface.selection = new Set();
                         },
                     }),
-                    new eskv.Button({text:'Dup', 
+                    new CommandButton({text:'Dup', 
                         on_press: (e,o,v)=> {
                             let drawing = QDraw.get().drawing;
                             let sel = QDraw.get().controlSurface.selection;
-                            if(sel.length===0) return;
+                            if(sel.size===0) return;
                             const dup = []; 
                             for(let s of sel) {
                                 const ser = s.serialize();
@@ -197,7 +246,7 @@ export class QCommandBar extends eskv.BoxLayout {
                                 dup.push(sh);
                             }
                             drawing.children = [...drawing._children, ...dup];
-                            QDraw.get().controlSurface.selection = dup;
+                            QDraw.get().controlSurface.selection = new Set(dup);
                         },
                     }),
                     new eskv.ToggleButton({text:'Multi', group: 'selectModeToggle', press: true, disable:true,
@@ -209,25 +258,28 @@ export class QCommandBar extends eskv.BoxLayout {
             new eskv.Label({text:'Drawing', align:'left', fontSize:'0.015ah', hints:{h:'0.02ah'}}),
             new eskv.BoxLayout({orientation: 'horizontal', hints: {h:'0.04ah'},
                 children: [
-                    new eskv.Button({text:'Config', 
+                    new CommandButton({text:'Config', 
                         on_press: (e,o,v)=> {
+                            QDraw.get().controlSurface.selection = new Set();
                             QDraw.get().shapeConfig.shape = QDraw.get().drawing;
                         },
                     }),
-                    new eskv.Button({text:'Export', 
-                        on_press: (e, o, v)=> {
-                            const drawing = QDraw.get().drawing
-                            exportShapeToPNG(drawing, drawing.pixelsPerTile);
-                            return;
-                        }
+                    new CommandButton({text:'Grid', 
+                        on_press: (e,o,v)=> {
+                            QDraw.get().controlSurface.selection = new Set();
+                            QDraw.get().shapeConfig.shape = QDraw.get().controlSurface;
+                        },
                     }),
-                    new eskv.Button({text:'Load', 
-                        on_press: drawingPicker 
+                    new CommandButton({text:'Export', 
+                        on_press: drawingExport,
                     }),
-                    new eskv.Button({text:'Save', 
+                    new CommandButton({text:'Load', 
+                        on_press: drawingPicker,
+                    }),
+                    new CommandButton({text:'Save', 
                         on_press: drawingSave,
                     }),
-                    new eskv.Button({text:'Fit', 
+                    new CommandButton({text:'Fit', 
                         on_press: (e,o,v)=> {
                             QDraw.get().fitDrawingToView();
                         },
@@ -236,7 +288,7 @@ export class QCommandBar extends eskv.BoxLayout {
             }),
 
         ];
-        const band = /**@type {eskv.Button}*/(this.findById('Box'));
+        const band = /**@type {CommandButton}*/(this.findById('Box'));
         QDraw.get().controlSurface.bind('mode', (e,o,v)=> {
             if(/**@type {QControlSurface}*/(o).mode!=='Box') {
                 band.text = 'Box';

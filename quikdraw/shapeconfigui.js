@@ -4,14 +4,36 @@ import { QRectangle, QShape, QText, QCircle, QGeometric, QImage, QGroup } from "
 import { QDraw } from "./app.js";
 import { addShape, exportShapeToPNG} from "./commands.js";
 import { QDrawing } from "./drawing.js";
+import { QControlSurface } from "./controlsurface.js";
+
+function numberSanitizer(text, textInput) {
+    let value = parseFloat(text)
+    if(isNaN(value)) return String(textInput.default??'');
+    value = textInput.min ? Math.max(value, textInput.min):value;
+    value = textInput.max ? Math.min(value, textInput.max):value;
+    value = textInput.step? Math.floor(value/textInput.step)*textInput.step: value;
+    return value;
+}
 
 
-class PropUISliderNumber extends eskv.BoxLayout {
+export class PropUISliderNumber extends eskv.BoxLayout {
     constructor(props = {}) {
         super({orientation: 'horizontal'});
-        this.label = new eskv.Label({align:'left'});
-        this.slider = new eskv.Slider({orientation: 'horizontal', hints:{w:0.5, h:'0.04ah'}});
-        this.sliderValue = new eskv.TextInput({hints:{w:0.1, h:'0.04ah'}});
+        this.label = new eskv.Label({align:'left', sizeGroup:'Config'});
+        this.slider = new eskv.Slider({orientation: 'horizontal', hints:{w:0.5, h:'0.04ah'}, 
+            on_value:(e,o,v)=>{
+                this.sliderValue.text = `${parseFloat(v.toFixed(2)).toString()}`;    
+                this.emit('value',v);
+            }
+        });
+        this.sliderValue = new eskv.TextInput({hints:{w:0.1, h:'0.04ah'}, 
+            _inputSanitizer:numberSanitizer, sizeGroup:'Config',
+            on_text: (e,o,v)=> {
+                this._needsLayout = true;
+                const val = parseFloat(v);
+                if(val!==this.slider.value) this.slider.value = val;
+            }
+        });
         this.children = [this.label, this.slider, this.sliderValue];
         this.updateProperties(props);
     }
@@ -20,6 +42,9 @@ class PropUISliderNumber extends eskv.BoxLayout {
     }
     get max() {
         return this.slider.max;
+    }
+    get step() {
+        return this.slider.step;
     }
     get value() {
         return this.slider.value;
@@ -37,6 +62,9 @@ class PropUISliderNumber extends eskv.BoxLayout {
         this.slider.value = value;
         this.sliderValue.text = `${value}`;
         // this.slider.updateMax();
+    }
+    set step(value) {
+        this.slider.step = value;
     }
     set text(value) {
         this.label.text = value;
@@ -64,10 +92,12 @@ class PropUISliderNumber extends eskv.BoxLayout {
                 if(sn.slider.value!==val) sn.slider.value = val;    
             }
         }, this);
+        this.value = shape[prop];
+        shape.bind(prop, (e,o,v)=>{this.value=shape[prop]});
     }
 }
 
-class PropUISliderAlpha extends PropUISliderNumber {
+export class PropUISliderAlpha extends PropUISliderNumber {
     /**
      * Prop will be 'fillColor' or 'lineColor'
      * @param {eskv.Widget} shape 
@@ -93,6 +123,7 @@ class PropUISliderAlpha extends PropUISliderNumber {
             }
         }, this);
         sn.value = eskv.color.Color.fromString(shape[prop]).a;
+        shape.bind(prop, (e,o,v)=>{this.value=eskv.color.Color.fromString(shape[prop]).a});
     }
 }
 
@@ -100,13 +131,21 @@ class PropUISliderAlpha extends PropUISliderNumber {
  * A combined label, slider, editable textinput and button where the slider has a `default` value. 
  * Pressing the button resets the slider value to its default.
  */
-class PropUISliderNumberWithDefault extends eskv.BoxLayout {
+export class PropUISliderNumberWithDefault extends eskv.BoxLayout {
     constructor(props = {}) {
         super({orientation: 'horizontal'});
-        this.label = new eskv.Label({fontSize: '0.02ah', align:'left'});
-        this.button = new eskv.Button({text:'X', hints:{w:0.1, h:'0.04ah'}});
-        this.slider = new eskv.Slider({orientation: 'horizontal', hints:{w:0.5, h:'0.04ah'}});
-        this.sliderValue = new eskv.TextInput({hints:{w:0.1, h:'0.04ah'}});
+        this.label = new eskv.Label({align:'left', sizeGroup:'Config'});
+        this.button = new eskv.Button({text:'X', hints:{w:0.1, h:'0.04ah'}, sizeGroup:'Config'});
+        this.slider = new eskv.Slider({orientation: 'horizontal', hints:{w:0.5, h:'0.04ah'}, on_value:(e,o,v)=>{
+            this.sliderValue.text = `${parseFloat(v.toFixed(2)).toString()}`;    
+            this.emit('value',v);
+        }});
+        this.sliderValue = new eskv.TextInput({hints:{w:0.1, h:'0.04ah'}, sizeGroup:'Config',
+            on_text: (e,o,v)=> {
+                const val = parseFloat(v);
+                if(val!==this.slider.value) this.slider.value = val;
+            }
+        });
         this.default = 1.0;
         this.children = [this.label, this.button, this.slider, this.sliderValue];
         this.updateProperties(props);
@@ -118,6 +157,9 @@ class PropUISliderNumberWithDefault extends eskv.BoxLayout {
     /** @type {number|null} */
     get max() {
         return this.slider.max;
+    }
+    get step() {
+        return this.slider.step;
     }
     /** @type {number} */
     get value() {
@@ -132,8 +174,12 @@ class PropUISliderNumberWithDefault extends eskv.BoxLayout {
     set max(value) {
         this.slider.max = value;        
     }
+    set step(value) {
+        this.slider.step = value;        
+    }
     set value(value) {
         this.slider.value = value;
+        this.sliderValue.text = `${value}`;
     }
     set text(value) {
         this.label.text = value;
@@ -171,14 +217,15 @@ class PropUISliderNumberWithDefault extends eskv.BoxLayout {
             }
         });
         sn.value = shape[prop]??this.default;
+        shape.bind(prop, (e,o,v)=>{if(this.value!==shape[prop]) this.value=shape[prop]});
     }
 }
 
-class PropUIString extends eskv.BoxLayout {
+export class PropUIString extends eskv.BoxLayout {
     constructor(props = {}) {
         super({orientation: 'horizontal'});
-        this.label = new eskv.Label({fontSize: '0.02ah', align:'left'});
-        this.textInput = new eskv.TextInput({fontSize: '0.02ah', hints:{w:0.7, h:'0.04ah'}});
+        this.label = new eskv.Label({align:'left', sizeGroup:'Config'});
+        this.textInput = new eskv.TextInput({hints:{w:0.7, h:'0.04ah'}, sizeGroup:'Config', on_text:(e,o,v)=>this.emit('value',v)});
         this.children = [this.label, this.textInput];
         this.updateProperties(props);
     }
@@ -199,22 +246,58 @@ class PropUIString extends eskv.BoxLayout {
      * @param {string} prop 
      */
     bindShape(shape, prop) {
-        this.value = shape[prop];
         this.textInput.bind('text', (e,o,v)=>{
             const t = /**@type {eskv.TextInput}*/(o).text
             if(shape[prop]!==t) shape[prop] = t;
         });
+        this.value = shape[prop];
+        shape.bind(prop, (e,o,v)=>{this.value=shape[prop]});
     }
 }
 
-class PropUIBool extends eskv.BoxLayout {
+export class PropUINumber extends eskv.BoxLayout {
+    constructor(props = {}) {
+        super({orientation: 'horizontal'});
+        this.label = new eskv.Label({align:'left', sizeGroup:'Config'});
+        this.textInput = new eskv.TextInput({hints:{w:0.7, h:'0.04ah'}, _inputSanitizer: numberSanitizer, sizeGroup:'Config', on_value:(e,o,v)=>this.emit('value',this.value)});
+        this.children = [this.label, this.textInput];
+        this.updateProperties(props);
+    }
+    get value() {
+        return parseFloat(this.textInput.text);
+    }
+    get text() {
+        return this.label.text;
+    }
+    set value(value) {
+        this.textInput.text = String(value);
+    }
+    set text(value) {
+        this.label.text = value;
+    }
+    /**
+     * @param {eskv.Widget} shape 
+     * @param {string} prop 
+     */
+    bindShape(shape, prop) {
+        this.textInput.bind('text', (e,o,v)=>{
+            const t = /**@type {eskv.TextInput}*/(o).text
+            if(shape[prop]!==t) shape[prop] = parseFloat(t);
+        });
+        this.value = shape[prop];
+        shape.bind(prop, (e,o,v)=>{this.value=shape[prop]});
+    }
+}
+
+
+export class PropUIBool extends eskv.BoxLayout {
     constructor(props = {}) {
         super({orientation: 'horizontal'});
         this.label = new eskv.Label({
-            fontSize: '0.02ah',
             align:'left',
+            sizeGroup:'Config'
         });
-        this.checkbox = new eskv.CheckBox();
+        this.checkbox = new eskv.CheckBox({on_check:(e,o,v)=>this.emit('value',this.value)});
         this.children = [this.label, this.checkbox]
         this.updateProperties(props);
     }
@@ -239,12 +322,12 @@ class PropUIBool extends eskv.BoxLayout {
             const c = /**@type {eskv.CheckBox}*/(o).check;
             if(shape[prop]!==c) shape[prop] = c
         });
+        this.value = shape[prop];
+        shape.bind(prop, (e,o,v)=>{this.value=shape[prop]});
     }
 }
 
-
-
-class Dash extends eskv.Widget {
+export class Dash extends eskv.Widget {
     /**@type {number[]|null} */
     lineDash = null;
     lineWidth = 0.1;
@@ -271,23 +354,35 @@ function parseSpaceSeparatedNumbers(inputString) {
     return numbers.filter((num) => num !== null);
   }
 
-class PropUIStrokeDash extends eskv.BoxLayout {
+export class PropUIStrokeDash extends eskv.BoxLayout {
     constructor(props = {}) {
         super({orientation: 'horizontal'});
-        this.label = new eskv.Label({fontSize: '0.02ah', align:'left'});
-        this.textInput = new eskv.TextInput({fontSize: '0.02ah',
+        this.label = new eskv.Label({align:'left', sizeGroup:'Config'});
+        this.textInput = new eskv.TextInput({
             color: 'white',
+            sizeGroup:'Config',
             on_text: (e,o,v) => {
                 let val = parseSpaceSeparatedNumbers(v);
-                o.parent.value = val.length===0? null : val;
+                const setVal = val.length===0? null : val;
+                if(setVal!==o.parent.value) o.parent.value = setVal;
             },
         });
-        this.textInput.sanitizeInput = (text) => {
+        this.textInput._inputSanitizer = (text, textInput) => {
             let val = parseSpaceSeparatedNumbers(text);
             if(val.length===0) return '-';
             return text;
         }
-        this.dash = new Dash({hints:{w:0.5, h:'0.04ah'}});
+        this.dash = new Dash({hints:{w:0.5, h:'0.04ah'}, 
+            on_lineDash: (e,o,v)=>{
+                if(o.lineDash===null) {
+                    this.textInput.text = '-';
+                    return;
+                }
+                const text = o.lineDash.join(' ')
+                if(this.textInput.text !== text) this.textInput.text = text;
+                this.emit('value', this.value);
+            }
+        });
         this.children = [this.label, this.textInput, this.dash];
         this.updateProperties(props);
     }
@@ -320,6 +415,8 @@ class BaseConfig extends eskv.BoxLayout {
     constructor(props = {}) {
         super({orientation:'vertical', spacingY:'0.005ah'});
         this.id = new PropUIString({text:'Name'});
+        this.fillColor = new PropUIString({text: 'Fill RGB'});
+        this.strokeColor = new PropUIString({text: 'Stroke RGB'});
         this.lineWidth = new PropUISliderNumber({text:'St. width', min:0.01, max:null});
         this.lineDash = new PropUIStrokeDash({text:'St. dash'});
         this.close = new PropUIBool({text:'St. closed'});
@@ -331,7 +428,7 @@ class BaseConfig extends eskv.BoxLayout {
         let mode = QDraw.get().controlSurface.mode==='Edit'? 'Done':'Edit';
         this.hbox = new eskv.BoxLayout({ orientation:'horizontal',
             children: [
-                new eskv.Button({text: mode,
+                new eskv.Button({text: mode, sizeGroup:'Config',
                     on_press: (e,o,v)=> {
                         if(o.text==='Edit') {
                             QDraw.get().controlSurface.mode = 'Edit';
@@ -343,7 +440,7 @@ class BaseConfig extends eskv.BoxLayout {
                         }
                     }, 
                 }),
-                new eskv.Button({text:'Delete',
+                new eskv.Button({text:'Delete', sizeGroup:'Config',
                     on_press: (e,o,v)=> {
                         let ch = QDraw.get().shapeConfig.shape;
                         if(ch!==null) {
@@ -357,11 +454,13 @@ class BaseConfig extends eskv.BoxLayout {
             new eskv.Label({text: 'Configure shape', align:'left', fontSize:'0.015ah', hints:{h:'0.02ah'}}),
             this.hbox,
             this.id,
+            this.strokeColor,
+            this.strokeAlpha,
+            this.fillColor,
+            this.fillAlpha,
             this.lineWidth,
             this.lineDash,
             this.close,
-            this.strokeAlpha,
-            this.fillAlpha,
             this.txScaleX,
             this.txScaleY,
             this.txAngle,
@@ -369,15 +468,16 @@ class BaseConfig extends eskv.BoxLayout {
     }
     /**
      * 
-     * @param {QShape} sh 
+     * @param {eskv.Widget} sh 
      */
     bindShape(sh) {
+        if(!(sh instanceof QShape)) return;
         this.id.value = sh.id;
         this.lineWidth.value = sh.lineWidth;
         this.lineDash.value = sh.lineDash;
         this.close.value = sh.close;
-        this.strokeAlpha.value = sh.lineColor ? eskv.color.Color.fromString(sh.lineColor).a : 1;
-        this.fillAlpha.value = sh.fillColor ? eskv.color.Color.fromString(sh.fillColor).a : 1;
+        this.strokeAlpha.value = typeof sh.lineColor==='string' ? eskv.color.Color.fromString(sh.lineColor).a : 1;
+        this.fillAlpha.value = typeof sh.fillColor==='string' ? eskv.color.Color.fromString(sh.fillColor).a : 1;
         this.txScaleX.value = sh.txScaleX;
         this.txScaleY.value = sh.txScaleY;
         this.txAngle.value = sh.txAngle;
@@ -385,6 +485,8 @@ class BaseConfig extends eskv.BoxLayout {
         this.lineWidth.bindShape(sh, 'lineWidth');
         this.lineDash.bindShape(sh, 'lineDash');
         this.close.bindShape(sh, 'close');
+        this.strokeColor.bindShape(sh, 'lineColor');
+        this.fillColor.bindShape(sh, 'fillColor');
         this.strokeAlpha.bindShape(sh, 'lineColor');
         this.fillAlpha.bindShape(sh, 'fillColor');
         this.txScaleX.bindShape(sh, 'txScaleX');
@@ -420,7 +522,7 @@ class GroupConfig extends eskv.BoxLayout {
         this.txScaleX = new PropUISliderNumberWithDefault({text:'Tx. X', min:0.01, max:null, default:1.0});
         this.txScaleY = new PropUISliderNumberWithDefault({text:'Tx. Y', min:0.01, max:null, default:1.0});
         this.txAngle = new PropUISliderNumberWithDefault({text:'Tx. Angle', min:-2*Math.PI, max:2*Math.PI, value:0, default:0});
-        this.ungroup = new eskv.Button({text:'Ungroup', fontSize:'0.02ah',
+        this.ungroup = new eskv.Button({text:'Ungroup', sizeGroup:'Config',
             on_press: (e,o,v)=> {
                 let gr = QDraw.get().shapeConfig.shape;
                 if(gr===null) return;
@@ -428,10 +530,10 @@ class GroupConfig extends eskv.BoxLayout {
                 for(let ch of gr.children) {
                     QDraw.get().drawing.addChild(ch);
                 }
-                QDraw.get().controlSurface.selection = gr.children.map(c=>/**@type {QShape}*/(c));
+                QDraw.get().controlSurface.selection = new Set(/**@type QShape[]*/(gr.children));
             }, 
         });
-        this.delete = new eskv.Button({text:'Delete', fontSize:'0.02ah',
+        this.delete = new eskv.Button({text:'Delete',  sizeGroup:'Config',
             on_press: (e,o,v)=> {
                 let ch = QDraw.get().shapeConfig.shape;
                 if(ch!==null) QDraw.get().drawing.removeChild(ch);
@@ -449,7 +551,7 @@ class GroupConfig extends eskv.BoxLayout {
     }
     /**
      * 
-     * @param {QShape} sh 
+     * @param {eskv.Widget} sh 
      */
     bindShape(sh) {
         this.id.bindShape(sh,'id');
@@ -503,16 +605,23 @@ export class DrawingConfig extends eskv.BoxLayout{
         // TODO: scaleShapesToFit, grids/guides?
         super({orientation:'vertical'});//, spacingY:'0.005ah'
         this.id = new PropUIString({text:'Name'});
+        this.id.textInput.ignoreSizeForGroup = true;
+        this.id.textInput.clip = true;
+        this.fillColor = new PropUIString({text: 'Fill RGB'});
+        this.strokeColor = new PropUIString({text: 'Stroke RGB'});
         this.lineWidth = new PropUISliderNumber({text:'St. width', min:0.01, max:null});
         this.lineDash = new PropUIStrokeDash({text:'St. dash'});
         this.strokeAlpha = new PropUISliderAlpha({text:'St. alpha'});
         this.fillAlpha = new PropUISliderAlpha({text:'Fl. alpha'});
         this.tileWidth = new PropUIString({text: 'Width (tiles)'});
+        this.tileWidth.textInput.hints.w = 0.15;
         this.tileHeight = new PropUIString({text: 'Height (tiles)'});
-        this.pixelsPerTile = new PropUIString({text: 'Tile size (pixels)'})
+        this.tileHeight.textInput.hints.w = 0.15;
+        this.pixelsPerTile = new PropUIString({text: 'Tile size (px)'})
+        this.pixelsPerTile.textInput.hints.w = 0.15;
         this.hbox = new eskv.BoxLayout({ orientation:'horizontal',
             children: [
-                new eskv.Button({text: 'Resize to shapes',
+                new eskv.Button({text: 'Resize to shapes', sizeGroup:'Config',
                     on_press: (e,o,v)=> {
                         const drawing = QDraw.get().drawing;
                         if(drawing.children.length>0) {
@@ -530,10 +639,12 @@ export class DrawingConfig extends eskv.BoxLayout{
             new eskv.Label({text: 'Configure drawing', align:'left', fontSize:'0.015ah', hints:{h:'0.02ah'}}),
             this.hbox,
             this.id,
+            this.strokeColor,
+            this.strokeAlpha,
+            this.fillColor,
+            this.fillAlpha,
             this.lineWidth,
             this.lineDash,
-            this.strokeAlpha,
-            this.fillAlpha,
             this.tileWidth,
             this.tileHeight,
             this.pixelsPerTile,
@@ -547,6 +658,8 @@ export class DrawingConfig extends eskv.BoxLayout{
         this.id.bindShape(sh,'id');
         this.lineWidth.bindShape(sh, 'lineWidth');
         this.lineDash.bindShape(sh, 'lineDash');
+        this.strokeColor.bindShape(sh, 'lineColor');
+        this.fillColor.bindShape(sh, 'fillColor');
         this.strokeAlpha.bindShape(sh, 'lineColor');
         this.fillAlpha.bindShape(sh, 'fillColor');
         const drawingWidget = QDraw.get().drawingScrollView.children[0];
@@ -556,8 +669,63 @@ export class DrawingConfig extends eskv.BoxLayout{
     }
 }
 
+class ControlSurfaceConfig extends eskv.BoxLayout {
+    constructor() {
+        // TODO: scaleShapesToFit, grids/guides?
+        super({orientation:'vertical'});//, spacingY:'0.005ah'
+        this.visible = new PropUIBool({text:'Visible'});
+        this.lineWidth = new PropUISliderNumber({text:'Line width', min:0.01, max:null});
+        this.lineDash = new PropUIStrokeDash({text:'Line dash'});
+        this.strokeAlpha = new PropUISliderAlpha({text:'Line alpha'});
+        this.dimToDrawing = new PropUIBool({text:'Infinite'});
+        this.offsetX = new PropUINumber({text: 'Offset X (tiles)'}); 
+        this.offsetX.textInput.hints.w = 0.15;
+        this.offsetY = new PropUINumber({text: 'Offset Y (tiles)'}); 
+        this.offsetY.textInput.hints.w = 0.15;
+        this.cellWidth = new PropUINumber({text: 'Cell width (tiles)'});
+        this.cellWidth.textInput.hints.w = 0.15;
+        this.cellHeight = new PropUINumber({text: 'Cell height (tiles)'});
+        this.cellHeight.textInput.hints.w = 0.15;
+        this.children = [
+            new eskv.Label({text: 'Grid', align:'left', fontSize:'0.015ah', hints:{h:'0.02ah'}}),
+            this.visible,
+            this.lineWidth,
+            this.lineDash,
+            this.strokeAlpha,
+            this.offsetX, 
+            this.offsetY,
+            this.cellWidth,
+            this.cellHeight,
+        ];
+    }
+    /**
+     * 
+     * @param {eskv.Widget} sh 
+     */
+    bindShape(sh) {
+        if(!(sh instanceof QControlSurface)) return;
+        this.visible.value = sh.gridVisible;
+        this.lineWidth.value = sh.gridLineWidth;
+        this.lineDash.value = sh.gridLineDash;
+        this.cellWidth.value = sh.gridCellWidth;
+        this.cellHeight.value = sh.gridCellHeight;
+        this.offsetX.value = sh.gridOffsetX;
+        this.offsetY.value = sh.gridOffsetY;
+        this.strokeAlpha.value = eskv.color.Color.fromString(sh.gridLineColor).a;
+
+        this.visible.bindShape(sh, 'gridVisible');
+        this.lineWidth.bindShape(sh, 'gridLineWidth');
+        this.lineDash.bindShape(sh, 'gridLineDash');
+        this.strokeAlpha.bindShape(sh, 'gridLineColor');
+        this.cellWidth.bindShape(sh, 'gridCellWidth');
+        this.cellHeight.bindShape(sh, 'gridCellHeight');
+        this.offsetX.bindShape(sh, 'gridOffsetX');
+        this.offsetY.bindShape(sh, 'gridOffsetY');
+    }
+}
+
 export class QConfigArea extends eskv.BoxLayout {
-    /** @type {QShape|null} */
+    /** @type {eskv.Widget|null} */
     shape = null;
     id = 'ShapeConfig';
     constructor(properties) {
@@ -567,8 +735,8 @@ export class QConfigArea extends eskv.BoxLayout {
     }
     /** @type {import("../eskv/lib/modules/widgets.js").EventCallback} */
     csSelection(event, object, data) {
-        if(data.length===1) {
-            this.shape = data[0];
+        if(data.size===1) {
+            this.shape = [...data][0];
         } else {
             this.shape = null;
         }
@@ -577,7 +745,7 @@ export class QConfigArea extends eskv.BoxLayout {
     /** @type {import("../eskv/lib/modules/widgets.js").EventCallback} */
     on_shape(event, object, data) {
         let uiShape;
-        if (data instanceof QShape) {
+        if (data) {
             if(data instanceof QDrawing) uiShape = new DrawingConfig();
             else if(data instanceof QRectangle) uiShape = new BaseConfig();
             else if(data instanceof QCircle) uiShape = new BaseConfig();
@@ -585,6 +753,7 @@ export class QConfigArea extends eskv.BoxLayout {
             else if(data instanceof QGeometric) uiShape = new BaseConfig();
             else if(data instanceof QGroup) uiShape = new GroupConfig();
             else if(data instanceof QImage) uiShape = new BaseConfig();
+            else if(data instanceof QControlSurface) uiShape = new ControlSurfaceConfig();
             if (uiShape) {
                 uiShape.bindShape(data);
                 this.children = [uiShape];
@@ -593,26 +762,26 @@ export class QConfigArea extends eskv.BoxLayout {
         }
         if(!uiShape) {
             const cs = QDraw.get().controlSurface;
-            if(cs.selection.length===0) {
+            if(cs.selection.size===0) {
                 this.children = [];
-            } else { /**cs.selecttion.length>1 */
+            } else { /**cs.selecttion.size>1 */
                 this.children = [new eskv.BoxLayout({
                     hints: {x:0, y:0, w:1, h:1},
                     orientation: 'vertical',
                     children: [
                         new eskv.Label({
-                            hints: {x:0, y:0, w:1, h:0.5},
-                            text: `${cs.selection.length} shapes selected`,
-                            fontSize: '0.02ah',
+                            hints: {x:0, y:0, w:1, h:'0.04ah'},
+                            text: `${cs.selection.size} shapes selected`,
+                            sizeGroup:'Config',
                         }),
                         new eskv.Button({
                             text: 'Group',
-                            fontSize: '0.02ah',
+                            sizeGroup:'Config',
                             on_press: (e,o,v) => {
                                 const dr = QDraw.get().drawing;
                                 const cs = QDraw.get().controlSurface
-                                const sel = new Set(cs.selection);
-                                const drwShapes = /**@type {import("./controlsurface.js").QSelection}*/(dr.children)
+                                const sel = new Set(...cs.selection);
+                                const drwShapes = /**@type {QShape[]}*/(dr.children)
                                 const grpCh = drwShapes.filter(sh=>sel.has(sh));
                                 const drwCh = drwShapes.filter(sh=>!sel.has(sh));
                                 dr.children = drwCh;

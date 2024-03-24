@@ -1,21 +1,42 @@
 //@ts-check
 import * as eskv from "../eskv/lib/eskv.js";
 import { QDraw } from "./app.js";
+import { PropUISliderNumber } from "./shapeconfigui.js";
+
+/**
+ * 
+ * @param {string} oldColor 
+ * @param {string} newColor 
+ */
+function alphaBlendColor(oldColor, newColor) {
+    const alpha = eskv.color.Color.fromString(oldColor).a;
+    return eskv.color.Color.fromString(newColor).toStringWithAlpha(alpha);
+
+}
 
 function setColor(event, object, value) {
-    let sel = QDraw.get().controlSurface.selection;
-    if(sel.length===0) sel = [QDraw.get().drawing];
-    const affects = QDraw.get().palette.affects
+    const cs = QDraw.get().controlSurface;
+    let sel = cs.selection;
+    if(sel.size===0 && QDraw.get().shapeConfig.shape === cs) {
+        cs.gridLineColor = alphaBlendColor(cs.gridLineColor, object.bgColor);
+        return;
+    }
+    if(sel.size===0) sel = new Set([QDraw.get().drawing]);
+    const affects = QDraw.get().palette.affects;
     if(affects==="fill") {
-        sel.forEach((sh)=>sh.fillColor = object.bgColor);
+        sel.forEach((sh)=>{
+            sh.fillColor = alphaBlendColor(sh.fillColor??object.bgColor, object.bgColor);
+        });
     } else if (affects==="stroke") {
-        sel.forEach((sh)=>sh.lineColor = object.bgColor);
+        sel.forEach((sh)=>{
+            sh.lineColor = alphaBlendColor(sh.lineColor??object.bgColor, object.bgColor);
+        });
     }
 }
 
 function clearColor(event, object, value) {
     let sel = QDraw.get().controlSurface.selection;
-    if(sel.length===0) sel = [QDraw.get().drawing];
+    if(sel.size===0) sel = new Set([QDraw.get().drawing]);
     const affects = QDraw.get().palette.affects
     if(affects==="fill") {
         sel.forEach((sh)=>sh.fillColor = null);
@@ -57,6 +78,39 @@ function palettePicker(e, o, v) {
     });
 }    
 
+function colorDialog(e, o, v) {
+    let dialog = new eskv.ModalView({
+        orientation: 'vertical',
+        hints: {x:0.2,y:0.3,w:0.6,h:0.4},
+    });
+
+    let box1 = new eskv.BoxLayout({orientation:'horizontal', hints:{x:0,y:0,w:1}});
+    let box2 = new eskv.BoxLayout({orientation:'vertical', hints:{x:0,y:0,w:0.75,h:1}});
+    let colorBlock = new eskv.Widget({bgColor:'rgb(255,255,255)'});
+    let red = new PropUISliderNumber({text:'Red', value:255, min:0, max:255, step:1});
+    let green = new PropUISliderNumber({text:'Green', value:255, min:0, max:255, step:1});
+    let blue = new PropUISliderNumber({text:'Blue', value:255, min:0, max:255, step:1});
+    red.bind('value', (e,o,v)=>{
+        colorBlock.bgColor=`rgb(${red.value},${green.value},${blue.value})`;
+    })
+    green.bind('value', (e,o,v)=>{
+        colorBlock.bgColor=`rgb(${red.value},${green.value},${blue.value})`;
+    })
+    blue.bind('value', (e,o,v)=>{
+        colorBlock.bgColor=`rgb(${red.value},${green.value},${blue.value})`;
+    })
+    let OK = new eskv.Button({text:'OK', hints:{h:'1'}, on_press:(e,o,v)=>{
+        setColor('press', colorBlock, null);
+        dialog.close()
+    }})
+    let cancel = new eskv.Button({text:'Cancel', hints:{h:'1'}, on_press:(e,o,v)=>{
+        dialog.close();
+    }})
+    box2.children = [red, green, blue];
+    box1.children = [box2, colorBlock];
+    dialog.children = [box1, new eskv.BoxLayout({orientation:'horizontal', hints:{h:'1'}, children:[OK, cancel]})];
+    dialog.popup();
+}
 
 class PaletteColor {
     /**
@@ -181,6 +235,7 @@ class LabeledSlider extends eskv.BoxLayout {
     constructor(props = null) {
         super({orientation: 'horizontal'});
         this.label = new eskv.Label({fontSize: '0.02ah', align:'left'});
+        if(props!==null && 'sizeGroup' in props) this.label.sizeGroup = props['sizeGroup'];
         this.slider = new eskv.Slider({orientation: 'horizontal', hints:{w:0.8}});
         this.children = [this.label, this.slider]
         if(props!==null) this.updateProperties(props);
@@ -209,7 +264,7 @@ class ColorPickedPopup extends eskv.ModalView {
             new eskv.Widget({bgColor: this.color, hints:{h:"0.08ah"}}),
             new eskv.Button({text:'Set fill', on_press: (e,o,v) => {
                 let sel = QDraw.get().controlSurface.selection;
-                if(sel.length===0) sel = [QDraw.get().drawing];
+                if(sel.size===0) sel = new Set([QDraw.get().drawing]);
                 for(let sh of sel) {
                     sh.fillColor = this.color;
                 }
@@ -217,7 +272,7 @@ class ColorPickedPopup extends eskv.ModalView {
             }}),
             new eskv.Button({text:'Set stroke', on_press: (e,o,v) => {
                 let sel = QDraw.get().controlSurface.selection;
-                if(sel.length===0) sel = [QDraw.get().drawing];
+                if(sel.size===0) sel = new Set([QDraw.get().drawing]);
                 for(let sh of sel) {
                     sh.lineColor = this.color;
                 }
@@ -289,25 +344,25 @@ export class QCustomPalette extends eskv.BoxLayout {
             children: [
                 // new eskv.Button({text:'New'}),
                 // new eskv.Button({text:'Save'}),
-                new eskv.Button({text:'Palette library', on_press:palettePicker}),
+                new eskv.Button({text:'Palette library', on_press:palettePicker, sizeGroup:'palette'}),
             ]
         });
         this.layoutGridName = new eskv.BoxLayout({orientation:'horizontal', hints:{h:'0.04ah'},
             children: [
-                new eskv.Label({text:'Name', align:'left', hints:{w:0.3}}),
-                new eskv.Label({text: id.slice(id.lastIndexOf('/')+1)}),
+                new eskv.Label({text:'Name', align:'left', hints:{w:0.3}, sizeGroup:'palette'}),
+                new eskv.Label({text: id.slice(id.lastIndexOf('/')+1), sizeGroup:'palette', ignoreSizeForGroup:true, clip:true}),
             ]
         });
         this.layoutGridNumColors = new eskv.BoxLayout({orientation:'horizontal', hints:{h:'0.04ah'},
             children: [
-                new eskv.Label({text:'Colors', align:'left', hints:{w:0.3}}),
-                new eskv.TextInput({text:''+gimpPalette.colors.length}),
+                new eskv.Label({text:'Colors', align:'left', hints:{w:0.3}, sizeGroup:'palette'}),
+                new eskv.TextInput({text:''+gimpPalette.colors.length, sizeGroup:'palette'}),
             ]
         });
         this.layoutGridRows = new eskv.BoxLayout({orientation:'horizontal', hints:{h:'0.04ah'},
             children: [
-                new eskv.Label({text:'Rows', align:'left', hints:{w:0.3}}),
-                new eskv.TextInput({text:''+grid.numY}),
+                new eskv.Label({text:'Rows', align:'left', hints:{w:0.3}, sizeGroup:'palette'}),
+                new eskv.TextInput({text:''+grid.numY, sizeGroup:'palette'}),
             ]
         });
         for(let c of gimpPalette.colors) {
@@ -348,9 +403,9 @@ export class QDynamicPalette extends eskv.BoxLayout {
         this.numX = N;
         if(properties) this.updateProperties(properties)
 
-        this.hueSlider = new LabeledSlider({text: 'Hue', orientation:"horizontal", min:0,max:1/K, hints:{h:0.05}});
-        this.satSlider = new LabeledSlider({text: 'Sat', orientation:"horizontal", max:1/N, hints:{h:0.05}});
-        this.valSlider = new LabeledSlider({text: 'Val', orientation:"horizontal", hints:{h:0.05}});
+        this.hueSlider = new LabeledSlider({text: 'Hue', orientation:"horizontal", min:0,max:1/K, hints:{h:0.05}, sizeGroup:'palette'});
+        this.satSlider = new LabeledSlider({text: 'Sat', orientation:"horizontal", max:1/N, hints:{h:0.05}, sizeGroup:'palette'});
+        this.valSlider = new LabeledSlider({text: 'Val', orientation:"horizontal", hints:{h:0.05}, sizeGroup:'palette'});
         let grid = new eskv.GridLayout({
             orientation:"horizontal",
             numX: N,
@@ -399,7 +454,6 @@ export class QDynamicPalette extends eskv.BoxLayout {
 }
 
 
-
 export class QPalette extends eskv.BoxLayout {
     /**@type {'vertical'|'horizontal'} */
     orientation = "vertical";
@@ -423,15 +477,17 @@ export class QPalette extends eskv.BoxLayout {
                             if(!this._children.find(c=>c===this.customPalette)) return
                             this.removeChild(this.customPalette, false);
                             this.addChild(this.dynamicPalette);
-                        }
+                        },
+                        sizeGroup:'palette',
                     }),
                     new eskv.ToggleButton({text:'Custom', group: 'palettePicker',
                         on_press: (e,o,v) => {
                             if(!this._children.find(c=>c===this.dynamicPalette)) return
                             this.removeChild(this.dynamicPalette, false);
                             this.addChild(this.customPalette);
-                        }
-                }),
+                        },
+                        sizeGroup:'palette',
+                    }),
                 ],
             }),
             new eskv.BoxLayout({orientation:'horizontal', hints: {h:'0.04ah'},
@@ -441,21 +497,30 @@ export class QPalette extends eskv.BoxLayout {
                     on_press: (event,object,value)=>{
                         object.text = object.text==="Fill"? "Stroke":"Fill";
                         this.affects = object.text==="Fill"? "fill": "stroke";    
-                    }
+                    },
+                    sizeGroup:'palette'
                 }),
                 new eskv.Button({ //Clear out color
                     text: 'X',
                     on_press: clearColor,
+                    sizeGroup:'palette'
+                }),
+                new eskv.Button({ //Clear out color
+                    text: 'RGB',
+                    on_press: colorDialog,
+                    sizeGroup:'palette'
                 }),
                 new eskv.Button({ //Black
                     text: '',
                     bgColor: 'rgba(0,0,0,1)',
                     on_press: setColor, 
+                    sizeGroup:'palette'
                 }),
                 new eskv.Button({ //White
                     text: '',
                     bgColor: 'rgba(255,255,255,1)',
                     on_press: setColor, 
+                    sizeGroup:'palette'
                 }),   
             ],
         }),

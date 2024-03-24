@@ -5,7 +5,7 @@ import { QDraw } from "./app.js";
 
 
 export class QGradient {
-    /**@type {[number, string][]} */
+    /**@type {[number, string][]} array of tuples containing color offset (range 0 - 1) and CSS string color*/
     stops = []
     setGradientFill(ctx, x0, y0, x1, y1) {
         const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
@@ -35,10 +35,10 @@ export class QShapeStack extends eskv.BoxLayout {
         super();
         this.stack = new eskv.BoxLayout({orientation: 'vertical', hints:{x:0,y:0,w:1,h:null}, paddingX:'1.0', order:'reverse'});
         this.controls = new eskv.BoxLayout({orientation: 'horizontal', hints: {h:'0.04ah'}, children: [
-            new eskv.Button({ text: 'Top', 
+            new eskv.Button({ text: 'Top', sizeGroup:'Config',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
-                    let sel = [...QDraw.get().controlSurface.selection];
+                    let sel = new Set([...QDraw.get().controlSurface.selection]);
                     for(let s of sel) {
                         const ind = drawing.children.findIndex(ds=>ds===s);
                         if(ind<drawing.children.length-1) {
@@ -49,7 +49,7 @@ export class QShapeStack extends eskv.BoxLayout {
                     QDraw.get().controlSurface.selection = sel;
                 }
             }),
-            new eskv.Button({ text: 'Up',
+            new eskv.Button({ text: 'Up', sizeGroup:'Config',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
                     let sel = [...QDraw.get().controlSurface.selection];
@@ -60,10 +60,10 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, ind+1);    
                         }
                     }
-                    QDraw.get().controlSurface.selection = sel;
+                    QDraw.get().controlSurface.selection = new Set(sel);
                 }
             }),
-            new eskv.Button({ text: 'Down',
+            new eskv.Button({ text: 'Down', sizeGroup:'Config',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
                     let sel = [...QDraw.get().controlSurface.selection];
@@ -74,10 +74,10 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, ind-1);    
                         }
                     }
-                    QDraw.get().controlSurface.selection = sel;
+                    QDraw.get().controlSurface.selection = new Set(sel);
                 }
             }),
-            new eskv.Button({ text: 'Bot.',
+            new eskv.Button({ text: 'Bot.', sizeGroup:'Config',
                 on_press: (e,o,v)=> {
                     let drawing = QDraw.get().drawing;
                     let sel = [...QDraw.get().controlSurface.selection];
@@ -88,7 +88,7 @@ export class QShapeStack extends eskv.BoxLayout {
                             drawing.addChild(s, 0);    
                         }
                     }
-                    QDraw.get().controlSurface.selection = sel;
+                    QDraw.get().controlSurface.selection = new Set(sel);
                 }
             }),
         ]});
@@ -104,7 +104,7 @@ export class QShapeStack extends eskv.BoxLayout {
     /**@type {import("../eskv/lib/modules/widgets.js").EventCallbackNullable} */
     csSelection(event, object, sel) {
         //@ts-ignore
-        this.stack.children.forEach((c)=>c._press = sel.includes(c.shape));
+        this.stack.children.forEach((c)=>c._press = sel.has(c.shape));
     }
     /**@type {import("../eskv/lib/modules/widgets.js").EventCallbackNullable} */
     onShapeAdded(event, object, data) {
@@ -112,9 +112,10 @@ export class QShapeStack extends eskv.BoxLayout {
         for(let c of this.stack.children) if(c instanceof eskv.ToggleButton) c._press = false;
         let ch = new eskv.ToggleButton({
             text:data.id,
-            hints:{h:'0.05ah'}, 
+            hints:{h:'0.04ah'}, 
             shape:data,
             group:'stackShape',
+            sizeGroup: 'Config',
             press: true,
             singleSelect: false,
             on_press: (event,object,data) => {
@@ -123,14 +124,14 @@ export class QShapeStack extends eskv.BoxLayout {
                 let sel = app.controlSurface.selection;
                 let w = app.drawing.findById(object.shape.id);
                 if(w instanceof QShape) {
-                    if(sel.includes(w) && !object.press) {
-                        sel = sel.filter((s)=>s!==w);
+                    if(sel.has(w) && !object.press) {
+                        sel.delete(w);
                         app.controlSurface.selection = sel;
                     } else if (object.press){
-                        sel = [...sel, w];
+                        sel.add(w);
                         app.controlSurface.selection = sel;
                     }
-                    sc.shape = sel.length===1 ? sel[0] : null;
+                    sc.shape = sel.size===1 ? [...sel][0] : null;
                 }
             }
         })
@@ -152,8 +153,8 @@ export class QShapeStack extends eskv.BoxLayout {
             sc.shape = null; 
         }
         const cs = QDraw.get().controlSurface;
-        const ind = cs.selection.findIndex(s=>s===data);
-        if(ind>=0) cs.selection = [...cs.selection.slice(0,ind), ...cs.selection.slice(ind+1)];
+        cs.selection.delete(data);
+        cs.selection = cs.selection;
         if(sh) this.stack.removeChild(sh);
         return false;
     }
@@ -216,6 +217,16 @@ export class QDrawing extends QGroup {
         data['pixelsPerTile'] = this.pixelsPerTile;
         data['shapeNum'] = this.shapeNum;
         data['paletteId'] = this.paletteId;
+        const cs = QDraw.get().controlSurface;
+        data['gridVisible'] = cs.gridVisible;
+        data['gridLineWidth'] = cs.gridLineWidth;
+        data['gridLineDash'] = cs.gridLineDash;
+        data['gridLineColor'] = cs.gridLineColor;
+        data['gridCellWidth'] = cs.gridCellWidth;
+        data['gridCellHeight'] = cs.gridCellHeight;
+        data['gridOffsetX'] = cs.gridOffsetX;
+        data['gridOffsetY'] = cs.gridOffsetY;
+
         // //TODO: Also dump data for images, gradients, canvas properties and anything else
         // data['children'] = ch;
         data['gradients'] = {}
@@ -232,6 +243,17 @@ export class QDrawing extends QGroup {
         this.pixelsPerTile = data['pixelsPerTile']??64;
         this.shapeNum = data['shapeNum']??1;
         this.paletteId = data['paletteId']??'';
+
+        const cs = QDraw.get().controlSurface;
+        cs.gridVisible = data['gridVisible']??false;
+        cs.gridLineWidth = data['gridLineWidth']??0.05;
+        cs.gridLineDash = data['gridLineDash']??[0.1,0.2];
+        cs.gridLineColor = data['gridLineColor']??'rgba(82,82,82,0.4)';
+        cs.gridCellWidth = data['gridCellWidth']??1;
+        cs.gridCellHeight = data['gridCellHeight']??1;
+        cs.gridOffsetX = data['gridOffsetX']??0;
+        cs.gridOffsetY = data['gridOffsetY']??0;
+
         if('gradients' in data) {
             for(let gs in data['gradients']) {
                 let gr = new QGradient();
