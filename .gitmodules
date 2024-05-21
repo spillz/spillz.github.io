@@ -4,9 +4,6 @@
 [submodule "eskv"]
 	path = eskv
 	url = https://github.com/spillz/eskv
-[submodule "puzzlekingdom"]
-	path = puzzlekingdom
-	url = https://github.com/spillz/puzzlekingdom
 [submodule "alphabetical"]
 	path = alphabetical
 	url = https://github.com/spillz/alphabetical
