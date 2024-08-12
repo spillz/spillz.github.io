@@ -574,6 +574,7 @@ parcelHelpers.export(exports, "saveStats", ()=>saveStats);
 parcelHelpers.export(exports, "zoomIn", ()=>zoomIn);
 parcelHelpers.export(exports, "zoomOut", ()=>zoomOut);
 parcelHelpers.export(exports, "restartGame", ()=>restartGame);
+parcelHelpers.export(exports, "statusBarZoom", ()=>statusBarZoom);
 parcelHelpers.export(exports, "getCurrentDateFormatted", ()=>getCurrentDateFormatted);
 var _myMatrix = require("./my-matrix");
 var _createMap = require("./create-map");
@@ -597,7 +598,15 @@ let NoiseType;
 (function(NoiseType) {
     NoiseType[NoiseType["Creak"] = 0] = "Creak";
     NoiseType[NoiseType["Splash"] = 1] = "Splash";
+    NoiseType[NoiseType["Thud"] = 2] = "Thud";
+    NoiseType[NoiseType["BangDoor"] = 3] = "BangDoor";
+    NoiseType[NoiseType["BangChair"] = 4] = "BangChair";
 })(NoiseType || (NoiseType = {}));
+let StepType;
+(function(StepType) {
+    StepType[StepType["Normal"] = 0] = "Normal";
+    StepType[StepType["AttemptedLeap"] = 1] = "AttemptedLeap";
+})(StepType || (StepType = {}));
 const debugInitialLevel = 0; // set to non-zero to test level generation
 const debugSeeAll = false; // initial value for see-all cheat code
 const tileSet = (0, _tilesets.getTileSet)();
@@ -706,17 +715,17 @@ function updateControllerState(state) {
         }
         if (controller.controlStates["snapToPlayer"]) state.camera.panning = false;
         if (activated("left")) {
-            if (state.leapToggleActive || controller.controlStates["jump"]) tryPlayerLeap(state, -1, 0);
-            else tryPlayerStep(state, -1, 0);
+            if (state.leapToggleActive !== controller.controlStates["jump"]) tryPlayerLeap(state, -1, 0);
+            else tryPlayerStep(state, -1, 0, StepType.Normal);
         } else if (activated("right")) {
-            if (state.leapToggleActive || controller.controlStates["jump"]) tryPlayerLeap(state, 1, 0);
-            else tryPlayerStep(state, 1, 0);
+            if (state.leapToggleActive !== controller.controlStates["jump"]) tryPlayerLeap(state, 1, 0);
+            else tryPlayerStep(state, 1, 0, StepType.Normal);
         } else if (activated("down")) {
-            if (state.leapToggleActive || controller.controlStates["jump"]) tryPlayerLeap(state, 0, -1);
-            else tryPlayerStep(state, 0, -1);
+            if (state.leapToggleActive !== controller.controlStates["jump"]) tryPlayerLeap(state, 0, -1);
+            else tryPlayerStep(state, 0, -1, StepType.Normal);
         } else if (activated("up")) {
-            if (state.leapToggleActive || controller.controlStates["jump"]) tryPlayerLeap(state, 0, 1);
-            else tryPlayerStep(state, 0, 1);
+            if (state.leapToggleActive !== controller.controlStates["jump"]) tryPlayerLeap(state, 0, 1);
+            else tryPlayerStep(state, 0, 1, StepType.Normal);
         } else if (activated("wait")) tryPlayerWait(state);
         else if (activated("menu")) {
             if (state.player.health > 0) {
@@ -958,7 +967,7 @@ function canStepToPos(state, pos) {
     if (state.gameMap.guards.find((guard)=>guard.pos.equals(pos))) return false;
     return true;
 }
-function canLeapToPos(state, pos) {
+function canLeapToPosDisregardingGuard(state, pos) {
     // Cannot leap off map if level is unfinished
     if (pos[0] < 0 || pos[0] >= state.gameMap.cells.sizeX || pos[1] < 0 || pos[1] >= state.gameMap.cells.sizeY) {
         if (!state.finishedLevel) return false;
@@ -971,6 +980,10 @@ function canLeapToPos(state, pos) {
     if ((cellNew.type === (0, _gameMap.TerrainType).DoorNS || cellNew.type === (0, _gameMap.TerrainType).DoorEW) && state.gameMap.items.find((item)=>item.pos.equals(pos) && (0, _gameMap.isDoorItemType)(item.type))) return false;
     // Cannot leap onto a blocking item
     if (state.gameMap.items.find((item)=>item.pos.equals(pos) && !canLeapOntoItemType(item.type))) return false;
+    return true;
+}
+function canLeapToPos(state, pos) {
+    if (!canLeapToPosDisregardingGuard(state, pos)) return false;
     // Cannot leap onto a stationary guard
     if (state.gameMap.guards.find((guard)=>guard.pos.equals(pos) && !guard.allowsMoveOntoFrom(state.player.pos))) return false;
     return true;
@@ -1045,7 +1058,7 @@ function bumpFail(state, dx, dy) {
     state.sounds["footstepTile"].play(0.1);
     bumpAnim(state, dx, dy);
 }
-function collectGuardLoot(state, player, guard, posNew) {
+function collectGuardLoot(state, player, guard, posNew, animDelay = 0) {
     let pickedItem = null;
     player.pickTarget = null;
     if (guard.hasPurse) {
@@ -1069,7 +1082,30 @@ function collectGuardLoot(state, player, guard, posNew) {
         const pt0 = (0, _myMatrix.vec2).create();
         const pt2 = posNew.subtract(pickedItem.pos);
         const pt1 = pt2.scale(0.3333).add((0, _myMatrix.vec2).fromValues(0, 0.5));
-        const animation = new (0, _animation.SpriteAnimation)([
+        const animation = animDelay > 0 ? new (0, _animation.SpriteAnimation)([
+            {
+                pt0: pt0,
+                pt1: pt0,
+                duration: 0.1,
+                fn: (0, _animation.tween).easeOutQuad
+            },
+            {
+                pt0: pt0,
+                pt1: pt1,
+                duration: 0.1,
+                fn: (0, _animation.tween).easeOutQuad
+            },
+            {
+                pt0: pt1,
+                pt1: pt2,
+                duration: 0.1,
+                fn: (0, _animation.tween).easeInQuad
+            }
+        ], [
+            tileSet.itemTiles[pickedItem.type],
+            tileSet.itemTiles[pickedItem.type],
+            tileSet.itemTiles[pickedItem.type]
+        ]) : new (0, _animation.SpriteAnimation)([
             {
                 pt0: pt0,
                 pt1: pt1,
@@ -1186,7 +1222,7 @@ function tryPlayerWait(state) {
     ++state.numWaitMoves;
     advanceTime(state);
 }
-function tryPlayerStep(state, dx, dy) {
+function tryPlayerStep(state, dx, dy, stepType) {
     // Can't move if you're dead
     const player = state.player;
     if (player.health <= 0) return;
@@ -1404,7 +1440,8 @@ function tryPlayerStep(state, dx, dy) {
     // Collect loot
     collectLoot(state, player.pos, posNew);
     // Generate movement AI noises
-    if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
+    if (stepType === StepType.AttemptedLeap && (cellNew.type === (0, _gameMap.TerrainType).DoorNS || cellNew.type === (0, _gameMap.TerrainType).DoorEW) && state.gameMap.items.find((item)=>item.pos.equals(posNew) && (0, _gameMap.isDoorItemType)(item.type))) makeNoise(state.gameMap, player, NoiseType.BangDoor, 17, state.sounds);
+    else if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
     // Let guards take a turn
     advanceTime(state);
     // Play sound for terrain type changes
@@ -1428,7 +1465,7 @@ function tryPlayerLeap(state, dx, dy) {
         if (guardMid.mode === (0, _guard.GuardMode).ChaseVisibleTarget) {
             // Swap places with the guard
             moveGuardToPlayerPos(state, guardMid);
-            tryPlayerStep(state, dx, dy);
+            tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
         } else {
             preTurn(state);
             guardMid.mode = (0, _guard.GuardMode).Unconscious;
@@ -1444,55 +1481,38 @@ function tryPlayerLeap(state, dx, dy) {
     }
     // If player is in water, downgrade to a step
     if (state.gameMap.cells.atVec(posOld).type === (0, _gameMap.TerrainType).GroundWater) {
-        tryPlayerStep(state, dx, dy);
+        tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
         return;
     }
     // If the midpoint is off the map, downgrade to a step
     if (posMid[0] < 0 || posMid[1] < 0 || posMid[0] >= state.gameMap.cells.sizeX || posMid[1] >= state.gameMap.cells.sizeY) {
-        tryPlayerStep(state, dx, dy);
+        tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
         return;
     }
     // If the midpoint is a wall, downgrade to a step
     const cellMid = state.gameMap.cells.atVec(posMid);
     if (cellMid.blocksPlayerMove) {
-        tryPlayerStep(state, dx, dy);
+        tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
         return;
     }
     // If the midpoint is a door, downgrade to a step
     if ((cellMid.type === (0, _gameMap.TerrainType).DoorNS || cellMid.type === (0, _gameMap.TerrainType).DoorEW) && state.gameMap.items.find((item)=>item.pos.equals(posMid) && (0, _gameMap.isDoorItemType)(item.type))) {
-        tryPlayerStep(state, dx, dy);
+        tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
         return;
     }
     // If the midpoint is a one-way window but is the wrong way, downgrade to a step
     if (cellMid.type == (0, _gameMap.TerrainType).OneWayWindowE && posNew[0] <= posOld[0] || cellMid.type == (0, _gameMap.TerrainType).OneWayWindowW && posNew[0] >= posOld[0] || cellMid.type == (0, _gameMap.TerrainType).OneWayWindowN && posNew[1] <= posOld[1] || cellMid.type == (0, _gameMap.TerrainType).OneWayWindowS && posNew[1] >= posOld[1]) {
-        tryPlayerStep(state, dx, dy);
+        tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
         return;
     }
-    // Handle a guard at the endpoint
-    const guard = state.gameMap.guards.find((guard)=>guard.pos.equals(posNew));
-    if (guard === undefined) player.pickTarget = null;
-    else {
-        if (guard.hasPurse || guard.hasVaultKey) player.pickTarget = guard;
-        const oh = guard.overheadIcon();
-        if (oh === (0, _gameMap.GuardStates).Relaxed || oh === (0, _gameMap.GuardStates).Alerted) {
-            tryPlayerStep(state, dx, dy);
-            if (player.pos.equals(posMid)) {
-                guard.mode = (0, _guard.GuardMode).Unconscious;
-                guard.modeTimeout = Math.max(1, 40 - 2 * state.level) + (0, _random.randomInRange)(20);
-                if (guard.hasPurse || guard.hasVaultKey) collectGuardLoot(state, player, guard, posOld);
-                player.pickTarget = null;
-                ++state.levelStats.numKnockouts;
-                state.sounds.hitGuard.play(0.25);
-                bumpAnim(state, dx, dy);
-            // advanceTime(state);
-            }
-            return;
-        }
-    }
     // If the leap destination is blocked, try a step if it can succeeed; else fail
+    const guard = state.gameMap.guards.find((guard)=>guard.pos.equals(posNew));
     if (!canLeapToPos(state, posNew)) {
-        if (canStepToPos(state, posMid)) tryPlayerStep(state, dx, dy);
-        else if (collectLoot(state, posMid, player.pos)) {
+        if (canStepToPos(state, posMid)) {
+            if (guard !== undefined && guard.overheadIcon() === (0, _gameMap.GuardStates).Alerted) // Leaping attack: An alert guard at posNew will be KO'd and looted with player landing at posMid
+            executeLeapAttack(state, player, guard, dx, dy, posOld, posMid, posNew);
+            else tryPlayerStep(state, dx, dy, StepType.AttemptedLeap);
+        } else if (collectLoot(state, posMid, player.pos)) {
             preTurn(state);
             player.pickTarget = null;
             bumpAnim(state, dx, dy);
@@ -1500,6 +1520,9 @@ function tryPlayerLeap(state, dx, dy) {
         } else bumpFail(state, dx, dy);
         return;
     }
+    // Handle a guard at the endpoint
+    if (guard === undefined || !(guard.hasPurse || guard.hasVaultKey)) player.pickTarget = null;
+    else player.pickTarget = guard;
     // Execute the leap
     preTurn(state);
     // Collect any loot from posMid
@@ -1587,7 +1610,8 @@ function tryPlayerLeap(state, dx, dy) {
     // Collect any loot from posNew
     collectLoot(state, posNew, posNew);
     // Generate movement AI noises
-    if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
+    if (state.gameMap.items.find((item)=>item.pos.equals(posNew) && item.type === (0, _gameMap.ItemType).Chair)) makeNoise(state.gameMap, player, NoiseType.BangChair, 17, state.sounds);
+    else if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
     else if (cellNew.type === (0, _gameMap.TerrainType).GroundWater) {
         makeNoise(state.gameMap, player, NoiseType.Splash, 17, state.sounds);
         state.sounds["splash"].play(0.5);
@@ -1597,6 +1621,73 @@ function tryPlayerLeap(state, dx, dy) {
     // Play sound for terrain type changes
     playMoveSound(state, state.gameMap.cells.atVec(posOld), cellNew);
     if (cellMid.type === (0, _gameMap.TerrainType).PortcullisNS || cellMid.type === (0, _gameMap.TerrainType).PortcullisEW) state.sounds["gate"].play(0.3);
+}
+function executeLeapAttack(state, player, target, dx, dy, posOld, posMid, posNew) {
+    // Execute the leaping attack that will finish at posMid
+    preTurn(state);
+    // Collect any loot from posMid
+    collectLoot(state, posMid, posNew);
+    // Update player position
+    (0, _myMatrix.vec2).copy(player.pos, posMid);
+    ++state.numLeapMoves;
+    target.mode = (0, _guard.GuardMode).Unconscious;
+    target.modeTimeout = Math.max(1, 40 - 2 * state.level) + (0, _random.randomInRange)(20);
+    if (target.hasPurse || target.hasVaultKey) collectGuardLoot(state, player, target, posMid, 0.15);
+    player.pickTarget = null;
+    ++state.levelStats.numKnockouts;
+    state.sounds.hitGuard.play(0.25);
+    // Identify creaky floor under player
+    const cellMid = state.gameMap.cells.atVec(posMid);
+    cellMid.identified = true;
+    // Animate player moving
+    const start = (0, _myMatrix.vec2).clone(posOld).subtract(posMid);
+    const mid = (0, _myMatrix.vec2).clone(posNew).subtract(posMid).scale(0.5).add((0, _myMatrix.vec2).fromValues(0, 0.25));
+    const end = (0, _myMatrix.vec2).create();
+    // let smid = start.add(mid).scale(0.5).add(vec2.fromValues(0,0.25));
+    // let emid = mid.add(end).scale(0.5).add(vec2.fromValues(0,0.25));
+    const tile = dx < 0 ? tileSet.playerTiles.left : dx > 0 ? tileSet.playerTiles.right : dy > 0 ? tileSet.playerTiles.up : tileSet.playerTiles.down;
+    const hid = player.hidden(state.gameMap);
+    const tweenSeq = [
+        {
+            pt0: start,
+            pt1: mid,
+            duration: 0.15,
+            fn: (0, _animation.tween).easeInQuad
+        },
+        {
+            pt0: mid,
+            pt1: end,
+            duration: 0.1,
+            fn: (0, _animation.tween).easeOutQuad
+        },
+        {
+            pt0: end,
+            pt1: end,
+            duration: dy > 0 && !hid ? 0.5 : 0.1,
+            fn: (0, _animation.tween).easeOutQuad
+        }
+    ];
+    if (dy > 0 && !hid) tweenSeq.push({
+        pt0: end,
+        pt1: end,
+        duration: 0.1,
+        fn: (0, _animation.tween).easeOutQuad
+    });
+    const tile2 = hid ? tileSet.playerTiles.hidden : tile;
+    player.animation = new (0, _animation.SpriteAnimation)(tweenSeq, [
+        tile,
+        tile2,
+        tile2,
+        tileSet.playerTiles.left
+    ]);
+    // Generate movement AI noises
+    makeNoise(state.gameMap, player, NoiseType.Thud, 17, state.sounds);
+    if (cellMid.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
+    else if (cellMid.type === (0, _gameMap.TerrainType).GroundWater) makeNoise(state.gameMap, player, NoiseType.Splash, 17, state.sounds);
+    // Let guards take a turn
+    advanceTime(state);
+    // Play sound for terrain type changes
+    playMoveSound(state, state.gameMap.cells.atVec(posOld), cellMid);
 }
 function canLeapOntoItemType(itemType) {
     switch(itemType){
@@ -1626,6 +1717,13 @@ function makeNoise(map, player, noiseType, radius, sounds) {
             sounds.footstepCreaky.play(0.6);
             break;
         case NoiseType.Splash:
+            sounds.splash.play(0.5);
+            break;
+        case NoiseType.Thud:
+            break;
+        case NoiseType.BangDoor:
+            break;
+        case NoiseType.BangChair:
             break;
     }
     let closestGuardDist = Infinity;
@@ -2729,10 +2827,10 @@ function viewWorldSize(viewportPixelSize, zoomScale) {
 }
 function statusBarZoom(screenSize) {
     const minCharsX = 45;
-    const minCharsY = 22;
-    const scaleLargestX = Math.max(1, Math.floor(screenSize[0] / (statusBarCharPixelSizeX * minCharsX)));
-    const scaleLargestY = Math.max(1, Math.floor(screenSize[1] / (statusBarCharPixelSizeY * minCharsY)));
-    const scaleFactor = Math.min(scaleLargestX, scaleLargestY);
+    const minCharsY = 25;
+    const scaleLargestX = Math.max(1, screenSize[0] / (statusBarCharPixelSizeX * minCharsX));
+    const scaleLargestY = Math.max(1, screenSize[1] / (statusBarCharPixelSizeY * minCharsY));
+    const scaleFactor = Math.floor(Math.min(scaleLargestX, scaleLargestY) * 2) / 2;
     return scaleFactor;
 }
 function renderTextBox(renderer, screenSize, state) {
@@ -2793,23 +2891,21 @@ function renderTextBox(renderer, screenSize, state) {
 }
 function renderTopStatusBar(renderer, screenSize, state) {
     const tileZoom = statusBarZoom(screenSize);
-    const statusBarPixelSizeY = tileZoom * statusBarCharPixelSizeY;
     const screenSizeInTilesX = screenSize[0] / (tileZoom * statusBarCharPixelSizeX);
-    const screenSizeInTilesY = screenSize[1] / statusBarPixelSizeY;
+    const screenSizeInTilesY = screenSize[1] / (tileZoom * statusBarCharPixelSizeY);
     const offsetTilesY = 1 - screenSizeInTilesY;
     const matScreenFromWorld = (0, _myMatrix.mat4).create();
     (0, _myMatrix.mat4).ortho(matScreenFromWorld, 0, screenSizeInTilesX, offsetTilesY, screenSizeInTilesY + offsetTilesY, 1, -1);
     renderer.start(matScreenFromWorld, 0);
-    const statusBarTileSizeX = Math.ceil(screenSizeInTilesX);
     const colorBackground = colorLerp(0xff101010, 0xff404040, 1 - (1 - state.topStatusMessageAnim) ** 2);
-    renderer.addGlyph(0, 0, statusBarTileSizeX, 1, {
+    renderer.addGlyph(0, 0, screenSizeInTilesX, 1, {
         textureIndex: fontTileSet.background.textureIndex,
         color: colorBackground,
         unlitColor: colorBackground
     });
     if (state.dailyRun) putString(renderer, 0, "Daily run", _colorPreset.lightYellow);
     const message = state.topStatusMessage;
-    const messageX = Math.floor((statusBarTileSizeX - message.length) / 2 + 0.5);
+    const messageX = (screenSizeInTilesX - message.length) / 2;
     putString(renderer, messageX, message, _colorPreset.lightGray);
     renderer.flush();
 }
@@ -2832,10 +2928,11 @@ function putString(renderer, x, s, color) {
     for(let i = 0; i < s.length; ++i){
         let glyphIndex = s.charCodeAt(i);
         if (glyphIndex === 10) glyphIndex = 32;
-        renderer.addGlyph(x + i, 0, x + i + 1, 1, {
+        renderer.addGlyph(x, 0, x + 1, 1, {
             textureIndex: glyphIndex,
             color: color
         });
+        ++x;
     }
 }
 function renderBottomStatusBar(renderer, screenSize, state) {
@@ -2845,8 +2942,7 @@ function renderBottomStatusBar(renderer, screenSize, state) {
     const matScreenFromWorld = (0, _myMatrix.mat4).create();
     (0, _myMatrix.mat4).ortho(matScreenFromWorld, 0, screenSizeInTilesX, 0, screenSizeInTilesY, 1, -1);
     renderer.start(matScreenFromWorld, 0);
-    const statusBarTileSizeX = Math.ceil(screenSizeInTilesX);
-    renderer.addGlyph(0, 0, statusBarTileSizeX, 1, fontTileSet.background);
+    renderer.addGlyph(0, 0, screenSizeInTilesX, 1, fontTileSet.background);
     let leftSideX = 1;
     const playerUnderwater = state.gameMap.cells.at(state.player.pos[0], state.player.pos[1]).type == (0, _gameMap.TerrainType).GroundWater && state.player.turnsRemainingUnderwater > 0;
     if (playerUnderwater) {
@@ -2877,7 +2973,7 @@ function renderBottomStatusBar(renderer, screenSize, state) {
     const msgLeapToggle = "Leap";
     if (state.leapToggleActive) putString(renderer, leftSideX, msgLeapToggle, _colorPreset.lightGreen);
     leftSideX += msgLeapToggle.length;
-    let rightSideX = statusBarTileSizeX;
+    let rightSideX = screenSizeInTilesX;
     const percentRevealed = Math.floor(state.gameMap.fractionRevealed() * 100);
     if (percentRevealed >= 100) {
         // Total loot
@@ -2901,7 +2997,7 @@ function renderBottomStatusBar(renderer, screenSize, state) {
     let msgTimer = state.turns + "/" + numTurnsParForCurrentMap(state);
     const ghosted = state.levelStats.numSpottings === 0;
     if (!ghosted) msgTimer += "!";
-    const centeredX = Math.floor((leftSideX + rightSideX - (msgLevel.length + msgTimer.length + 1)) / 2);
+    const centeredX = (leftSideX + rightSideX - (msgLevel.length + msgTimer.length + 1)) / 2;
     putString(renderer, centeredX, msgLevel, _colorPreset.lightGray);
     putString(renderer, centeredX + msgLevel.length + 1, msgTimer, _colorPreset.darkGray);
     renderer.flush();
@@ -3353,7 +3449,7 @@ function createGameMap(level, plan) {
                 const dx = Math.min(x, plan.numRoomsX - 1 - x);
                 const dy = Math.min(y, plan.numRoomsY - 1 - y);
                 const d = Math.min(dx, dy);
-                inside.set(x, y, d !== 1 || !ringCourtyard && dy === 1 && y > 1);
+                inside.set(x, y, d !== 1 || !ringCourtyard && y > 1 && dx !== 1);
             }
             break;
     }
@@ -3375,7 +3471,7 @@ function createGameMap(level, plan) {
     // Make a set of rooms.
     const [rooms, roomIndex] = createRooms(inside, offsetX, offsetY);
     // Compute a list of room adjacencies.
-    const mirrorAdjacencies = rng.random() < 0.75;
+    const mirrorAdjacencies = rng.randomInRange(24) >= level;
     const mirrorAdjacenciesX = mirrorRoomsX && mirrorAdjacencies;
     const mirrorAdjacenciesY = mirrorRoomsY && mirrorAdjacencies;
     const adjacencies = computeAdjacencies(mirrorAdjacenciesX, mirrorAdjacenciesY, offsetX, offsetY, rooms, roomIndex);
@@ -5347,44 +5443,29 @@ function renderWalls(levelType, adjacencies, map, rng) {
         let walls = [];
         walls.push(adj0);
         if (adjMirror !== null && adjMirror !== adj0) walls.push(adjMirror);
-        const type0 = adj0.roomLeft.roomType;
-        const type1 = adj0.roomRight.roomType;
-        if (!adj0.door && type0 !== type1) {
-            if (type0 == RoomType.Exterior || type1 == RoomType.Exterior) {
-                if (allowExteriorWindows) for (const a of walls){
-                    if (a.roomLeft.roomType === RoomType.Vault || a.roomRight.roomType === RoomType.Vault) continue;
-                    const dir = (0, _myMatrix.vec2).clone(a.dir);
-                    if (a.roomRight.roomType == RoomType.Exterior) (0, _myMatrix.vec2).negate(dir, dir);
-                    const windowType = oneWayWindowTerrainTypeFromDir(dir);
-                    if (a.length === 5) {
-                        const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, 2 + (a.origin[0] + a.origin[1] & 1));
-                        map.cells.atVec(p).type = windowType;
-                    } else {
-                        const k_end = 1 + Math.floor(a.length / 2) - (a.length & 1);
-                        for(let k = 2; k < k_end; k += 2){
-                            const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, k);
-                            map.cells.atVec(p).type = windowType;
-                            const q = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, a.length - k);
-                            map.cells.atVec(q).type = windowType;
-                        }
-                    }
-                }
-            } else if (isCourtyardRoomType(type0) || isCourtyardRoomType(type1)) for (const a of walls){
-                if (a.roomLeft.roomType === RoomType.Vault || a.roomRight.roomType === RoomType.Vault) continue;
-                const dir = (0, _myMatrix.vec2).clone(a.dir);
-                if (isCourtyardRoomType(a.roomRight.roomType)) (0, _myMatrix.vec2).negate(dir, dir);
-                const windowType = oneWayWindowTerrainTypeFromDir(dir);
-                if (a.length === 5) {
-                    const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, 2 + (a.origin[0] + a.origin[1] & 1));
+        for (const a of walls){
+            if (a.door) continue;
+            const roomTypeL = a.roomLeft.roomType;
+            const roomTypeR = a.roomRight.roomType;
+            if (roomTypeL === RoomType.Vault || roomTypeR === RoomType.Vault) continue;
+            const dir = (0, _myMatrix.vec2).clone(a.dir);
+            if (roomTypeL === RoomType.Exterior !== (roomTypeR === RoomType.Exterior)) {
+                if (!allowExteriorWindows) continue;
+                if (roomTypeR == RoomType.Exterior) (0, _myMatrix.vec2).negate(dir, dir);
+            } else if (isCourtyardRoomType(roomTypeL) !== isCourtyardRoomType(roomTypeR)) {
+                if (isCourtyardRoomType(roomTypeR)) (0, _myMatrix.vec2).negate(dir, dir);
+            } else continue;
+            const windowType = oneWayWindowTerrainTypeFromDir(dir);
+            if (a.length === 5) {
+                const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, 2 + (a.origin[0] + a.origin[1] & 1));
+                map.cells.atVec(p).type = windowType;
+            } else {
+                const k_end = 1 + Math.floor(a.length / 2) - (a.length & 1);
+                for(let k = 2; k < k_end; k += 2){
+                    const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, k);
+                    const q = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, a.length - k);
                     map.cells.atVec(p).type = windowType;
-                } else {
-                    const k_end = 1 + Math.floor(a.length / 2) - (a.length & 1);
-                    for(let k = 2; k < k_end; k += 2){
-                        const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, k);
-                        const q = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, a.length - k);
-                        map.cells.atVec(p).type = windowType;
-                        map.cells.atVec(q).type = windowType;
-                    }
+                    map.cells.atVec(q).type = windowType;
                 }
             }
         }
@@ -7303,6 +7384,7 @@ let GuardMode;
 class Guard {
     dir = (0, _myMatrix.vec2).fromValues(1, 0);
     mode = GuardMode.Patrol;
+    modePrev = GuardMode.Patrol;
     angry = false;
     hasTorch = false;
     hasPurse = false;
@@ -7372,9 +7454,9 @@ class Guard {
             case GuardMode.ChaseVisibleTarget:
             case GuardMode.MoveToLastSighting:
             case GuardMode.MoveToGuardShout:
+            case GuardMode.MoveToLastSound:
                 this.goals = this.chooseMoveTowardPosition(this.goal, state.gameMap);
                 break;
-            case GuardMode.MoveToLastSound:
             case GuardMode.MoveToDownedGuard:
             case GuardMode.WakeGuard:
             case GuardMode.MoveToTorch:
@@ -7404,7 +7486,6 @@ class Guard {
         ];
     }
     act(map, popups, player, levelStats, shouts) {
-        const modePrev = this.mode;
         const posPrev = (0, _myMatrix.vec2).clone(this.pos);
         // Immediately upgrade to chasing if we see the player while investigating;
         // this lets us start moving toward the player on this turn rather than
@@ -7434,7 +7515,7 @@ class Guard {
                 (0, _myMatrix.vec2).copy(this.goal, player.pos);
                 if (this.adjacentTo(player.pos) && !this.pos.equals(player.pos)) {
                     updateDir(this.dir, this.pos, this.goal);
-                    if (modePrev === GuardMode.ChaseVisibleTarget) {
+                    if (this.modePrev === GuardMode.ChaseVisibleTarget) {
                         if (!player.damagedLastTurn) {
                             popups.add((0, _popups.PopupType).Damage, ()=>this.posAnimated());
                             this.speaking = true;
@@ -7548,10 +7629,8 @@ class Guard {
                 }
                 break;
         }
-        // If the guard's moved and has a torch, recompute the level's lighting so the guard can spot
-        // the player using the new lighting
-        if (this.hasTorch && !posPrev.equals(this.pos)) map.computeLighting(map.cells.at(player.pos[0], player.pos[1]));
-        // Change states based on sensory input
+    }
+    postActSense(map, popups, player, levelStats, shouts) {
         if (this.mode !== GuardMode.Unconscious) {
             // See the thief, or lose sight of the thief
             if (this.seesActor(map, player)) {
@@ -7559,7 +7638,7 @@ class Guard {
                     this.mode = GuardMode.Look;
                     this.modeTimeout = 2 + (0, _random.randomInRange)(4);
                 } else this.mode = GuardMode.ChaseVisibleTarget;
-            } else if (this.mode === GuardMode.ChaseVisibleTarget && modePrev === GuardMode.ChaseVisibleTarget) {
+            } else if (this.mode === GuardMode.ChaseVisibleTarget && this.modePrev === GuardMode.ChaseVisibleTarget) {
                 this.mode = GuardMode.MoveToLastSighting;
                 this.modeTimeout = 3;
             }
@@ -7616,12 +7695,12 @@ class Guard {
         this.heardThief = false;
         this.heardThiefClosest = false;
         // Say something to indicate state changes
-        const popupType = popupTypeForStateChange(modePrev, this.mode);
+        const popupType = popupTypeForStateChange(this.modePrev, this.mode);
         if (popupType !== undefined) {
             popups.add(popupType, ()=>this.posAnimated());
             this.speaking = true;
         }
-        if (this.mode === GuardMode.ChaseVisibleTarget && modePrev !== GuardMode.ChaseVisibleTarget) {
+        if (this.mode === GuardMode.ChaseVisibleTarget && this.modePrev !== GuardMode.ChaseVisibleTarget) {
             shouts.push({
                 pos_shouter: this.pos,
                 pos_target: player.pos,
@@ -7646,8 +7725,8 @@ class Guard {
         (0, _myMatrix.vec2).subtract(d, person.pos, this.pos);
         // Check view frustum except when in GuardMode.ChaseVisibleTarget
         if (this.mode !== GuardMode.ChaseVisibleTarget && (0, _myMatrix.vec2).dot(this.dir, d) < offset) return false;
-        let personIsLit = map.cells.atVec(person.pos).lit > 0;
-        let d2 = (0, _myMatrix.vec2).squaredLen(d);
+        const personIsLit = map.cells.atVec(person.pos).lit > 0;
+        const d2 = (0, _myMatrix.vec2).squaredLen(d);
         if (d2 >= this.sightCutoff(personIsLit)) return false;
         if (isRelaxedGuardMode(this.mode) && !this.angry || Math.abs(d[0]) >= 2 || Math.abs(d[1]) >= 2) {
             // Enemy is relaxed and/or player is distant. Normal line-of-sight applies.
@@ -7666,7 +7745,7 @@ class Guard {
     sightCutoff(litTarget) {
         if (this.mode === GuardMode.ChaseVisibleTarget) return litTarget ? 75 : 33;
         else if (!isRelaxedGuardMode(this.mode) || this.angry) return litTarget ? 75 : 15;
-        else return litTarget ? 40 : 3;
+        else return litTarget ? 40 : 5;
     }
     enterPatrolMode(map) {
         this.patrolPathIndex = map.patrolPathIndexForResume(this.patrolPath, this.patrolPathIndex, this.pos);
@@ -7745,6 +7824,7 @@ function chooseGuardMoves(state) {
 function guardActAll(state, map, popups, player) {
     // Mark if we heard a guard last turn, and clear the speaking flag.
     for (const guard of map.guards){
+        guard.modePrev = guard.mode;
         guard.heardGuard = guard.hearingGuard;
         guard.hearingGuard = false;
         guard.speaking = false;
@@ -7768,6 +7848,10 @@ function guardActAll(state, map, popups, player) {
         guard.hasMoved = true;
         ontoGate = ontoGate || guardOnGate(guard, map) && !oldPos.equals(guard.pos);
     }
+    // Update lighting to account for guards moving with torches, or opening/closing doors
+    map.computeLighting(map.cells.atVec(player.pos));
+    // Update guard states based on their senses
+    for (const guard of map.guards)guard.postActSense(map, popups, player, state.levelStats, shouts);
     // Process shouts
     for (const shout of shouts)alertNearbyGuards(map, shout);
     // Clear pickTarget if the guard sees the player or is no longer adjacent to the player
@@ -7788,7 +7872,7 @@ function popupTypeForStateChange(modePrev, modeNext) {
                 case GuardMode.MoveToLastSound:
                     return (0, _popups.PopupType).GuardFinishInvestigating;
                 case GuardMode.MoveToGuardShout:
-                    return (0, _popups.PopupType).GuardFinishInvestigating;
+                    return (0, _popups.PopupType).GuardEndChase;
                 case GuardMode.MoveToLastSighting:
                     return (0, _popups.PopupType).GuardEndChase;
                 case GuardMode.Unconscious:
@@ -7980,22 +8064,22 @@ function shuffleArray(array) {
 // alea, a 53-bit multiply-with-carry generator by Johannes Baagøe.
 // Period: ~2^116
 // Reported to pass all BigCrush tests.
-var alea = require("7bf590523ce23bdd");
+var alea = require("21b609bf913c0562");
 // xor128, a pure xor-shift generator by George Marsaglia.
 // Period: 2^128-1.
 // Reported to fail: MatrixRank and LinearComp.
-var xor128 = require("6f22271c47aa398b");
+var xor128 = require("7a7fae06fd87b416");
 // xorwow, George Marsaglia's 160-bit xor-shift combined plus weyl.
 // Period: 2^192-2^32
 // Reported to fail: CollisionOver, SimpPoker, and LinearComp.
-var xorwow = require("b3f05ba4cc02a1e5");
+var xorwow = require("f102f3d30a440eaa");
 // xorshift7, by François Panneton and Pierre L'ecuyer, takes
 // a different approach: it adds robustness by allowing more shifts
 // than Marsaglia's original three.  It is a 7-shift generator
 // with 256 bits, that passes BigCrush with no systmatic failures.
 // Period 2^256-1.
 // No systematic BigCrush failures reported.
-var xorshift7 = require("6b87207d7b592c71");
+var xorshift7 = require("1c744efeef6279eb");
 // xor4096, by Richard Brent, is a 4096-bit xor-shift with a
 // very long period that also adds a Weyl generator. It also passes
 // BigCrush with no systematic failures.  Its long period may
@@ -8003,16 +8087,16 @@ var xorshift7 = require("6b87207d7b592c71");
 // collisions.
 // Period: 2^4128-2^32.
 // No systematic BigCrush failures reported.
-var xor4096 = require("999b871f72fbe5e6");
+var xor4096 = require("2ee2784be686d489");
 // Tyche-i, by Samuel Neves and Filipe Araujo, is a bit-shifting random
 // number generator derived from ChaCha, a modern stream cipher.
 // https://eden.dei.uc.pt/~sneves/pubs/2011-snfa2.pdf
 // Period: ~2^127
 // No systematic BigCrush failures reported.
-var tychei = require("4acb41f51fb8d2db");
+var tychei = require("877e1ecf14904f36");
 // The original ARC4-based prng included in this library.
 // Period: ~2^1600
-var sr = require("a135c26b6302ae09");
+var sr = require("2fe471b72ae639de");
 sr.alea = alea;
 sr.xor128 = xor128;
 sr.xorwow = xorwow;
@@ -8021,7 +8105,7 @@ sr.xor4096 = xor4096;
 sr.tychei = tychei;
 module.exports = sr;
 
-},{"7bf590523ce23bdd":"c47hP","6f22271c47aa398b":"hy9Go","b3f05ba4cc02a1e5":"8ktBo","6b87207d7b592c71":"i5aBa","999b871f72fbe5e6":"7tXtZ","4acb41f51fb8d2db":"eVmNr","a135c26b6302ae09":"lbeKh"}],"c47hP":[function(require,module,exports) {
+},{"21b609bf913c0562":"c47hP","7a7fae06fd87b416":"hy9Go","f102f3d30a440eaa":"8ktBo","1c744efeef6279eb":"i5aBa","2ee2784be686d489":"7tXtZ","877e1ecf14904f36":"eVmNr","2fe471b72ae639de":"lbeKh"}],"c47hP":[function(require,module,exports) {
 // A port of an algorithm by Johannes Baagøe <baagoe@baagoe.com>, 2010
 // http://baagoe.com/en/RandomMusings/javascript/
 // https://github.com/nquinlan/better-random-numbers-for-javascript-mirror
@@ -8748,7 +8832,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         module.exports = seedrandom;
         // When in node.js, try using crypto package for autoseeding.
         try {
-            nodecrypto = require("2080230c56ad12b8");
+            nodecrypto = require("7473861789732e18");
         } catch (ex) {}
     } else if (typeof define == "function" && define.amd) define(function() {
         return seedrandom;
@@ -8761,7 +8845,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 typeof self !== "undefined" ? self : this, [], Math // math: package containing random, pow, and seedrandom
 );
 
-},{"2080230c56ad12b8":"jhUEF"}],"jhUEF":[function(require,module,exports) {
+},{"7473861789732e18":"jhUEF"}],"jhUEF":[function(require,module,exports) {
 "use strict";
 
 },{}],"eiIYq":[function(require,module,exports) {
@@ -8874,7 +8958,7 @@ parcelHelpers.export(exports, "tween", ()=>tween);
 parcelHelpers.export(exports, "LightState", ()=>LightState);
 var _myMatrix = require("./my-matrix");
 var _gameMap = require("./game-map");
-var tween = require("74ddcfb5b40ba0c4");
+var tween = require("126a265403e2534c");
 class Animator {
     update(dt) {
         return false;
@@ -8992,7 +9076,7 @@ class LightSourceAnimation extends Animator {
     }
 }
 
-},{"./my-matrix":"21x0k","./game-map":"3bH7G","74ddcfb5b40ba0c4":"k5maZ","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"k5maZ":[function(require,module,exports) {
+},{"./my-matrix":"21x0k","./game-map":"3bH7G","126a265403e2534c":"k5maZ","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"k5maZ":[function(require,module,exports) {
 "use strict";
 // t: current time, b: beginning value, _c: final value, d: total duration
 var tweenFunctions = {
@@ -9231,27 +9315,8 @@ class Renderer {
 
             out lowp vec4 fragColor;
 
-            // Function to convert sRGB to linear space
-            highp vec3 srgbToLinear(highp vec3 color) {
-                return pow(color, vec3(2.2));
-            }
-
-            // Function to convert linear space to sRGB
-            highp vec3 linearToSrgb(highp vec3 color) {
-                return pow(color, vec3(1.0 / 2.2));
-            }
-
             void main() {
-                // Convert fColor and texColor to linear space
-                highp vec4 linearColor = vec4(srgbToLinear(fColor.rgb), fColor.a);
-                highp vec4 linearTexColor = texture(uOpacity, fTexcoord);
-                linearTexColor = vec4(srgbToLinear(linearTexColor.rgb), linearTexColor.a);
-                
-                // Perform the texture multiplication in linear space
-                highp vec4 linearResult = linearColor * linearTexColor;
-
-                // Convert the final result back to sRGB
-                fragColor = vec4(linearToSrgb(linearResult.rgb), linearResult.a);
+                fragColor = fColor * texture(uOpacity, fTexcoord);
             }
         `;
         const attribs = {
@@ -9492,8 +9557,8 @@ parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "getTileSet", ()=>getTileSet);
 parcelHelpers.export(exports, "getFontTileSet", ()=>getFontTileSet);
 var _colorPreset = require("./color-preset");
-const imageTileset31Color = require("e3a6a72e474edc4d");
-const imageTilesetFont = require("f18515cbd1b4d5cd");
+const imageTileset31Color = require("76edfa0a4f08390c");
+const imageTilesetFont = require("e7be3d8d2aa97acf");
 function getTileSet() {
     return tileSet31Color;
 }
@@ -10499,7 +10564,7 @@ const tileSet31Color = {
     ]
 };
 
-},{"./color-preset":"37fo9","e3a6a72e474edc4d":"1YCFZ","f18515cbd1b4d5cd":"bEQAo","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"37fo9":[function(require,module,exports) {
+},{"./color-preset":"37fo9","76edfa0a4f08390c":"1YCFZ","e7be3d8d2aa97acf":"bEQAo","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"37fo9":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "black", ()=>black);
@@ -10548,9 +10613,9 @@ const darkerYellowTint = 0xffc0eeee;
 const white = 0xffffffff;
 
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"1YCFZ":[function(require,module,exports) {
-module.exports = require("4908690a836c7ba1").getBundleURL("lf1OY") + "tiles31color.eef502e2.png" + "?" + Date.now();
+module.exports = require("a619690fbd10cf7f").getBundleURL("lf1OY") + "tiles31color.eef502e2.png" + "?" + Date.now();
 
-},{"4908690a836c7ba1":"lgJ39"}],"lgJ39":[function(require,module,exports) {
+},{"a619690fbd10cf7f":"lgJ39"}],"lgJ39":[function(require,module,exports) {
 "use strict";
 var bundleURL = {};
 function getBundleURLCached(id) {
@@ -10585,9 +10650,9 @@ exports.getBaseURL = getBaseURL;
 exports.getOrigin = getOrigin;
 
 },{}],"bEQAo":[function(require,module,exports) {
-module.exports = require("1e5eb13fe118761e").getBundleURL("lf1OY") + "font.e7668d7f.png" + "?" + Date.now();
+module.exports = require("322b4fe98180296c").getBundleURL("lf1OY") + "font.e7668d7f.png" + "?" + Date.now();
 
-},{"1e5eb13fe118761e":"lgJ39"}],"1vRTt":[function(require,module,exports) {
+},{"322b4fe98180296c":"lgJ39"}],"1vRTt":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "Howler", ()=>(0, _howler.Howler));
@@ -10597,865 +10662,827 @@ parcelHelpers.export(exports, "SubtitledHowlGroup", ()=>SubtitledHowlGroup);
 parcelHelpers.export(exports, "setupSounds", ()=>setupSounds);
 var _howler = require("howler");
 var _random = require("./random");
-const victorySong = require("d8be2bd7ee235459");
-const levelRequirementJingle = require("2846b3fe1f8d0ace");
-const levelCompleteJingle = require("40b99350e8e2f6cc");
-const gameOverJingle = require("36f769a5f0dc43e6");
-const easterEgg = require("40db36a513c976cc");
-const footstepWood = require("1791be9b7c7eee03");
-const footstepTile = require("34c8e3236e76c872");
-const footstepWater = require("25e560b466ee46c9");
-const footstepGravel = require("dd9ae501a09f49b5");
-const footstepGrass = require("4d8e6a94e903bccb");
+const victorySong = require("f0665be29a76364f");
+const levelRequirementJingle = require("8ee4b45ed4305ffe");
+const levelCompleteJingle = require("744d49c14cf3bd64");
+const gameOverJingle = require("bcd7cf6a0b64acb2");
+const easterEgg = require("352a1308c22a1e56");
+const footstepWood = require("d74976564eabf9e4");
+const footstepTile = require("4cc04d2b3f9932d");
+const footstepWater = require("9bfaf4c4f4128feb");
+const footstepGravel = require("306aae0e4d4a043b");
+const footstepGrass = require("3558e8405095caac");
 const footstepCreakSet = [
-    require("4548c030266b51d7"),
-    require("126501b655fa9afa"),
-    require("e6ca3ad34aa458f3"),
-    require("622a1db4690fe37d"),
-    require("22c76dbbac11e9c8"),
-    require("90003c50dc9dc398"),
-    require("ee2c250460d76b76"),
-    require("8c455b21134381da"),
-    require("dce21359b6473004"),
-    require("958728459ce5ad9")
+    require("87b50c685d8423a0"),
+    require("c01f582973819430"),
+    require("7c2f92882c19e0cc"),
+    require("cc049c7c517bba2c"),
+    require("41416a4f73637d98"),
+    require("12be1db3c1725433"),
+    require("e0765626201a3b82"),
+    require("f328e12481fdd79"),
+    require("ce97ba434fd185c3"),
+    require("efd1dac51efba792")
 ];
 const hitPlayerSet = [
-    require("59cb5ab2c73f6758"),
-    require("91b458e1c498a812"),
-    require("e192c1b2c20aaf62"),
-    require("d41593edbaa53ee4"),
-    require("ac1de7689610792f"),
-    require("36fad69d632fab09"),
-    require("13bac3caa3992ca2")
+    require("266db93e07a61201"),
+    require("c0d78fffcf346c82"),
+    require("f5bb8cbdd21f5342"),
+    require("43a9e46d8ea7cd81"),
+    require("1172555423365d87"),
+    require("b1a21bee33b6e90f"),
+    require("ab56bd8b2de1ccfc")
 ];
 const hitGuardSet = [
-    require("36fad69d632fab09")
+    require("b1a21bee33b6e90f")
 ];
 const coinSet = [
-    require("2784580c96fffee8"),
-    require("54f9824621755d5e"),
-    require("3c8650e30ac0c35d"),
-    require("62d89b46318d70c0"),
-    require("bd31e4570f77526")
+    require("5fdcb53fa5673aef"),
+    require("91c6e5f5d386663b"),
+    require("6d93f942c434b176"),
+    require("e49f1f5764e00901"),
+    require("becc902d0316f6cc")
 ];
 const gruntSet = [
-    require("eb1c71a70afb7403"),
-    require("ad188d1a6617e894"),
-    require("a28119595675c465"),
-    require("4148e9dead0ad061"),
-    require("7cc54700e81f0cb2"),
-    require("9f12e903f624967c"),
-    require("6c7faa4701b34fb6"),
-    require("61ead1e798c0f61e")
+    require("e9696568bef5d9b8"),
+    require("265960cf8a3c9220"),
+    require("580710a44af1d25c"),
+    require("ba891949d514fa31"),
+    require("42fa7fdeb51b9be6"),
+    require("ee01e021b25eefa9"),
+    require("2396c11a4aa1da8f"),
+    require("1ff4195689ab20cd")
 ];
 const douseSet = [
-    require("cb75f8dce606e9cd"),
-    require("b943464a88b1b153"),
-    require("e3f5243a3059488b"),
-    require("e6aa4943bd2b7c32")
+    require("61cd0b5d8fc06e59"),
+    require("22ab6fd9e4daca1c"),
+    require("8c07257dee09846b"),
+    require("e21bc160ecafd4cd")
 ];
 const igniteSet = [
-    require("380652c99ba87d6"),
-    require("3973fc9e72324db5")
+    require("f6c90b38141e2ace"),
+    require("38c34066f7055b70")
 ];
 const hideSet = [
-    require("2afb5681fb5aa605"),
-    require("851741874f77a9ee"),
-    require("ccb70b5667a4518a"),
-    require("576285c07095594f"),
-    require("48fff4ee20b1593d"),
-    require("515be48043402fb2")
+    require("a025b5eb5484ff46"),
+    require("ac6f442f76de79b"),
+    require("b3335efda7b6af04"),
+    require("c5ed7272e7cb3587"),
+    require("d1dcc0a946567529"),
+    require("ab293f84a67c8d99")
 ];
 const gateSet = [
-    require("11692f5099756fad"),
-    require("48848c085391f7ee"),
-    require("7ee8287e4980cca"),
-    require("4987406cb0ca6036"),
-    require("de21946c81ff8b45")
+    require("1891a9aba3708a53"),
+    require("5865dbd8bae7c96b"),
+    require("bcd7c16ba7d7d61"),
+    require("e78deec06d901d3a"),
+    require("f394a2a4f193774b")
 ];
 const splashSet = [
-    require("973fe71d2b1c35b0"),
-    require("f805b96600a628a3")
+    require("da67478315c5f9c"),
+    require("ac1cce7696e2e28f")
 ];
 const waterEnterSet = [
-    require("3c0254c5df21dfe0")
+    require("91d3d82a23a7f2a6")
 ];
 const waterExitSet = [
-    require("bcbc13e2d5f1a4b6")
+    require("fa0de2a4aaced4aa")
 ];
 const jumpSet = [
-    require("1505541a03324ba3"),
-    require("7bdb88453d2751ac")
+    require("74431cc7db6e18c"),
+    require("f5bdd46198a870f2")
 ];
 const tooHighSet = [
-    require("77935f9ec1d69787"),
-    require("5a7fe79a20e19bcb")
+    require("a23fc5e626d3bd70"),
+    require("bcc23937980b90cf")
 ];
 const guardSeeThiefSet = [
     [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
     [
-        require("332c88ebe5bffb92"),
+        require("8edeba5e41e9fe07"),
         "Hey!"
     ],
     [
-        require("379cfd599dca4a7"),
+        require("e5d78107540b029c"),
         "Hey!"
     ],
     [
-        require("44e17fc55e40fdb5"),
+        require("1f3be94fb6cf8421"),
         "Hey!"
     ],
     [
-        require("eb32510d8a70fbf"),
+        require("79c08e91e327e3b6"),
         "What was that?"
     ],
     [
-        require("20b041461dcd4dfe"),
+        require("943813e688572223"),
         "What was that?"
     ],
     [
-        require("9e772393541b208"),
+        require("47dd61530dd9f68d"),
         "What was that?"
     ],
     [
-        require("7a7a25aefea189"),
+        require("74be602c333f9f10"),
         "What was that?"
     ],
     [
-        require("711db0f041d33a26"),
+        require("b9007e2781c8ee20"),
         "What was that?"
     ],
     [
-        require("d186312139fed697"),
+        require("568cc259fedf00bd"),
         "Who goes there?"
     ],
     [
-        require("91efe67cb2a41c7f"),
+        require("142501f6fd66cfe5"),
         "Huh?"
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
     [
-        require("bf8228ece25758da"),
+        require("b39f735b9213825f"),
         "Wha..."
     ],
     [
-        require("7c0e2da8c9873842"),
+        require("a46d950f1c8847f6"),
         "Wait!"
     ],
     [
-        require("b79b89ec6acb7480"),
+        require("d9a30d4970e974d5"),
         "Who's there?"
     ],
     [
-        require("877574795d6d50cc"),
+        require("dace3e3b8595d572"),
         "What moved?"
     ],
     [
-        require("3565284318cb4ff0"),
+        require("86eb3dabc7348e5f"),
         "What's that\nin the shadows?"
     ],
     [
-        require("33eadadb11f0bf4b"),
+        require("21b0fca0793efdb4"),
         "Did that\nshadow move?"
     ],
     [
-        require("ea52f0c88dcdb982"),
+        require("224b720952fd21ac"),
         "I see\nsomething!"
     ],
     [
-        require("9d42ba6cef670c72"),
+        require("ca8652950eea7433"),
         "Hello?"
     ],
     [
-        require("f7ffeaac3d5e4ab6"),
+        require("90cf32e28e1410d9"),
         "Uhh..."
+    ]
+];
+// TODO: We don't have a guard rest state to attach these too.
+const guardRestSet = [
+    [
+        require("fd884530210b7540"),
+        "Ahh..."
+    ],
+    [
+        require("99dbdd06a964d404"),
+        "Aww..."
+    ],
+    [
+        require("395b6e78f128e720"),
+        "Quiet out..."
+    ],
+    [
+        require("ae72d688a53c23ff"),
+        "Rest me old\nbones..."
     ]
 ];
 const guardFinishLookingSet = [
     [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
     [
-        require("eb32510d8a70fbf"),
+        require("79c08e91e327e3b6"),
         "What was that?"
     ],
     [
-        require("8e40265776cf5775"),
+        require("395b6e78f128e720"),
         "Quiet out\nthere..."
     ],
     [
-        require("a81d1c1900309603"),
+        require("4edb014b66a8648e"),
         "Jumpy tonight..."
     ],
     [
-        require("e2525562fa139099"),
+        require("7e4780586df1d42"),
         "Jumpin' at\nshadows!"
     ],
     [
-        require("76b204aa1dbfe2d6"),
-        "Ahh..."
-    ],
-    [
-        require("76b204aa1dbfe2d6"),
-        "Ahh..."
-    ],
-    [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("433817c476ce7401"),
-        "Aww..."
-    ],
-    [
-        require("df93ca7613b78f6a"),
-        "Rest me old\nbones..."
-    ],
-    [
-        require("c4c27d000d3384ff"),
+        require("511c3be8d5db6a3b"),
         "Oh well..."
     ],
     [
-        require("188f4a0cc9ea5c70"),
+        require("777ec5f8c5a13e72"),
         "I've got myself\na case of the\njitters..."
     ],
     [
-        require("c9aa2c5a42c61c63"),
+        require("3d39a0baa84ae221"),
         "I must be\nseein' things..."
     ],
     [
-        require("18b1b67ff58ba9fd"),
+        require("487dd58d8afaed00"),
         "What'd they put\nin my coffee?"
     ],
     [
-        require("b119313e97e0882d"),
+        require("ea583a9536558ce4"),
         "Coffee must be\ntoo strong!"
     ],
     [
-        require("9fbd9249af5fc7ed"),
+        require("5127cbf04c818c89"),
         "Hmm!\nNothing..."
     ],
     [
-        require("ee3aeb6b650ef329"),
+        require("17d495b82c9a6548"),
         "Well, I thought\nI saw something."
     ],
     [
-        require("3dba1b9c2ddae2e4"),
+        require("67f2d90328b3956d"),
         "Nothing..."
     ],
     [
-        require("d4f743e02167d0fc"),
+        require("54115fb2810e4778"),
         "Hopefully\nnothing."
     ],
     [
-        require("a3d7dff3b153d3e4"),
+        require("354312d52bb443e"),
         "Seein' things,\nI guess."
     ],
     [
-        require("a3d7dff3b153d3e4"),
+        require("354312d52bb443e"),
         "Seein' things,\nI guess."
     ]
 ];
 const guardHearThiefSet = [
     [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
     [
-        require("4fe8213e96106e18"),
+        require("350f5fda52fe072d"),
         "What?"
     ],
     [
-        require("332c88ebe5bffb92"),
+        require("8edeba5e41e9fe07"),
         "Hey!"
     ],
     [
-        require("379cfd599dca4a7"),
+        require("e5d78107540b029c"),
         "Hey!"
     ],
     [
-        require("44e17fc55e40fdb5"),
+        require("1f3be94fb6cf8421"),
         "Hey!"
     ],
     [
-        require("eb32510d8a70fbf"),
+        require("79c08e91e327e3b6"),
         "What was that?"
     ],
     [
-        require("20b041461dcd4dfe"),
+        require("943813e688572223"),
         "What was that?"
     ],
     [
-        require("9e772393541b208"),
+        require("47dd61530dd9f68d"),
         "What was that?"
     ],
     [
-        require("7a7a25aefea189"),
+        require("74be602c333f9f10"),
         "What was that?"
     ],
     [
-        require("711db0f041d33a26"),
+        require("b9007e2781c8ee20"),
         "What was that?"
     ],
     [
-        require("91efe67cb2a41c7f"),
+        require("142501f6fd66cfe5"),
         "Huh?"
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
     [
-        require("bf8228ece25758da"),
+        require("b39f735b9213825f"),
         "Wha..."
     ],
     [
-        require("7c0e2da8c9873842"),
+        require("a46d950f1c8847f6"),
         "Wait!"
     ],
     [
-        require("b79b89ec6acb7480"),
+        require("d9a30d4970e974d5"),
         "Who's there?"
     ],
     [
-        require("9d42ba6cef670c72"),
+        require("ca8652950eea7433"),
         "Hello?"
     ],
     [
-        require("f7ffeaac3d5e4ab6"),
+        require("90cf32e28e1410d9"),
         "Uhh..."
     ],
     [
-        require("7ac555b7fb9898e5"),
+        require("87d9a412cc379454"),
         "Hark?"
     ],
     [
-        require("4a61fcff714a7344"),
+        require("dbac7c2d662b6cae"),
         "What was that noise?"
     ],
     [
-        require("3fddc47090cc7cc"),
+        require("dbac7c2d662b6cae"),
+        "What was that noise?"
+    ],
+    [
+        require("7f6c92e0cf0ed649"),
+        "I heard something..."
+    ],
+    [
+        require("7f6c92e0cf0ed649"),
         "I heard something..."
     ]
 ];
 const guardFinishListeningSet = [
     [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("eb32510d8a70fbf"),
-        "What was that?"
-    ],
-    [
-        require("8e40265776cf5775"),
-        "Quiet out..."
-    ],
-    [
-        require("a81d1c1900309603"),
+        require("4edb014b66a8648e"),
         "Jumpy tonight..."
     ],
     [
-        require("76b204aa1dbfe2d6"),
-        "Ahh..."
-    ],
-    [
-        require("76b204aa1dbfe2d6"),
-        "Ahh..."
-    ],
-    [
-        require("a6782583d3bcfab0"),
-        "Hmm..."
-    ],
-    [
-        require("433817c476ce7401"),
-        "Aww..."
-    ],
-    [
-        require("df93ca7613b78f6a"),
-        "Rest me old\nbones..."
-    ],
-    [
-        require("c4c27d000d3384ff"),
+        require("511c3be8d5db6a3b"),
         "Oh well..."
     ],
     [
-        require("188f4a0cc9ea5c70"),
+        require("777ec5f8c5a13e72"),
         "I've got myself\na case of the\njitters..."
     ],
     [
-        require("18b1b67ff58ba9fd"),
+        require("487dd58d8afaed00"),
         "What's in my\ncoffee today?"
     ],
     [
-        require("b119313e97e0882d"),
+        require("ea583a9536558ce4"),
         "Coffee must be\ntoo strong!"
     ],
     [
-        require("9fbd9249af5fc7ed"),
+        require("5127cbf04c818c89"),
         "Hmm!\nNothing..."
     ],
     [
-        require("9272bd200d73707c"),
+        require("86118448d5815fb6"),
         "Well, I can't\nhear it now."
     ],
     [
-        require("3dba1b9c2ddae2e4"),
+        require("67f2d90328b3956d"),
         "Nothing..."
     ],
     [
-        require("d4f743e02167d0fc"),
+        require("54115fb2810e4778"),
         "Hopefully\nnothing."
     ],
     [
-        require("cf7d91cc8f4443bf"),
+        require("604c5e0c7b422b4c"),
         "I must be\nhearing things."
     ]
 ];
 const guardInvestigateSet = [
     [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("332c88ebe5bffb92"),
+        require("8edeba5e41e9fe07"),
         "Hey!"
     ],
     [
-        require("379cfd599dca4a7"),
+        require("e5d78107540b029c"),
         "Hey!"
     ],
     [
-        require("44e17fc55e40fdb5"),
+        require("1f3be94fb6cf8421"),
         "Hey!"
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
     [
-        require("244cdea9e71c8ba5"),
+        require("b84d87dd9b0ef6bd"),
         "That noise\nagain?"
     ],
     [
-        require("a1065a3881bff421"),
+        require("6ce1930c6823684"),
         "Someone's there!"
     ],
     [
-        require("c752f7d2c650037"),
+        require("9b5d0dcf56fcdc89"),
         "Who could\nthat be?"
     ],
     [
-        require("2b6203a189a7057f"),
-        "There it\nis again."
-    ],
-    [
-        require("ea5dd47a39cb99be"),
+        require("f5fb3e952820b04b"),
         "Better check\nit out."
     ],
     [
-        require("9f4bec44e117cd48"),
-        "What keeps making\nthose noises?"
-    ],
-    [
-        require("d9ae76cbc6f63795"),
+        require("4c0e7002d45fcb92"),
         "That better\nbe rats!"
     ],
     [
-        require("75fe62eb78c7a058"),
-        "Again!?"
-    ],
-    [
-        require("7168138f684b7578"),
+        require("74f5de3cc2585e47"),
         "Who is that?"
     ],
     [
-        require("2426022d8c68304d"),
+        require("e70917b8c836c082"),
         "Come out, come out\nwherever you are!"
     ]
 ];
+// TODO: When the thief has been chased, many of these lines will no longer seem appropriate
+// Perhaps need to disambiguate the state in some way 
+// (guardFinishedInvestgiateButUnseen gaurdFinishedInvestigateAndSeen or something)
 const guardFinishInvestigatingSet = [
     [
-        require("a6782583d3bcfab0"),
+        require("6de92d5fb4e57e1d"),
         "Hmm..."
     ],
     [
-        require("e2525562fa139099"),
+        require("7e4780586df1d42"),
         "Jumpin' at\nshadows!"
     ],
     [
-        require("a81d1c1900309603"),
+        require("4edb014b66a8648e"),
         "Jumpy!"
     ],
     [
-        require("c4c27d000d3384ff"),
+        require("511c3be8d5db6a3b"),
         "Oh, well."
     ],
     [
-        require("d6cb7af44352bbf2"),
+        require("cf4fdad406947277"),
         "Guess it was\nnothing."
     ],
     [
-        require("adf6ffd37ae1dbd0"),
+        require("6a71d42b37875a29"),
         "Wonder what it was."
     ],
     [
-        require("4b676e6456899be1"),
+        require("4d50e92e752dd3c4"),
         "Back to my post."
     ],
     [
-        require("e6c5feb70a10ac51"),
+        require("482dc5e14b7be46b"),
         "All quiet now."
     ],
     [
-        require("d3d77cf9e69c828a"),
+        require("8f5442e9228bec91"),
         "I'm sure I\nheard something."
     ],
     [
-        require("25eba2c8e406d957"),
+        require("4ef580c005f4327c"),
         "Not there anymore."
     ],
     [
-        require("19ca2d8dcdde6987"),
+        require("dc13b9229da0b357"),
         "Probably nothing."
     ],
     [
-        require("9fbd9249af5fc7ed"),
+        require("5127cbf04c818c89"),
         "Hmm!\nNothing."
     ],
     [
-        require("5e00908d021a313a"),
+        require("533eaa8e0e0b8f94"),
         "I don't know why\nI work here."
     ],
     [
-        require("32b0bcbf45dfc08f"),
+        require("621d805e99e5af5"),
         "Waste of my time."
     ],
     [
-        require("efaebfea4a23d1a6"),
+        require("ddef5abb720f71fc"),
         "Why do I\neven try?"
     ],
     [
-        require("6785b00738f913bc"),
+        require("6302957cdde9b758"),
         "At least I'm not\non cleaning duty."
     ],
     [
-        require("607f1b10dbd9d132"),
+        require("768d22e87bfa9812"),
         "At least my\nshift ends soon."
     ],
     [
-        require("42f7ecfc8e93ade4"),
+        require("5a415b70efd49466"),
         "What do you\nwant me to\ndo about it?"
     ]
 ];
+// TODO: If we split this group up for guards that are in the same room vs another room
+// we could use more of these
 const guardHearGuardSet = [
     [
-        require("44e17fc55e40fdb5"),
+        require("1f3be94fb6cf8421"),
         "Hey!"
     ],
     [
-        require("61aaf127ae6233a3"),
+        require("d25948602b9f0ec4"),
         "What?"
     ],
+    // [require('url:./audio/guards/where.mp3'), 'Where!?'],
     [
-        require("abf774c1c70e0779"),
-        "Where!?"
-    ],
-    [
-        require("7ec1f7d563f050b2"),
+        require("4d5149e8114ba50a"),
         "Coming!"
     ],
+    // [require('url:./audio/guards/here I come.mp3'), 'Here I come!'],
     [
-        require("da14331cc0e15597"),
-        "Here I come!"
-    ],
-    [
-        require("13e6bee2a33afad8"),
+        require("a0175914b3fe88fd"),
         "To arms!"
-    ],
-    [
-        require("59716eb7d1f5f582"),
-        "What is it!?"
-    ],
-    [
-        require("592fcd8f030d47b4"),
-        "I don't know\nhow to whistle."
     ]
 ];
 const guardChaseSet = [
     [
-        require("1548059b57afcb5b"),
+        require("ab778be72001d61"),
         "(Whistle)"
     ],
     [
-        require("e492fd85f9832fed"),
+        require("270489758d0f9c16"),
         "(Whistle)"
     ],
     [
-        require("86c6bfaa821c33a0"),
+        require("1428c9f21452d721"),
         "(Whistle)"
     ],
     [
-        require("2494c24e0559a596"),
+        require("443597fce9dba5e7"),
         "Get 'em!"
     ],
     [
-        require("dea94d3a4ffe309d"),
+        require("bbf6a0263d0a948e"),
         "Intruder!"
     ],
     [
-        require("c16d7ebbd6a319d9"),
+        require("f4cb02350d7af827"),
         "Oh no...\nIt's a thief!"
     ],
     [
-        require("8d0babdd13b4f1d1"),
+        require("1f6838e48e98dcb1"),
         "We're coming\nfor you!"
     ],
     [
-        require("b22d077dabee1bd2"),
+        require("aecae72693944788"),
         "Coming for you!"
     ],
     [
-        require("97a353f66fd6259"),
+        require("d3fce0947127664c"),
         "Halt!"
     ],
     [
-        require("28733b2c5c3da8b5"),
+        require("7d031e9458050173"),
         "We see you!"
     ],
     [
-        require("40cd6301a73c0854"),
+        require("b883ae2827b679eb"),
         "I'll get you!"
     ],
     [
-        require("13956e26f1e89dee"),
+        require("ef2c85c3dc835679"),
         "You're a goner!"
     ],
     [
-        require("84b1e6a929ccffc7"),
+        require("704c5d63255692d7"),
         "Just you wait!"
     ],
     [
-        require("369e58dbc629a38d"),
+        require("84fee459c99cfae4"),
         "You won't get away!"
     ],
     [
-        require("a014c5eb65ddf401"),
+        require("4bbf9dd9aa23f007"),
         "No you don't!"
     ],
     [
-        require("e687a3a3b764bfd0"),
+        require("9e7041e68b24c7bf"),
         "Thief!"
     ],
     [
-        require("44fa829dafc10ef9"),
+        require("ee9f186cac76a511"),
         "Thief!"
     ],
     [
-        require("3110f0d4b92ac603"),
+        require("1ae79f75082baf33"),
         "Thief!"
     ],
     [
-        require("bc29c05f64ef3090"),
+        require("af843efae160d9c9"),
         "After them!"
     ],
     [
-        require("7501d9826ab3a78e"),
+        require("2f9dc2ad0435f181"),
         "What is thy business\nwith this gold?"
     ],
     [
-        require("3d2e4a631d22f43"),
+        require("1e53c1f4d7f380e2"),
         "No mercy for\nthe wicked!"
     ]
 ];
 const guardEndChaseSet = [
     [
-        require("d542a1fac8e3437"),
+        require("bbfb2ff46a8d9255"),
         "Lost 'im!"
     ],
     [
-        require("29890f6cbdea9ec1"),
+        require("546e5b3efc94c094"),
         "Must have\nrun off..."
     ],
     [
-        require("c4c27d000d3384ff"),
+        require("511c3be8d5db6a3b"),
         "Oh, well..."
     ],
     [
-        require("7b8a1bb5a3e2eb5c"),
+        require("3aba4d3856fa8e51"),
         "Where did they go?"
     ],
     [
-        require("25c5e92bbc6a2994"),
+        require("6fcc3058c27618ec"),
         "His Holiness would\nnot be pleased!"
     ],
     [
-        require("1669eba1dcb42b00"),
+        require("b20f033b705a9076"),
         "The boss will\nnot be pleased!"
     ],
     [
-        require("1680c2c9f735cab7"),
+        require("80928ef071a4c62f"),
         "I give up!"
     ],
     [
-        require("70f2e192489111a4"),
+        require("3c487dfeb4c006d4"),
         "Where did he go!?"
     ],
     [
-        require("1c97cad2f0fc1da3"),
+        require("23acf8e1c462b589"),
         "Drats!\nLost him!"
     ],
     [
-        require("61f27516438c7a6d"),
+        require("e15bc68d0ea7ce88"),
         "Gone!"
     ],
     [
-        require("2386f10e544f2d4d"),
+        require("be08925e1437b3a4"),
         "Come back here!"
     ],
     [
-        require("e5493c8061fb9002"),
+        require("a64116f7dce39ac4"),
         "Rotten scoundrel!"
     ],
     [
-        require("31afdcdb85a8c09"),
+        require("113aff5d788496dd"),
         "Aargh!!"
     ],
     [
-        require("277c37ae4c873074"),
+        require("af88d9f43b998c5b"),
         "He's not coming back!"
     ],
     [
-        require("976243abc04d61a8"),
+        require("577ecaebe0b8be5d"),
         "Blast!"
     ],
     [
-        require("34ac8808828d77cd"),
+        require("d7f9f45e68e6a652"),
         "Don't come back!"
     ],
     [
-        require("f830afe20d11b271"),
+        require("ec5991ba0f70294e"),
         "You won't\nget away\nnext time!"
     ],
     [
-        require("5c4371ce2c6163c6"),
+        require("fb20d33233fe0332"),
         "His Holiness is a\nlord of mercy!"
     ],
     [
-        require("aa1891424451254c"),
+        require("b65eb609bdb5cde8"),
         "What a lousy day\nat work!"
     ],
     [
-        require("2316a6f9edba15da"),
+        require("de7d039eeeba0e99"),
         "I give up..."
     ],
     [
-        require("34537cd137208624"),
+        require("d6761317e96464b0"),
         "What do I do?\nHelp me, help me..."
     ],
     [
-        require("680749970a32616b"),
+        require("46632fd56311f5ed"),
         "Oh no,\nhe got away!"
     ],
     [
-        require("c3e623bfebaf2956"),
+        require("812793c8407b7767"),
         "(Guard rant)"
     ]
 ];
 const guardAwakesWarningSet = [
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "Someone smacked me!"
     ],
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "Someone hit me!"
     ],
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "Who hit me!?"
     ]
 ];
 const guardDownWarningSet = [
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "We have a guard down!"
     ],
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "Man down!"
     ],
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "Guard down!"
     ]
 ];
 const guardStirringSet = [
     [
-        require("76b204aa1dbfe2d6"),
+        require("fd884530210b7540"),
         "Ahh..."
     ]
 ];
 const guardWarningResponseSet = [
     [
-        require("dea94d3a4ffe309d"),
+        require("bbf6a0263d0a948e"),
         "We must have\nan intruder!"
     ],
     [
-        require("dea94d3a4ffe309d"),
+        require("bbf6a0263d0a948e"),
         "I will keep\nan eye out!"
     ]
 ];
 const guardDamageSet = [
     [
-        require("f1fa5a78c991b754"),
+        require("8e3c4a5899f9d44f"),
         "Take that!!"
     ],
     [
-        require("bfc6269fbcfac317"),
+        require("869814f5994bfd60"),
         "Oof!!"
     ],
     [
-        require("33d2b94f6b7b0747"),
+        require("536bee59109a4784"),
         "Ugg!!"
     ],
     [
-        require("ba961ce8902149a2"),
+        require("3abfb09928f0a785"),
         "Ahh!!"
     ],
     [
-        require("10bebf0e4d73d8e9"),
+        require("27062fd0189b252e"),
         "Ahh!!"
     ],
     [
-        require("c754db0b3f0fc35"),
+        require("8d400b0ed672a639"),
         "Hi-yah!"
     ],
     [
-        require("92683cf3422bcd3a"),
+        require("6ab2cc733fe4eb61"),
         "Hi-yah!"
     ],
     [
-        require("9ee996622054dedc"),
+        require("4af601d250e1994b"),
         "Hi-yah!"
     ]
 ];
@@ -11612,9 +11639,10 @@ function setupSounds(sounds, subtitledSounds, howlPool) {
     subtitledSounds.guardFinishListening = new SubtitledHowlGroup(guardFinishListeningSet, howlPool);
     subtitledSounds.guardDamage = new SubtitledHowlGroup(guardDamageSet, howlPool);
     subtitledSounds.guardStirring = new SubtitledHowlGroup(guardStirringSet, howlPool);
+    subtitledSounds.guardRest = new SubtitledHowlGroup(guardRestSet, howlPool);
 }
 
-},{"howler":"5Vjgk","./random":"gUC1v","d8be2bd7ee235459":"9zKUC","2846b3fe1f8d0ace":"cHoSB","40b99350e8e2f6cc":"iNzdT","36f769a5f0dc43e6":"04Z21","40db36a513c976cc":"1SIsy","1791be9b7c7eee03":"9JVPU","34c8e3236e76c872":"fGTkM","25e560b466ee46c9":"k14gH","dd9ae501a09f49b5":"5GAcE","4d8e6a94e903bccb":"f1aB8","4548c030266b51d7":"kGQAb","126501b655fa9afa":"2XGfn","e6ca3ad34aa458f3":"2r6eZ","622a1db4690fe37d":"7ei1H","22c76dbbac11e9c8":"jg9uN","90003c50dc9dc398":"gj9kS","ee2c250460d76b76":"26zV0","8c455b21134381da":"5s0T0","dce21359b6473004":"36S8f","958728459ce5ad9":"6ptWC","59cb5ab2c73f6758":"dvdqa","91b458e1c498a812":"aBtts","e192c1b2c20aaf62":"8mLsA","d41593edbaa53ee4":"ajJoe","ac1de7689610792f":"wy2ST","36fad69d632fab09":"jPeF6","13bac3caa3992ca2":"2ZtkO","2784580c96fffee8":"jZaET","54f9824621755d5e":"4dkLh","3c8650e30ac0c35d":"kvn87","62d89b46318d70c0":"JMLiq","bd31e4570f77526":"8Lw3Q","eb1c71a70afb7403":"2nUq5","ad188d1a6617e894":"lHBqN","a28119595675c465":"4X6eo","4148e9dead0ad061":"ltpKK","7cc54700e81f0cb2":"iPB70","9f12e903f624967c":"9tbU5","6c7faa4701b34fb6":"a46JQ","61ead1e798c0f61e":"epH9n","cb75f8dce606e9cd":"dwcOP","b943464a88b1b153":"4Rqw7","e3f5243a3059488b":"hEMO1","e6aa4943bd2b7c32":"6uN4N","380652c99ba87d6":"denBs","3973fc9e72324db5":"ai87a","2afb5681fb5aa605":"e4yW2","851741874f77a9ee":"e0rLU","ccb70b5667a4518a":"5mFUd","576285c07095594f":"e5ksw","48fff4ee20b1593d":"bFfhf","515be48043402fb2":"ewAQQ","11692f5099756fad":"gELii","48848c085391f7ee":"5nU87","7ee8287e4980cca":"7uWJZ","4987406cb0ca6036":"bYumL","de21946c81ff8b45":"6gY1x","973fe71d2b1c35b0":"fTvDo","f805b96600a628a3":"3E807","3c0254c5df21dfe0":"8n85h","bcbc13e2d5f1a4b6":"3Nd3F","1505541a03324ba3":"2vWH3","7bdb88453d2751ac":"8rRS9","77935f9ec1d69787":"iQKP6","5a7fe79a20e19bcb":"5Wuxs","a6782583d3bcfab0":"s2Q2L","61aaf127ae6233a3":"224to","332c88ebe5bffb92":"fzuGN","379cfd599dca4a7":"6RqV3","44e17fc55e40fdb5":"h3YyP","eb32510d8a70fbf":"3zmDf","20b041461dcd4dfe":"bVmQ3","9e772393541b208":"9Ktkp","7a7a25aefea189":"9x3D3","711db0f041d33a26":"fd0c0","d186312139fed697":"hqU6N","91efe67cb2a41c7f":"bx4BT","bf8228ece25758da":"ffzGR","7c0e2da8c9873842":"cghPs","b79b89ec6acb7480":"8T7H4","877574795d6d50cc":"7z9d9","3565284318cb4ff0":"agX7A","33eadadb11f0bf4b":"8aQyK","ea52f0c88dcdb982":"dJQsj","9d42ba6cef670c72":"gKhEi","f7ffeaac3d5e4ab6":"lITH8","8e40265776cf5775":"inZis","a81d1c1900309603":"cFuxm","e2525562fa139099":"gCVVo","76b204aa1dbfe2d6":"2E6Ey","433817c476ce7401":"g90E0","df93ca7613b78f6a":"eBH2o","c4c27d000d3384ff":"7tUMg","188f4a0cc9ea5c70":"LWHfM","c9aa2c5a42c61c63":"3taIr","18b1b67ff58ba9fd":"6HKZl","b119313e97e0882d":"9s0IZ","9fbd9249af5fc7ed":"bmUje","ee3aeb6b650ef329":"r8pEn","3dba1b9c2ddae2e4":"gmBDQ","d4f743e02167d0fc":"cZw51","a3d7dff3b153d3e4":"cnzN4","4fe8213e96106e18":"jefVX","7ac555b7fb9898e5":"aPaoT","4a61fcff714a7344":"g0dhG","3fddc47090cc7cc":"kDwJ2","9272bd200d73707c":"2x9nC","cf7d91cc8f4443bf":"9fVaC","244cdea9e71c8ba5":"k1uRF","a1065a3881bff421":"fLNJF","c752f7d2c650037":"chTre","2b6203a189a7057f":"2bSxl","ea5dd47a39cb99be":"2QvYX","9f4bec44e117cd48":"lePkF","d9ae76cbc6f63795":"5V3sW","75fe62eb78c7a058":"hUQoD","7168138f684b7578":"8PECt","2426022d8c68304d":"abuDI","d6cb7af44352bbf2":"39DEl","adf6ffd37ae1dbd0":"3kmal","4b676e6456899be1":"85RTq","e6c5feb70a10ac51":"6JYFN","d3d77cf9e69c828a":"8o6R6","25eba2c8e406d957":"g7juJ","19ca2d8dcdde6987":"2IFEg","5e00908d021a313a":"bCvEE","32b0bcbf45dfc08f":"iI2P6","efaebfea4a23d1a6":"fTTTf","6785b00738f913bc":"in1Yk","607f1b10dbd9d132":"4sFml","42f7ecfc8e93ade4":"8DCSZ","abf774c1c70e0779":"dwonC","7ec1f7d563f050b2":"8HYPW","da14331cc0e15597":"99UIf","13e6bee2a33afad8":"gCSP7","59716eb7d1f5f582":"fEbIW","592fcd8f030d47b4":"daMKt","1548059b57afcb5b":"94LvL","e492fd85f9832fed":"aD2F4","86c6bfaa821c33a0":"1ZglP","2494c24e0559a596":"k7f64","dea94d3a4ffe309d":"cZ0PT","c16d7ebbd6a319d9":"4FfLU","8d0babdd13b4f1d1":"4WptE","b22d077dabee1bd2":"eODND","97a353f66fd6259":"hZ2B8","28733b2c5c3da8b5":"AMRHc","40cd6301a73c0854":"6UCsk","13956e26f1e89dee":"g7XAg","84b1e6a929ccffc7":"cFlu7","369e58dbc629a38d":"7FJ37","a014c5eb65ddf401":"3Hs3x","e687a3a3b764bfd0":"coNMD","44fa829dafc10ef9":"4s9gT","3110f0d4b92ac603":"ikayr","bc29c05f64ef3090":"bUSG1","7501d9826ab3a78e":"gs4UN","3d2e4a631d22f43":"j5cRJ","d542a1fac8e3437":"hF47h","29890f6cbdea9ec1":"kYZUc","7b8a1bb5a3e2eb5c":"lqrS2","25c5e92bbc6a2994":"kbO4H","1669eba1dcb42b00":"ckkdt","1680c2c9f735cab7":"3WyJt","70f2e192489111a4":"hlHmX","1c97cad2f0fc1da3":"hIFxo","61f27516438c7a6d":"7eQ6w","2386f10e544f2d4d":"2Pk6f","e5493c8061fb9002":"jovj4","31afdcdb85a8c09":"c3U1l","277c37ae4c873074":"b2ME2","976243abc04d61a8":"lMgKq","34ac8808828d77cd":"8hWQ7","f830afe20d11b271":"f4Hq0","5c4371ce2c6163c6":"2Bc7G","aa1891424451254c":"4bzJ9","2316a6f9edba15da":"lvXdP","34537cd137208624":"gPuPz","680749970a32616b":"iZ55y","c3e623bfebaf2956":"cvhbf","f1fa5a78c991b754":"bgYzw","bfc6269fbcfac317":"fmwYX","33d2b94f6b7b0747":"1sAT4","ba961ce8902149a2":"iT3UI","10bebf0e4d73d8e9":"HN7wh","c754db0b3f0fc35":"6mKlg","92683cf3422bcd3a":"b3mdd","9ee996622054dedc":"iyQcS","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"5Vjgk":[function(require,module,exports) {
+},{"howler":"5Vjgk","./random":"gUC1v","f0665be29a76364f":"9zKUC","8ee4b45ed4305ffe":"cHoSB","744d49c14cf3bd64":"iNzdT","bcd7cf6a0b64acb2":"04Z21","352a1308c22a1e56":"1SIsy","d74976564eabf9e4":"9JVPU","4cc04d2b3f9932d":"fGTkM","9bfaf4c4f4128feb":"k14gH","306aae0e4d4a043b":"5GAcE","3558e8405095caac":"f1aB8","87b50c685d8423a0":"kGQAb","c01f582973819430":"2XGfn","7c2f92882c19e0cc":"2r6eZ","cc049c7c517bba2c":"7ei1H","41416a4f73637d98":"jg9uN","12be1db3c1725433":"gj9kS","e0765626201a3b82":"26zV0","f328e12481fdd79":"5s0T0","ce97ba434fd185c3":"36S8f","efd1dac51efba792":"6ptWC","266db93e07a61201":"dvdqa","c0d78fffcf346c82":"aBtts","f5bb8cbdd21f5342":"8mLsA","43a9e46d8ea7cd81":"ajJoe","1172555423365d87":"wy2ST","b1a21bee33b6e90f":"jPeF6","ab56bd8b2de1ccfc":"2ZtkO","5fdcb53fa5673aef":"jZaET","91c6e5f5d386663b":"4dkLh","6d93f942c434b176":"kvn87","e49f1f5764e00901":"JMLiq","becc902d0316f6cc":"8Lw3Q","e9696568bef5d9b8":"2nUq5","265960cf8a3c9220":"lHBqN","580710a44af1d25c":"4X6eo","ba891949d514fa31":"ltpKK","42fa7fdeb51b9be6":"iPB70","ee01e021b25eefa9":"9tbU5","2396c11a4aa1da8f":"a46JQ","1ff4195689ab20cd":"epH9n","61cd0b5d8fc06e59":"dwcOP","22ab6fd9e4daca1c":"4Rqw7","8c07257dee09846b":"hEMO1","e21bc160ecafd4cd":"6uN4N","f6c90b38141e2ace":"denBs","38c34066f7055b70":"ai87a","a025b5eb5484ff46":"e4yW2","ac6f442f76de79b":"e0rLU","b3335efda7b6af04":"5mFUd","c5ed7272e7cb3587":"e5ksw","d1dcc0a946567529":"bFfhf","ab293f84a67c8d99":"ewAQQ","1891a9aba3708a53":"gELii","5865dbd8bae7c96b":"5nU87","bcd7c16ba7d7d61":"7uWJZ","e78deec06d901d3a":"bYumL","f394a2a4f193774b":"6gY1x","da67478315c5f9c":"fTvDo","ac1cce7696e2e28f":"3E807","91d3d82a23a7f2a6":"8n85h","fa0de2a4aaced4aa":"3Nd3F","74431cc7db6e18c":"2vWH3","f5bdd46198a870f2":"8rRS9","a23fc5e626d3bd70":"iQKP6","bcc23937980b90cf":"5Wuxs","6de92d5fb4e57e1d":"s2Q2L","d25948602b9f0ec4":"224to","8edeba5e41e9fe07":"fzuGN","e5d78107540b029c":"6RqV3","1f3be94fb6cf8421":"h3YyP","79c08e91e327e3b6":"3zmDf","943813e688572223":"bVmQ3","47dd61530dd9f68d":"9Ktkp","74be602c333f9f10":"9x3D3","b9007e2781c8ee20":"fd0c0","568cc259fedf00bd":"hqU6N","142501f6fd66cfe5":"bx4BT","b39f735b9213825f":"ffzGR","a46d950f1c8847f6":"cghPs","d9a30d4970e974d5":"8T7H4","dace3e3b8595d572":"7z9d9","86eb3dabc7348e5f":"agX7A","21b0fca0793efdb4":"8aQyK","224b720952fd21ac":"dJQsj","ca8652950eea7433":"gKhEi","90cf32e28e1410d9":"lITH8","395b6e78f128e720":"inZis","4edb014b66a8648e":"cFuxm","7e4780586df1d42":"gCVVo","fd884530210b7540":"2E6Ey","99dbdd06a964d404":"g90E0","ae72d688a53c23ff":"eBH2o","511c3be8d5db6a3b":"7tUMg","777ec5f8c5a13e72":"LWHfM","3d39a0baa84ae221":"3taIr","487dd58d8afaed00":"6HKZl","ea583a9536558ce4":"9s0IZ","5127cbf04c818c89":"bmUje","17d495b82c9a6548":"r8pEn","67f2d90328b3956d":"gmBDQ","54115fb2810e4778":"cZw51","354312d52bb443e":"cnzN4","350f5fda52fe072d":"jefVX","87d9a412cc379454":"aPaoT","dbac7c2d662b6cae":"g0dhG","7f6c92e0cf0ed649":"kDwJ2","86118448d5815fb6":"2x9nC","604c5e0c7b422b4c":"9fVaC","b84d87dd9b0ef6bd":"k1uRF","6ce1930c6823684":"fLNJF","9b5d0dcf56fcdc89":"chTre","f5fb3e952820b04b":"2QvYX","4c0e7002d45fcb92":"5V3sW","74f5de3cc2585e47":"8PECt","e70917b8c836c082":"abuDI","cf4fdad406947277":"39DEl","6a71d42b37875a29":"3kmal","4d50e92e752dd3c4":"85RTq","482dc5e14b7be46b":"6JYFN","8f5442e9228bec91":"8o6R6","4ef580c005f4327c":"g7juJ","dc13b9229da0b357":"2IFEg","533eaa8e0e0b8f94":"bCvEE","621d805e99e5af5":"iI2P6","ddef5abb720f71fc":"fTTTf","6302957cdde9b758":"in1Yk","768d22e87bfa9812":"4sFml","5a415b70efd49466":"8DCSZ","4d5149e8114ba50a":"8HYPW","a0175914b3fe88fd":"gCSP7","ab778be72001d61":"94LvL","270489758d0f9c16":"aD2F4","1428c9f21452d721":"1ZglP","443597fce9dba5e7":"k7f64","bbf6a0263d0a948e":"cZ0PT","f4cb02350d7af827":"4FfLU","1f6838e48e98dcb1":"4WptE","aecae72693944788":"eODND","d3fce0947127664c":"hZ2B8","7d031e9458050173":"AMRHc","b883ae2827b679eb":"6UCsk","ef2c85c3dc835679":"g7XAg","704c5d63255692d7":"cFlu7","84fee459c99cfae4":"7FJ37","4bbf9dd9aa23f007":"3Hs3x","9e7041e68b24c7bf":"coNMD","ee9f186cac76a511":"4s9gT","1ae79f75082baf33":"ikayr","af843efae160d9c9":"bUSG1","2f9dc2ad0435f181":"gs4UN","1e53c1f4d7f380e2":"j5cRJ","bbfb2ff46a8d9255":"hF47h","546e5b3efc94c094":"kYZUc","3aba4d3856fa8e51":"lqrS2","6fcc3058c27618ec":"kbO4H","b20f033b705a9076":"ckkdt","80928ef071a4c62f":"3WyJt","3c487dfeb4c006d4":"hlHmX","23acf8e1c462b589":"hIFxo","e15bc68d0ea7ce88":"7eQ6w","be08925e1437b3a4":"2Pk6f","a64116f7dce39ac4":"jovj4","113aff5d788496dd":"c3U1l","af88d9f43b998c5b":"b2ME2","577ecaebe0b8be5d":"lMgKq","d7f9f45e68e6a652":"8hWQ7","ec5991ba0f70294e":"f4Hq0","fb20d33233fe0332":"2Bc7G","b65eb609bdb5cde8":"4bzJ9","de7d039eeeba0e99":"lvXdP","d6761317e96464b0":"gPuPz","46632fd56311f5ed":"iZ55y","812793c8407b7767":"cvhbf","8e3c4a5899f9d44f":"bgYzw","869814f5994bfd60":"fmwYX","536bee59109a4784":"1sAT4","3abfb09928f0a785":"iT3UI","27062fd0189b252e":"HN7wh","8d400b0ed672a639":"6mKlg","6ab2cc733fe4eb61":"b3mdd","4af601d250e1994b":"iyQcS","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"5Vjgk":[function(require,module,exports) {
 var global = arguments[3];
 /*!
  *  howler.js v2.2.3
@@ -14070,570 +14098,549 @@ var global = arguments[3];
 })();
 
 },{}],"9zKUC":[function(require,module,exports) {
-module.exports = require("41e4b2c1dda6b973").getBundleURL("lf1OY") + "Minstrel_Dance.1ffad141.mp3" + "?" + Date.now();
+module.exports = require("d5c5c0cf6cdfb74f").getBundleURL("lf1OY") + "Minstrel_Dance.1ffad141.mp3" + "?" + Date.now();
 
-},{"41e4b2c1dda6b973":"lgJ39"}],"cHoSB":[function(require,module,exports) {
-module.exports = require("f906aa5070df93ad").getBundleURL("lf1OY") + "level-requirement-1.571b17b1.mp3" + "?" + Date.now();
+},{"d5c5c0cf6cdfb74f":"lgJ39"}],"cHoSB":[function(require,module,exports) {
+module.exports = require("ce6ebdcc71e59d3c").getBundleURL("lf1OY") + "level-requirement-1.571b17b1.mp3" + "?" + Date.now();
 
-},{"f906aa5070df93ad":"lgJ39"}],"iNzdT":[function(require,module,exports) {
-module.exports = require("b5c66c6f174b419d").getBundleURL("lf1OY") + "level-requirement-2.f84b8465.mp3" + "?" + Date.now();
+},{"ce6ebdcc71e59d3c":"lgJ39"}],"iNzdT":[function(require,module,exports) {
+module.exports = require("7ae069ead5a874e7").getBundleURL("lf1OY") + "level-requirement-2.f84b8465.mp3" + "?" + Date.now();
 
-},{"b5c66c6f174b419d":"lgJ39"}],"04Z21":[function(require,module,exports) {
-module.exports = require("ca5b61f496b2dd7b").getBundleURL("lf1OY") + "lose-game-over.a878a217.mp3" + "?" + Date.now();
+},{"7ae069ead5a874e7":"lgJ39"}],"04Z21":[function(require,module,exports) {
+module.exports = require("eb9df5964f772f7d").getBundleURL("lf1OY") + "lose-game-over.a878a217.mp3" + "?" + Date.now();
 
-},{"ca5b61f496b2dd7b":"lgJ39"}],"1SIsy":[function(require,module,exports) {
-module.exports = require("2fb24ee88a800e4d").getBundleURL("lf1OY") + "Minstrel Dance Easter Egg.a4d96f81.mp3" + "?" + Date.now();
+},{"eb9df5964f772f7d":"lgJ39"}],"1SIsy":[function(require,module,exports) {
+module.exports = require("70c4f650c0468ff7").getBundleURL("lf1OY") + "Minstrel Dance Easter Egg.a4d96f81.mp3" + "?" + Date.now();
 
-},{"2fb24ee88a800e4d":"lgJ39"}],"9JVPU":[function(require,module,exports) {
-module.exports = require("21876527de980903").getBundleURL("lf1OY") + "footstep-wood.8690031b.mp3" + "?" + Date.now();
+},{"70c4f650c0468ff7":"lgJ39"}],"9JVPU":[function(require,module,exports) {
+module.exports = require("6be0b34cce5bda97").getBundleURL("lf1OY") + "footstep-wood.8690031b.mp3" + "?" + Date.now();
 
-},{"21876527de980903":"lgJ39"}],"fGTkM":[function(require,module,exports) {
-module.exports = require("367f1b751b37cf4d").getBundleURL("lf1OY") + "footstep-tile.e4daf0bf.mp3" + "?" + Date.now();
+},{"6be0b34cce5bda97":"lgJ39"}],"fGTkM":[function(require,module,exports) {
+module.exports = require("847d232b34ff889e").getBundleURL("lf1OY") + "footstep-tile.e4daf0bf.mp3" + "?" + Date.now();
 
-},{"367f1b751b37cf4d":"lgJ39"}],"k14gH":[function(require,module,exports) {
-module.exports = require("40f53fa2ce15e91b").getBundleURL("lf1OY") + "footstep-water.9888f7f5.mp3" + "?" + Date.now();
+},{"847d232b34ff889e":"lgJ39"}],"k14gH":[function(require,module,exports) {
+module.exports = require("862a066e9a1edb00").getBundleURL("lf1OY") + "footstep-water.9888f7f5.mp3" + "?" + Date.now();
 
-},{"40f53fa2ce15e91b":"lgJ39"}],"5GAcE":[function(require,module,exports) {
-module.exports = require("e5f8326c78171127").getBundleURL("lf1OY") + "footstep-gravel.01f28ef2.mp3" + "?" + Date.now();
+},{"862a066e9a1edb00":"lgJ39"}],"5GAcE":[function(require,module,exports) {
+module.exports = require("e70b6aae7e4500e7").getBundleURL("lf1OY") + "footstep-gravel.01f28ef2.mp3" + "?" + Date.now();
 
-},{"e5f8326c78171127":"lgJ39"}],"f1aB8":[function(require,module,exports) {
-module.exports = require("368008586e9916c2").getBundleURL("lf1OY") + "footstep-grass.e4966900.mp3" + "?" + Date.now();
+},{"e70b6aae7e4500e7":"lgJ39"}],"f1aB8":[function(require,module,exports) {
+module.exports = require("8d27bd7821a1b082").getBundleURL("lf1OY") + "footstep-grass.e4966900.mp3" + "?" + Date.now();
 
-},{"368008586e9916c2":"lgJ39"}],"kGQAb":[function(require,module,exports) {
-module.exports = require("56904baf78b36ad2").getBundleURL("lf1OY") + "creak.1d93b972.mp3" + "?" + Date.now();
+},{"8d27bd7821a1b082":"lgJ39"}],"kGQAb":[function(require,module,exports) {
+module.exports = require("21350c3b6eaf4079").getBundleURL("lf1OY") + "creak.1d93b972.mp3" + "?" + Date.now();
 
-},{"56904baf78b36ad2":"lgJ39"}],"2XGfn":[function(require,module,exports) {
-module.exports = require("53ecc84a358d5a60").getBundleURL("lf1OY") + "creak-2.a1adac63.mp3" + "?" + Date.now();
+},{"21350c3b6eaf4079":"lgJ39"}],"2XGfn":[function(require,module,exports) {
+module.exports = require("a5c236711e322452").getBundleURL("lf1OY") + "creak-2.a1adac63.mp3" + "?" + Date.now();
 
-},{"53ecc84a358d5a60":"lgJ39"}],"2r6eZ":[function(require,module,exports) {
-module.exports = require("a637a2ed1a308728").getBundleURL("lf1OY") + "creak-3.bdf1752d.mp3" + "?" + Date.now();
+},{"a5c236711e322452":"lgJ39"}],"2r6eZ":[function(require,module,exports) {
+module.exports = require("727907710f3ebcd7").getBundleURL("lf1OY") + "creak-3.bdf1752d.mp3" + "?" + Date.now();
 
-},{"a637a2ed1a308728":"lgJ39"}],"7ei1H":[function(require,module,exports) {
-module.exports = require("814c39de272aed25").getBundleURL("lf1OY") + "creak-4.851b4602.mp3" + "?" + Date.now();
+},{"727907710f3ebcd7":"lgJ39"}],"7ei1H":[function(require,module,exports) {
+module.exports = require("6f8af5f5b028ff3c").getBundleURL("lf1OY") + "creak-4.851b4602.mp3" + "?" + Date.now();
 
-},{"814c39de272aed25":"lgJ39"}],"jg9uN":[function(require,module,exports) {
-module.exports = require("f98b522544c24f8f").getBundleURL("lf1OY") + "creak-5.7a5a448b.mp3" + "?" + Date.now();
+},{"6f8af5f5b028ff3c":"lgJ39"}],"jg9uN":[function(require,module,exports) {
+module.exports = require("e8661f656bb1fc88").getBundleURL("lf1OY") + "creak-5.7a5a448b.mp3" + "?" + Date.now();
 
-},{"f98b522544c24f8f":"lgJ39"}],"gj9kS":[function(require,module,exports) {
-module.exports = require("8d08cca99c6704a4").getBundleURL("lf1OY") + "creak-6.40a39a61.mp3" + "?" + Date.now();
+},{"e8661f656bb1fc88":"lgJ39"}],"gj9kS":[function(require,module,exports) {
+module.exports = require("ae04a5ac28d96fe1").getBundleURL("lf1OY") + "creak-6.40a39a61.mp3" + "?" + Date.now();
 
-},{"8d08cca99c6704a4":"lgJ39"}],"26zV0":[function(require,module,exports) {
-module.exports = require("408371f775185a8f").getBundleURL("lf1OY") + "squeak1.a56771a8.wav" + "?" + Date.now();
+},{"ae04a5ac28d96fe1":"lgJ39"}],"26zV0":[function(require,module,exports) {
+module.exports = require("dd51421a806ee378").getBundleURL("lf1OY") + "squeak1.a56771a8.wav" + "?" + Date.now();
 
-},{"408371f775185a8f":"lgJ39"}],"5s0T0":[function(require,module,exports) {
-module.exports = require("2758fd19d281c69f").getBundleURL("lf1OY") + "squeak2.22cf1d83.wav" + "?" + Date.now();
+},{"dd51421a806ee378":"lgJ39"}],"5s0T0":[function(require,module,exports) {
+module.exports = require("bc0ff94ac3919024").getBundleURL("lf1OY") + "squeak2.22cf1d83.wav" + "?" + Date.now();
 
-},{"2758fd19d281c69f":"lgJ39"}],"36S8f":[function(require,module,exports) {
-module.exports = require("2fc2d8a254aa3017").getBundleURL("lf1OY") + "squeak3.29042a05.wav" + "?" + Date.now();
+},{"bc0ff94ac3919024":"lgJ39"}],"36S8f":[function(require,module,exports) {
+module.exports = require("ae082481182368ff").getBundleURL("lf1OY") + "squeak3.29042a05.wav" + "?" + Date.now();
 
-},{"2fc2d8a254aa3017":"lgJ39"}],"6ptWC":[function(require,module,exports) {
-module.exports = require("d1c0885f741362f8").getBundleURL("lf1OY") + "squeak4.3a2d4289.wav" + "?" + Date.now();
+},{"ae082481182368ff":"lgJ39"}],"6ptWC":[function(require,module,exports) {
+module.exports = require("c414818aaaf87634").getBundleURL("lf1OY") + "squeak4.3a2d4289.wav" + "?" + Date.now();
 
-},{"d1c0885f741362f8":"lgJ39"}],"dvdqa":[function(require,module,exports) {
-module.exports = require("375d2909e5dcf1e7").getBundleURL("lf1OY") + "hit16.mp3.455b231f.flac" + "?" + Date.now();
+},{"c414818aaaf87634":"lgJ39"}],"dvdqa":[function(require,module,exports) {
+module.exports = require("1ee51f1950617754").getBundleURL("lf1OY") + "hit16.mp3.455b231f.flac" + "?" + Date.now();
 
-},{"375d2909e5dcf1e7":"lgJ39"}],"aBtts":[function(require,module,exports) {
-module.exports = require("b1512f8c9db36646").getBundleURL("lf1OY") + "hit17.mp3.9928478e.flac" + "?" + Date.now();
+},{"1ee51f1950617754":"lgJ39"}],"aBtts":[function(require,module,exports) {
+module.exports = require("a5e03feea24f5b91").getBundleURL("lf1OY") + "hit17.mp3.9928478e.flac" + "?" + Date.now();
 
-},{"b1512f8c9db36646":"lgJ39"}],"8mLsA":[function(require,module,exports) {
-module.exports = require("c0b380ee321f6850").getBundleURL("lf1OY") + "hit18.mp3.15d993c9.flac" + "?" + Date.now();
+},{"a5e03feea24f5b91":"lgJ39"}],"8mLsA":[function(require,module,exports) {
+module.exports = require("d3f20bf46bd232d8").getBundleURL("lf1OY") + "hit18.mp3.15d993c9.flac" + "?" + Date.now();
 
-},{"c0b380ee321f6850":"lgJ39"}],"ajJoe":[function(require,module,exports) {
-module.exports = require("24a9aa964e99ee57").getBundleURL("lf1OY") + "hit19.mp3.683d9630.flac" + "?" + Date.now();
+},{"d3f20bf46bd232d8":"lgJ39"}],"ajJoe":[function(require,module,exports) {
+module.exports = require("19fd54a21fccdf42").getBundleURL("lf1OY") + "hit19.mp3.683d9630.flac" + "?" + Date.now();
 
-},{"24a9aa964e99ee57":"lgJ39"}],"wy2ST":[function(require,module,exports) {
-module.exports = require("bd84155498648606").getBundleURL("lf1OY") + "hit20.mp3.b9d8f281.flac" + "?" + Date.now();
+},{"19fd54a21fccdf42":"lgJ39"}],"wy2ST":[function(require,module,exports) {
+module.exports = require("5a615f5d3ac7dbc7").getBundleURL("lf1OY") + "hit20.mp3.b9d8f281.flac" + "?" + Date.now();
 
-},{"bd84155498648606":"lgJ39"}],"jPeF6":[function(require,module,exports) {
-module.exports = require("2a103d2eb5499556").getBundleURL("lf1OY") + "hit26.mp3.37fc8009.flac" + "?" + Date.now();
+},{"5a615f5d3ac7dbc7":"lgJ39"}],"jPeF6":[function(require,module,exports) {
+module.exports = require("3192a0163bc74796").getBundleURL("lf1OY") + "hit26.mp3.37fc8009.flac" + "?" + Date.now();
 
-},{"2a103d2eb5499556":"lgJ39"}],"2ZtkO":[function(require,module,exports) {
-module.exports = require("25027ee6e6de9aef").getBundleURL("lf1OY") + "hit27.mp3.cada292a.flac" + "?" + Date.now();
+},{"3192a0163bc74796":"lgJ39"}],"2ZtkO":[function(require,module,exports) {
+module.exports = require("9c33afd1daf5eb20").getBundleURL("lf1OY") + "hit27.mp3.cada292a.flac" + "?" + Date.now();
 
-},{"25027ee6e6de9aef":"lgJ39"}],"jZaET":[function(require,module,exports) {
-module.exports = require("eb38345ebaad8976").getBundleURL("lf1OY") + "coin.98a2b3da.mp3" + "?" + Date.now();
+},{"9c33afd1daf5eb20":"lgJ39"}],"jZaET":[function(require,module,exports) {
+module.exports = require("37eefd897d711590").getBundleURL("lf1OY") + "coin.98a2b3da.mp3" + "?" + Date.now();
 
-},{"eb38345ebaad8976":"lgJ39"}],"4dkLh":[function(require,module,exports) {
-module.exports = require("882379a23a5057c0").getBundleURL("lf1OY") + "coin-2.8069d244.mp3" + "?" + Date.now();
+},{"37eefd897d711590":"lgJ39"}],"4dkLh":[function(require,module,exports) {
+module.exports = require("6e2d47df989112ea").getBundleURL("lf1OY") + "coin-2.8069d244.mp3" + "?" + Date.now();
 
-},{"882379a23a5057c0":"lgJ39"}],"kvn87":[function(require,module,exports) {
-module.exports = require("e476e31a526b7c4b").getBundleURL("lf1OY") + "coin-3.75056641.mp3" + "?" + Date.now();
+},{"6e2d47df989112ea":"lgJ39"}],"kvn87":[function(require,module,exports) {
+module.exports = require("18c4093b0fdd5da2").getBundleURL("lf1OY") + "coin-3.75056641.mp3" + "?" + Date.now();
 
-},{"e476e31a526b7c4b":"lgJ39"}],"JMLiq":[function(require,module,exports) {
-module.exports = require("c671fd0b7d35db99").getBundleURL("lf1OY") + "coin-4.64116cd7.mp3" + "?" + Date.now();
+},{"18c4093b0fdd5da2":"lgJ39"}],"JMLiq":[function(require,module,exports) {
+module.exports = require("472dc8729ee13a6").getBundleURL("lf1OY") + "coin-4.64116cd7.mp3" + "?" + Date.now();
 
-},{"c671fd0b7d35db99":"lgJ39"}],"8Lw3Q":[function(require,module,exports) {
-module.exports = require("677ad6434fa168ad").getBundleURL("lf1OY") + "coin-5.85f618a0.mp3" + "?" + Date.now();
+},{"472dc8729ee13a6":"lgJ39"}],"8Lw3Q":[function(require,module,exports) {
+module.exports = require("e47039e7d35de67").getBundleURL("lf1OY") + "coin-5.85f618a0.mp3" + "?" + Date.now();
 
-},{"677ad6434fa168ad":"lgJ39"}],"2nUq5":[function(require,module,exports) {
-module.exports = require("6064dd6d2e02f3f9").getBundleURL("lf1OY") + "grunt.eacdcc86.mp3" + "?" + Date.now();
+},{"e47039e7d35de67":"lgJ39"}],"2nUq5":[function(require,module,exports) {
+module.exports = require("a649b29055a39ab1").getBundleURL("lf1OY") + "grunt.eacdcc86.mp3" + "?" + Date.now();
 
-},{"6064dd6d2e02f3f9":"lgJ39"}],"lHBqN":[function(require,module,exports) {
-module.exports = require("20ea5458748e7c8c").getBundleURL("lf1OY") + "grunt-2.7a21b9a3.mp3" + "?" + Date.now();
+},{"a649b29055a39ab1":"lgJ39"}],"lHBqN":[function(require,module,exports) {
+module.exports = require("4ada812dd3cc6724").getBundleURL("lf1OY") + "grunt-2.7a21b9a3.mp3" + "?" + Date.now();
 
-},{"20ea5458748e7c8c":"lgJ39"}],"4X6eo":[function(require,module,exports) {
-module.exports = require("4d5f140529458e01").getBundleURL("lf1OY") + "grunt-3.78a3d0bf.mp3" + "?" + Date.now();
+},{"4ada812dd3cc6724":"lgJ39"}],"4X6eo":[function(require,module,exports) {
+module.exports = require("5dc925352df3f100").getBundleURL("lf1OY") + "grunt-3.78a3d0bf.mp3" + "?" + Date.now();
 
-},{"4d5f140529458e01":"lgJ39"}],"ltpKK":[function(require,module,exports) {
-module.exports = require("3cb4895061d36c73").getBundleURL("lf1OY") + "grunt-4.1442a7f9.mp3" + "?" + Date.now();
+},{"5dc925352df3f100":"lgJ39"}],"ltpKK":[function(require,module,exports) {
+module.exports = require("848647baef9b8e5f").getBundleURL("lf1OY") + "grunt-4.1442a7f9.mp3" + "?" + Date.now();
 
-},{"3cb4895061d36c73":"lgJ39"}],"iPB70":[function(require,module,exports) {
-module.exports = require("142e297143acb46d").getBundleURL("lf1OY") + "grunt-5.2684595d.mp3" + "?" + Date.now();
+},{"848647baef9b8e5f":"lgJ39"}],"iPB70":[function(require,module,exports) {
+module.exports = require("42929d22e8208ec8").getBundleURL("lf1OY") + "grunt-5.2684595d.mp3" + "?" + Date.now();
 
-},{"142e297143acb46d":"lgJ39"}],"9tbU5":[function(require,module,exports) {
-module.exports = require("37a4a7f0cf10053f").getBundleURL("lf1OY") + "grunt-6.383135e1.mp3" + "?" + Date.now();
+},{"42929d22e8208ec8":"lgJ39"}],"9tbU5":[function(require,module,exports) {
+module.exports = require("2048347a9d949305").getBundleURL("lf1OY") + "grunt-6.383135e1.mp3" + "?" + Date.now();
 
-},{"37a4a7f0cf10053f":"lgJ39"}],"a46JQ":[function(require,module,exports) {
-module.exports = require("f43b7fceed8dd5a0").getBundleURL("lf1OY") + "grunt-7.97264993.mp3" + "?" + Date.now();
+},{"2048347a9d949305":"lgJ39"}],"a46JQ":[function(require,module,exports) {
+module.exports = require("e063697f2f742693").getBundleURL("lf1OY") + "grunt-7.97264993.mp3" + "?" + Date.now();
 
-},{"f43b7fceed8dd5a0":"lgJ39"}],"epH9n":[function(require,module,exports) {
-module.exports = require("a1374265bf14f6c7").getBundleURL("lf1OY") + "grunt-8.2ac6e957.mp3" + "?" + Date.now();
+},{"e063697f2f742693":"lgJ39"}],"epH9n":[function(require,module,exports) {
+module.exports = require("211b84ad6b0e2944").getBundleURL("lf1OY") + "grunt-8.2ac6e957.mp3" + "?" + Date.now();
 
-},{"a1374265bf14f6c7":"lgJ39"}],"dwcOP":[function(require,module,exports) {
-module.exports = require("e82461ec7552b7db").getBundleURL("lf1OY") + "douse.3fb10c42.mp3" + "?" + Date.now();
+},{"211b84ad6b0e2944":"lgJ39"}],"dwcOP":[function(require,module,exports) {
+module.exports = require("b599e452351c7029").getBundleURL("lf1OY") + "douse.3fb10c42.mp3" + "?" + Date.now();
 
-},{"e82461ec7552b7db":"lgJ39"}],"4Rqw7":[function(require,module,exports) {
-module.exports = require("82626de792bd1a19").getBundleURL("lf1OY") + "douse-2.4d606725.mp3" + "?" + Date.now();
+},{"b599e452351c7029":"lgJ39"}],"4Rqw7":[function(require,module,exports) {
+module.exports = require("a5e97968f10e2bf4").getBundleURL("lf1OY") + "douse-2.4d606725.mp3" + "?" + Date.now();
 
-},{"82626de792bd1a19":"lgJ39"}],"hEMO1":[function(require,module,exports) {
-module.exports = require("f76eed594bc61f63").getBundleURL("lf1OY") + "douse-3.20efd3b8.mp3" + "?" + Date.now();
+},{"a5e97968f10e2bf4":"lgJ39"}],"hEMO1":[function(require,module,exports) {
+module.exports = require("e77144472496a797").getBundleURL("lf1OY") + "douse-3.20efd3b8.mp3" + "?" + Date.now();
 
-},{"f76eed594bc61f63":"lgJ39"}],"6uN4N":[function(require,module,exports) {
-module.exports = require("8d12f41e3c76e760").getBundleURL("lf1OY") + "douse-4.85b52d3b.mp3" + "?" + Date.now();
+},{"e77144472496a797":"lgJ39"}],"6uN4N":[function(require,module,exports) {
+module.exports = require("14fab09b36de2c36").getBundleURL("lf1OY") + "douse-4.85b52d3b.mp3" + "?" + Date.now();
 
-},{"8d12f41e3c76e760":"lgJ39"}],"denBs":[function(require,module,exports) {
-module.exports = require("89d991780bcf0dd4").getBundleURL("lf1OY") + "ignite.b71a30ef.mp3" + "?" + Date.now();
+},{"14fab09b36de2c36":"lgJ39"}],"denBs":[function(require,module,exports) {
+module.exports = require("49b3a66217806102").getBundleURL("lf1OY") + "ignite.b71a30ef.mp3" + "?" + Date.now();
 
-},{"89d991780bcf0dd4":"lgJ39"}],"ai87a":[function(require,module,exports) {
-module.exports = require("557ac8453ea0634a").getBundleURL("lf1OY") + "ignite-2.98391ff8.mp3" + "?" + Date.now();
+},{"49b3a66217806102":"lgJ39"}],"ai87a":[function(require,module,exports) {
+module.exports = require("889ce5e0030553fa").getBundleURL("lf1OY") + "ignite-2.98391ff8.mp3" + "?" + Date.now();
 
-},{"557ac8453ea0634a":"lgJ39"}],"e4yW2":[function(require,module,exports) {
-module.exports = require("6bd79a9373c99f47").getBundleURL("lf1OY") + "hide.6ddfbe7f.mp3" + "?" + Date.now();
+},{"889ce5e0030553fa":"lgJ39"}],"e4yW2":[function(require,module,exports) {
+module.exports = require("b82bc15f2398a04b").getBundleURL("lf1OY") + "hide.6ddfbe7f.mp3" + "?" + Date.now();
 
-},{"6bd79a9373c99f47":"lgJ39"}],"e0rLU":[function(require,module,exports) {
-module.exports = require("2c745d630726ba4c").getBundleURL("lf1OY") + "hide-2.78cc2235.mp3" + "?" + Date.now();
+},{"b82bc15f2398a04b":"lgJ39"}],"e0rLU":[function(require,module,exports) {
+module.exports = require("919a2667e213d9f1").getBundleURL("lf1OY") + "hide-2.78cc2235.mp3" + "?" + Date.now();
 
-},{"2c745d630726ba4c":"lgJ39"}],"5mFUd":[function(require,module,exports) {
-module.exports = require("7498f6b582800351").getBundleURL("lf1OY") + "hide-3.d141fece.mp3" + "?" + Date.now();
+},{"919a2667e213d9f1":"lgJ39"}],"5mFUd":[function(require,module,exports) {
+module.exports = require("c14038557771b934").getBundleURL("lf1OY") + "hide-3.d141fece.mp3" + "?" + Date.now();
 
-},{"7498f6b582800351":"lgJ39"}],"e5ksw":[function(require,module,exports) {
-module.exports = require("9bb9fc7d4fb27984").getBundleURL("lf1OY") + "hide-4.aafbec6e.mp3" + "?" + Date.now();
+},{"c14038557771b934":"lgJ39"}],"e5ksw":[function(require,module,exports) {
+module.exports = require("8650e6370ab91d97").getBundleURL("lf1OY") + "hide-4.aafbec6e.mp3" + "?" + Date.now();
 
-},{"9bb9fc7d4fb27984":"lgJ39"}],"bFfhf":[function(require,module,exports) {
-module.exports = require("b08fcc5799535049").getBundleURL("lf1OY") + "hide-5.c2a443ef.mp3" + "?" + Date.now();
+},{"8650e6370ab91d97":"lgJ39"}],"bFfhf":[function(require,module,exports) {
+module.exports = require("181192e46d98134b").getBundleURL("lf1OY") + "hide-5.c2a443ef.mp3" + "?" + Date.now();
 
-},{"b08fcc5799535049":"lgJ39"}],"ewAQQ":[function(require,module,exports) {
-module.exports = require("c91bb53f38ecd66f").getBundleURL("lf1OY") + "hide-6.d8af61de.mp3" + "?" + Date.now();
+},{"181192e46d98134b":"lgJ39"}],"ewAQQ":[function(require,module,exports) {
+module.exports = require("cd1f9dc8d250b1b5").getBundleURL("lf1OY") + "hide-6.d8af61de.mp3" + "?" + Date.now();
 
-},{"c91bb53f38ecd66f":"lgJ39"}],"gELii":[function(require,module,exports) {
-module.exports = require("e3342b3544f89eec").getBundleURL("lf1OY") + "gate.2fa92558.mp3" + "?" + Date.now();
+},{"cd1f9dc8d250b1b5":"lgJ39"}],"gELii":[function(require,module,exports) {
+module.exports = require("bed6ba1487eef0b8").getBundleURL("lf1OY") + "gate.2fa92558.mp3" + "?" + Date.now();
 
-},{"e3342b3544f89eec":"lgJ39"}],"5nU87":[function(require,module,exports) {
-module.exports = require("2893f199caa89fdb").getBundleURL("lf1OY") + "gate-2.231cf45f.mp3" + "?" + Date.now();
+},{"bed6ba1487eef0b8":"lgJ39"}],"5nU87":[function(require,module,exports) {
+module.exports = require("c60085be349ecc30").getBundleURL("lf1OY") + "gate-2.231cf45f.mp3" + "?" + Date.now();
 
-},{"2893f199caa89fdb":"lgJ39"}],"7uWJZ":[function(require,module,exports) {
-module.exports = require("5600861910f069f8").getBundleURL("lf1OY") + "gate-3.6d01307f.mp3" + "?" + Date.now();
+},{"c60085be349ecc30":"lgJ39"}],"7uWJZ":[function(require,module,exports) {
+module.exports = require("cb7186212b74d68b").getBundleURL("lf1OY") + "gate-3.6d01307f.mp3" + "?" + Date.now();
 
-},{"5600861910f069f8":"lgJ39"}],"bYumL":[function(require,module,exports) {
-module.exports = require("6e2ff9c1c65e4aca").getBundleURL("lf1OY") + "gate-4.2ad533bc.mp3" + "?" + Date.now();
+},{"cb7186212b74d68b":"lgJ39"}],"bYumL":[function(require,module,exports) {
+module.exports = require("13e82efcbe129931").getBundleURL("lf1OY") + "gate-4.2ad533bc.mp3" + "?" + Date.now();
 
-},{"6e2ff9c1c65e4aca":"lgJ39"}],"6gY1x":[function(require,module,exports) {
-module.exports = require("5b61140ce41a1775").getBundleURL("lf1OY") + "gate-5.ab6675de.mp3" + "?" + Date.now();
+},{"13e82efcbe129931":"lgJ39"}],"6gY1x":[function(require,module,exports) {
+module.exports = require("352933970cef37e1").getBundleURL("lf1OY") + "gate-5.ab6675de.mp3" + "?" + Date.now();
 
-},{"5b61140ce41a1775":"lgJ39"}],"fTvDo":[function(require,module,exports) {
-module.exports = require("84e78116d3081d34").getBundleURL("lf1OY") + "splash1.752ee478.mp3" + "?" + Date.now();
+},{"352933970cef37e1":"lgJ39"}],"fTvDo":[function(require,module,exports) {
+module.exports = require("82e2fa45db47cbcc").getBundleURL("lf1OY") + "splash1.752ee478.mp3" + "?" + Date.now();
 
-},{"84e78116d3081d34":"lgJ39"}],"3E807":[function(require,module,exports) {
-module.exports = require("f1e8696b4f63477").getBundleURL("lf1OY") + "splash2.eb81451d.mp3" + "?" + Date.now();
+},{"82e2fa45db47cbcc":"lgJ39"}],"3E807":[function(require,module,exports) {
+module.exports = require("f8c34cd0fa37e412").getBundleURL("lf1OY") + "splash2.eb81451d.mp3" + "?" + Date.now();
 
-},{"f1e8696b4f63477":"lgJ39"}],"8n85h":[function(require,module,exports) {
-module.exports = require("bc6935b8629fc384").getBundleURL("lf1OY") + "water-submerge.add4042d.mp3" + "?" + Date.now();
+},{"f8c34cd0fa37e412":"lgJ39"}],"8n85h":[function(require,module,exports) {
+module.exports = require("6bf6bcbff572ee8e").getBundleURL("lf1OY") + "water-submerge.add4042d.mp3" + "?" + Date.now();
 
-},{"bc6935b8629fc384":"lgJ39"}],"3Nd3F":[function(require,module,exports) {
-module.exports = require("420c275abeb74a53").getBundleURL("lf1OY") + "water-exit.64a0d3e4.mp3" + "?" + Date.now();
+},{"6bf6bcbff572ee8e":"lgJ39"}],"3Nd3F":[function(require,module,exports) {
+module.exports = require("b7f52e8708b30f2b").getBundleURL("lf1OY") + "water-exit.64a0d3e4.mp3" + "?" + Date.now();
 
-},{"420c275abeb74a53":"lgJ39"}],"2vWH3":[function(require,module,exports) {
-module.exports = require("9000d0904557ef0").getBundleURL("lf1OY") + "jump.bca32e3f.mp3" + "?" + Date.now();
+},{"b7f52e8708b30f2b":"lgJ39"}],"2vWH3":[function(require,module,exports) {
+module.exports = require("20fea83a70698e51").getBundleURL("lf1OY") + "jump.bca32e3f.mp3" + "?" + Date.now();
 
-},{"9000d0904557ef0":"lgJ39"}],"8rRS9":[function(require,module,exports) {
-module.exports = require("ae74ba4079865bc8").getBundleURL("lf1OY") + "jump-2.e646c371.mp3" + "?" + Date.now();
+},{"20fea83a70698e51":"lgJ39"}],"8rRS9":[function(require,module,exports) {
+module.exports = require("cbd509002c8070df").getBundleURL("lf1OY") + "jump-2.e646c371.mp3" + "?" + Date.now();
 
-},{"ae74ba4079865bc8":"lgJ39"}],"iQKP6":[function(require,module,exports) {
-module.exports = require("6a5ce3a3d6679dea").getBundleURL("lf1OY") + "too high.36fb70fa.mp3" + "?" + Date.now();
+},{"cbd509002c8070df":"lgJ39"}],"iQKP6":[function(require,module,exports) {
+module.exports = require("ab49a5e3aa5a4436").getBundleURL("lf1OY") + "too high.36fb70fa.mp3" + "?" + Date.now();
 
-},{"6a5ce3a3d6679dea":"lgJ39"}],"5Wuxs":[function(require,module,exports) {
-module.exports = require("8f3de6be19b9ee02").getBundleURL("lf1OY") + "too high-2.b6dab1d5.mp3" + "?" + Date.now();
+},{"ab49a5e3aa5a4436":"lgJ39"}],"5Wuxs":[function(require,module,exports) {
+module.exports = require("ca2b0ff3886cd445").getBundleURL("lf1OY") + "too high-2.b6dab1d5.mp3" + "?" + Date.now();
 
-},{"8f3de6be19b9ee02":"lgJ39"}],"s2Q2L":[function(require,module,exports) {
-module.exports = require("68fd3234eeef8521").getBundleURL("lf1OY") + "Hmm.9c642d91.mp3" + "?" + Date.now();
+},{"ca2b0ff3886cd445":"lgJ39"}],"s2Q2L":[function(require,module,exports) {
+module.exports = require("17f3a9705bd29b6").getBundleURL("lf1OY") + "Hmm.9c642d91.mp3" + "?" + Date.now();
 
-},{"68fd3234eeef8521":"lgJ39"}],"224to":[function(require,module,exports) {
-module.exports = require("8b031a4a9fd450a4").getBundleURL("lf1OY") + "What.5fbd0c56.mp3" + "?" + Date.now();
+},{"17f3a9705bd29b6":"lgJ39"}],"224to":[function(require,module,exports) {
+module.exports = require("25f7164df64dc448").getBundleURL("lf1OY") + "What.5fbd0c56.mp3" + "?" + Date.now();
 
-},{"8b031a4a9fd450a4":"lgJ39"}],"fzuGN":[function(require,module,exports) {
-module.exports = require("3b172c5ffc9bd18").getBundleURL("lf1OY") + "hey.aac49d21.mp3" + "?" + Date.now();
+},{"25f7164df64dc448":"lgJ39"}],"fzuGN":[function(require,module,exports) {
+module.exports = require("a34257c5aaca637c").getBundleURL("lf1OY") + "hey.aac49d21.mp3" + "?" + Date.now();
 
-},{"3b172c5ffc9bd18":"lgJ39"}],"6RqV3":[function(require,module,exports) {
-module.exports = require("bace266fe82d36d3").getBundleURL("lf1OY") + "hey-2.8ce95bbe.mp3" + "?" + Date.now();
+},{"a34257c5aaca637c":"lgJ39"}],"6RqV3":[function(require,module,exports) {
+module.exports = require("4ec1182620e17959").getBundleURL("lf1OY") + "hey-2.8ce95bbe.mp3" + "?" + Date.now();
 
-},{"bace266fe82d36d3":"lgJ39"}],"h3YyP":[function(require,module,exports) {
-module.exports = require("c3a29a40c776a50f").getBundleURL("lf1OY") + "hey-3.3ac6a922.mp3" + "?" + Date.now();
+},{"4ec1182620e17959":"lgJ39"}],"h3YyP":[function(require,module,exports) {
+module.exports = require("6b9f789ec436019b").getBundleURL("lf1OY") + "hey-3.3ac6a922.mp3" + "?" + Date.now();
 
-},{"c3a29a40c776a50f":"lgJ39"}],"3zmDf":[function(require,module,exports) {
-module.exports = require("95afce8d214c6bd9").getBundleURL("lf1OY") + "what was that.c6e8a3c2.mp3" + "?" + Date.now();
+},{"6b9f789ec436019b":"lgJ39"}],"3zmDf":[function(require,module,exports) {
+module.exports = require("e3f2c3fc8107dba9").getBundleURL("lf1OY") + "what was that.c6e8a3c2.mp3" + "?" + Date.now();
 
-},{"95afce8d214c6bd9":"lgJ39"}],"bVmQ3":[function(require,module,exports) {
-module.exports = require("ffb2c8c0f62278ee").getBundleURL("lf1OY") + "what was that-2.5fe20783.mp3" + "?" + Date.now();
+},{"e3f2c3fc8107dba9":"lgJ39"}],"bVmQ3":[function(require,module,exports) {
+module.exports = require("fc444165a8ea495c").getBundleURL("lf1OY") + "what was that-2.5fe20783.mp3" + "?" + Date.now();
 
-},{"ffb2c8c0f62278ee":"lgJ39"}],"9Ktkp":[function(require,module,exports) {
-module.exports = require("158d8f37cc345882").getBundleURL("lf1OY") + "what was that-3.6f2cdd0e.mp3" + "?" + Date.now();
+},{"fc444165a8ea495c":"lgJ39"}],"9Ktkp":[function(require,module,exports) {
+module.exports = require("b20dccb15ee7804e").getBundleURL("lf1OY") + "what was that-3.6f2cdd0e.mp3" + "?" + Date.now();
 
-},{"158d8f37cc345882":"lgJ39"}],"9x3D3":[function(require,module,exports) {
-module.exports = require("88a9b7085a9ecb4").getBundleURL("lf1OY") + "what was that-4.0aad96c3.mp3" + "?" + Date.now();
+},{"b20dccb15ee7804e":"lgJ39"}],"9x3D3":[function(require,module,exports) {
+module.exports = require("16b200230fb9e566").getBundleURL("lf1OY") + "what was that-4.0aad96c3.mp3" + "?" + Date.now();
 
-},{"88a9b7085a9ecb4":"lgJ39"}],"fd0c0":[function(require,module,exports) {
-module.exports = require("a61798681600abc6").getBundleURL("lf1OY") + "what was that-5.38eccbfc.mp3" + "?" + Date.now();
+},{"16b200230fb9e566":"lgJ39"}],"fd0c0":[function(require,module,exports) {
+module.exports = require("7bcc24c380f3bc94").getBundleURL("lf1OY") + "what was that-5.38eccbfc.mp3" + "?" + Date.now();
 
-},{"a61798681600abc6":"lgJ39"}],"hqU6N":[function(require,module,exports) {
-module.exports = require("252ffcaad8ac631a").getBundleURL("lf1OY") + "who goes there.90c8da6d.mp3" + "?" + Date.now();
+},{"7bcc24c380f3bc94":"lgJ39"}],"hqU6N":[function(require,module,exports) {
+module.exports = require("8b0344016687a4f7").getBundleURL("lf1OY") + "who goes there.90c8da6d.mp3" + "?" + Date.now();
 
-},{"252ffcaad8ac631a":"lgJ39"}],"bx4BT":[function(require,module,exports) {
-module.exports = require("b70b5c101e1c5ede").getBundleURL("lf1OY") + "huh.6993c461.mp3" + "?" + Date.now();
+},{"8b0344016687a4f7":"lgJ39"}],"bx4BT":[function(require,module,exports) {
+module.exports = require("f80302d4876479f8").getBundleURL("lf1OY") + "huh.6993c461.mp3" + "?" + Date.now();
 
-},{"b70b5c101e1c5ede":"lgJ39"}],"ffzGR":[function(require,module,exports) {
-module.exports = require("52025793bddccfd3").getBundleURL("lf1OY") + "wha.a8433e96.mp3" + "?" + Date.now();
+},{"f80302d4876479f8":"lgJ39"}],"ffzGR":[function(require,module,exports) {
+module.exports = require("99f50de5bff7a161").getBundleURL("lf1OY") + "wha.a8433e96.mp3" + "?" + Date.now();
 
-},{"52025793bddccfd3":"lgJ39"}],"cghPs":[function(require,module,exports) {
-module.exports = require("4f53ce21a3003528").getBundleURL("lf1OY") + "wait.504d3960.mp3" + "?" + Date.now();
+},{"99f50de5bff7a161":"lgJ39"}],"cghPs":[function(require,module,exports) {
+module.exports = require("183dbd106b189ec").getBundleURL("lf1OY") + "wait.504d3960.mp3" + "?" + Date.now();
 
-},{"4f53ce21a3003528":"lgJ39"}],"8T7H4":[function(require,module,exports) {
-module.exports = require("e3a0a1bbcbd6a70d").getBundleURL("lf1OY") + "who there.ce669432.mp3" + "?" + Date.now();
+},{"183dbd106b189ec":"lgJ39"}],"8T7H4":[function(require,module,exports) {
+module.exports = require("170ee31250c5d689").getBundleURL("lf1OY") + "who there.ce669432.mp3" + "?" + Date.now();
 
-},{"e3a0a1bbcbd6a70d":"lgJ39"}],"7z9d9":[function(require,module,exports) {
-module.exports = require("b0dff58582d6afeb").getBundleURL("lf1OY") + "what moved.3ff542a2.mp3" + "?" + Date.now();
+},{"170ee31250c5d689":"lgJ39"}],"7z9d9":[function(require,module,exports) {
+module.exports = require("3dc5c5b9e3d6bd04").getBundleURL("lf1OY") + "what moved.3ff542a2.mp3" + "?" + Date.now();
 
-},{"b0dff58582d6afeb":"lgJ39"}],"agX7A":[function(require,module,exports) {
-module.exports = require("e2b78086629a2ce7").getBundleURL("lf1OY") + "what in the shadows.b736a4ef.mp3" + "?" + Date.now();
+},{"3dc5c5b9e3d6bd04":"lgJ39"}],"agX7A":[function(require,module,exports) {
+module.exports = require("dfc6e19b7d6fe924").getBundleURL("lf1OY") + "what in the shadows.b736a4ef.mp3" + "?" + Date.now();
 
-},{"e2b78086629a2ce7":"lgJ39"}],"8aQyK":[function(require,module,exports) {
-module.exports = require("9af0dc621ea115b3").getBundleURL("lf1OY") + "shadow move.b0baebdd.mp3" + "?" + Date.now();
+},{"dfc6e19b7d6fe924":"lgJ39"}],"8aQyK":[function(require,module,exports) {
+module.exports = require("16b68281253109cb").getBundleURL("lf1OY") + "shadow move.b0baebdd.mp3" + "?" + Date.now();
 
-},{"9af0dc621ea115b3":"lgJ39"}],"dJQsj":[function(require,module,exports) {
-module.exports = require("c47fb389fa95132c").getBundleURL("lf1OY") + "see something.0f9e94e8.mp3" + "?" + Date.now();
+},{"16b68281253109cb":"lgJ39"}],"dJQsj":[function(require,module,exports) {
+module.exports = require("796789ce103bb3c4").getBundleURL("lf1OY") + "see something.0f9e94e8.mp3" + "?" + Date.now();
 
-},{"c47fb389fa95132c":"lgJ39"}],"gKhEi":[function(require,module,exports) {
-module.exports = require("c53a0c3f67a256d5").getBundleURL("lf1OY") + "hello.a532132d.mp3" + "?" + Date.now();
+},{"796789ce103bb3c4":"lgJ39"}],"gKhEi":[function(require,module,exports) {
+module.exports = require("8b6a12788dbf0059").getBundleURL("lf1OY") + "hello.a532132d.mp3" + "?" + Date.now();
 
-},{"c53a0c3f67a256d5":"lgJ39"}],"lITH8":[function(require,module,exports) {
-module.exports = require("1c71de158073f08d").getBundleURL("lf1OY") + "ugh.04a1dfba.mp3" + "?" + Date.now();
+},{"8b6a12788dbf0059":"lgJ39"}],"lITH8":[function(require,module,exports) {
+module.exports = require("c452d88b7e290b63").getBundleURL("lf1OY") + "ugh.04a1dfba.mp3" + "?" + Date.now();
 
-},{"1c71de158073f08d":"lgJ39"}],"inZis":[function(require,module,exports) {
-module.exports = require("2010baf9da8d2b2f").getBundleURL("lf1OY") + "quiet out.f7ea726c.mp3" + "?" + Date.now();
+},{"c452d88b7e290b63":"lgJ39"}],"inZis":[function(require,module,exports) {
+module.exports = require("878d725d3890dcd1").getBundleURL("lf1OY") + "quiet out.f7ea726c.mp3" + "?" + Date.now();
 
-},{"2010baf9da8d2b2f":"lgJ39"}],"cFuxm":[function(require,module,exports) {
-module.exports = require("1a805916895e8e81").getBundleURL("lf1OY") + "jumpy.717ed28d.mp3" + "?" + Date.now();
+},{"878d725d3890dcd1":"lgJ39"}],"cFuxm":[function(require,module,exports) {
+module.exports = require("a624eefa4ab6657c").getBundleURL("lf1OY") + "jumpy.717ed28d.mp3" + "?" + Date.now();
 
-},{"1a805916895e8e81":"lgJ39"}],"gCVVo":[function(require,module,exports) {
-module.exports = require("65f215a502ce03ea").getBundleURL("lf1OY") + "jumpin shadows.f5b3f61f.mp3" + "?" + Date.now();
+},{"a624eefa4ab6657c":"lgJ39"}],"gCVVo":[function(require,module,exports) {
+module.exports = require("f50c30657d43e02c").getBundleURL("lf1OY") + "jumpin shadows.f5b3f61f.mp3" + "?" + Date.now();
 
-},{"65f215a502ce03ea":"lgJ39"}],"2E6Ey":[function(require,module,exports) {
-module.exports = require("7c020cce187e019d").getBundleURL("lf1OY") + "ahh.176e0d5e.mp3" + "?" + Date.now();
+},{"f50c30657d43e02c":"lgJ39"}],"2E6Ey":[function(require,module,exports) {
+module.exports = require("45ff25e87603169c").getBundleURL("lf1OY") + "ahh.176e0d5e.mp3" + "?" + Date.now();
 
-},{"7c020cce187e019d":"lgJ39"}],"g90E0":[function(require,module,exports) {
-module.exports = require("9187ec764a18521e").getBundleURL("lf1OY") + "aww.f9d5ccbe.mp3" + "?" + Date.now();
+},{"45ff25e87603169c":"lgJ39"}],"g90E0":[function(require,module,exports) {
+module.exports = require("1cf48b7ba4282e89").getBundleURL("lf1OY") + "aww.f9d5ccbe.mp3" + "?" + Date.now();
 
-},{"9187ec764a18521e":"lgJ39"}],"eBH2o":[function(require,module,exports) {
-module.exports = require("db799165b3e4b107").getBundleURL("lf1OY") + "rest me bones.1a3842d9.mp3" + "?" + Date.now();
+},{"1cf48b7ba4282e89":"lgJ39"}],"eBH2o":[function(require,module,exports) {
+module.exports = require("40fb9115a1326d91").getBundleURL("lf1OY") + "rest me bones.1a3842d9.mp3" + "?" + Date.now();
 
-},{"db799165b3e4b107":"lgJ39"}],"7tUMg":[function(require,module,exports) {
-module.exports = require("42d8ad40244cab5f").getBundleURL("lf1OY") + "oh well.8f730a7f.mp3" + "?" + Date.now();
+},{"40fb9115a1326d91":"lgJ39"}],"7tUMg":[function(require,module,exports) {
+module.exports = require("d748ab5ff8df6df8").getBundleURL("lf1OY") + "oh well.8f730a7f.mp3" + "?" + Date.now();
 
-},{"42d8ad40244cab5f":"lgJ39"}],"LWHfM":[function(require,module,exports) {
-module.exports = require("25ead04e0d869c08").getBundleURL("lf1OY") + "case of the jitters.23c7641b.mp3" + "?" + Date.now();
+},{"d748ab5ff8df6df8":"lgJ39"}],"LWHfM":[function(require,module,exports) {
+module.exports = require("b26672319cc6bb7a").getBundleURL("lf1OY") + "case of the jitters.23c7641b.mp3" + "?" + Date.now();
 
-},{"25ead04e0d869c08":"lgJ39"}],"3taIr":[function(require,module,exports) {
-module.exports = require("352fc71dd107ef52").getBundleURL("lf1OY") + "must be seeing.170c8a9b.mp3" + "?" + Date.now();
+},{"b26672319cc6bb7a":"lgJ39"}],"3taIr":[function(require,module,exports) {
+module.exports = require("f33c3a6712a9a054").getBundleURL("lf1OY") + "must be seeing.170c8a9b.mp3" + "?" + Date.now();
 
-},{"352fc71dd107ef52":"lgJ39"}],"6HKZl":[function(require,module,exports) {
-module.exports = require("aadf68a75c5307c9").getBundleURL("lf1OY") + "what in my coffee.aefc32da.mp3" + "?" + Date.now();
+},{"f33c3a6712a9a054":"lgJ39"}],"6HKZl":[function(require,module,exports) {
+module.exports = require("ac00b0a3222f9902").getBundleURL("lf1OY") + "what in my coffee.aefc32da.mp3" + "?" + Date.now();
 
-},{"aadf68a75c5307c9":"lgJ39"}],"9s0IZ":[function(require,module,exports) {
-module.exports = require("1b05704546241aa8").getBundleURL("lf1OY") + "coffee too strong.71f40271.mp3" + "?" + Date.now();
+},{"ac00b0a3222f9902":"lgJ39"}],"9s0IZ":[function(require,module,exports) {
+module.exports = require("be93c5231e8bddbd").getBundleURL("lf1OY") + "coffee too strong.71f40271.mp3" + "?" + Date.now();
 
-},{"1b05704546241aa8":"lgJ39"}],"bmUje":[function(require,module,exports) {
-module.exports = require("8d69f63860627ac4").getBundleURL("lf1OY") + "hmm nothing.3f1d7137.mp3" + "?" + Date.now();
+},{"be93c5231e8bddbd":"lgJ39"}],"bmUje":[function(require,module,exports) {
+module.exports = require("81cefe90d2c3ccdd").getBundleURL("lf1OY") + "hmm nothing.3f1d7137.mp3" + "?" + Date.now();
 
-},{"8d69f63860627ac4":"lgJ39"}],"r8pEn":[function(require,module,exports) {
-module.exports = require("37773ad78f76b3d2").getBundleURL("lf1OY") + "well I though I saw.d247b6e6.mp3" + "?" + Date.now();
+},{"81cefe90d2c3ccdd":"lgJ39"}],"r8pEn":[function(require,module,exports) {
+module.exports = require("cab4b83c80bb0463").getBundleURL("lf1OY") + "well I though I saw.d247b6e6.mp3" + "?" + Date.now();
 
-},{"37773ad78f76b3d2":"lgJ39"}],"gmBDQ":[function(require,module,exports) {
-module.exports = require("479b3888c56e7cc0").getBundleURL("lf1OY") + "nothing.27b9ccb3.mp3" + "?" + Date.now();
+},{"cab4b83c80bb0463":"lgJ39"}],"gmBDQ":[function(require,module,exports) {
+module.exports = require("84d325ade4ea2cd9").getBundleURL("lf1OY") + "nothing.27b9ccb3.mp3" + "?" + Date.now();
 
-},{"479b3888c56e7cc0":"lgJ39"}],"cZw51":[function(require,module,exports) {
-module.exports = require("38dc81413cc8f1c5").getBundleURL("lf1OY") + "hopefully nothing.0e6a952f.mp3" + "?" + Date.now();
+},{"84d325ade4ea2cd9":"lgJ39"}],"cZw51":[function(require,module,exports) {
+module.exports = require("24d9d700cf6bca3f").getBundleURL("lf1OY") + "hopefully nothing.0e6a952f.mp3" + "?" + Date.now();
 
-},{"38dc81413cc8f1c5":"lgJ39"}],"cnzN4":[function(require,module,exports) {
-module.exports = require("1c6abf656fe8b2e4").getBundleURL("lf1OY") + "seeing things.cde1305b.mp3" + "?" + Date.now();
+},{"24d9d700cf6bca3f":"lgJ39"}],"cnzN4":[function(require,module,exports) {
+module.exports = require("66da7301d9bc4bf0").getBundleURL("lf1OY") + "seeing things.cde1305b.mp3" + "?" + Date.now();
 
-},{"1c6abf656fe8b2e4":"lgJ39"}],"jefVX":[function(require,module,exports) {
-module.exports = require("f3b7183b567e9563").getBundleURL("lf1OY") + "what-2.0eb6da69.mp3" + "?" + Date.now();
+},{"66da7301d9bc4bf0":"lgJ39"}],"jefVX":[function(require,module,exports) {
+module.exports = require("eb0fcf9f7bbce223").getBundleURL("lf1OY") + "what-2.0eb6da69.mp3" + "?" + Date.now();
 
-},{"f3b7183b567e9563":"lgJ39"}],"aPaoT":[function(require,module,exports) {
-module.exports = require("9f0208830b1c8caa").getBundleURL("lf1OY") + "hark.5dcc56a1.mp3" + "?" + Date.now();
+},{"eb0fcf9f7bbce223":"lgJ39"}],"aPaoT":[function(require,module,exports) {
+module.exports = require("b696fc422f27cd8").getBundleURL("lf1OY") + "hark.5dcc56a1.mp3" + "?" + Date.now();
 
-},{"9f0208830b1c8caa":"lgJ39"}],"g0dhG":[function(require,module,exports) {
-module.exports = require("2e6f3a9c9efed481").getBundleURL("lf1OY") + "noise.158a091c.mp3" + "?" + Date.now();
+},{"b696fc422f27cd8":"lgJ39"}],"g0dhG":[function(require,module,exports) {
+module.exports = require("82b797d1551b537c").getBundleURL("lf1OY") + "noise.158a091c.mp3" + "?" + Date.now();
 
-},{"2e6f3a9c9efed481":"lgJ39"}],"kDwJ2":[function(require,module,exports) {
-module.exports = require("2d968b6a17a17117").getBundleURL("lf1OY") + "heard something.7fdfb9f6.mp3" + "?" + Date.now();
+},{"82b797d1551b537c":"lgJ39"}],"kDwJ2":[function(require,module,exports) {
+module.exports = require("cc81a6b7c4b8ba84").getBundleURL("lf1OY") + "heard something.7fdfb9f6.mp3" + "?" + Date.now();
 
-},{"2d968b6a17a17117":"lgJ39"}],"2x9nC":[function(require,module,exports) {
-module.exports = require("27e3fa51c793cf5e").getBundleURL("lf1OY") + "cant hear now.1dc1a7a2.mp3" + "?" + Date.now();
+},{"cc81a6b7c4b8ba84":"lgJ39"}],"2x9nC":[function(require,module,exports) {
+module.exports = require("600d1522ec41c4ed").getBundleURL("lf1OY") + "cant hear now.1dc1a7a2.mp3" + "?" + Date.now();
 
-},{"27e3fa51c793cf5e":"lgJ39"}],"9fVaC":[function(require,module,exports) {
-module.exports = require("9a61e8b7fdf73498").getBundleURL("lf1OY") + "hearing things.19769955.mp3" + "?" + Date.now();
+},{"600d1522ec41c4ed":"lgJ39"}],"9fVaC":[function(require,module,exports) {
+module.exports = require("df8667697fb9a908").getBundleURL("lf1OY") + "hearing things.19769955.mp3" + "?" + Date.now();
 
-},{"9a61e8b7fdf73498":"lgJ39"}],"k1uRF":[function(require,module,exports) {
-module.exports = require("c15a3cbba53106d4").getBundleURL("lf1OY") + "noise again.0a7dbd4f.mp3" + "?" + Date.now();
+},{"df8667697fb9a908":"lgJ39"}],"k1uRF":[function(require,module,exports) {
+module.exports = require("a6299ef47f1780d7").getBundleURL("lf1OY") + "noise again.0a7dbd4f.mp3" + "?" + Date.now();
 
-},{"c15a3cbba53106d4":"lgJ39"}],"fLNJF":[function(require,module,exports) {
-module.exports = require("8bf2ee601b8b9d36").getBundleURL("lf1OY") + "someone there.1c0ae6c5.mp3" + "?" + Date.now();
+},{"a6299ef47f1780d7":"lgJ39"}],"fLNJF":[function(require,module,exports) {
+module.exports = require("cc525cb291041d3b").getBundleURL("lf1OY") + "someone there.1c0ae6c5.mp3" + "?" + Date.now();
 
-},{"8bf2ee601b8b9d36":"lgJ39"}],"chTre":[function(require,module,exports) {
-module.exports = require("a42c90818fb8f375").getBundleURL("lf1OY") + "who could that be.1719858b.mp3" + "?" + Date.now();
+},{"cc525cb291041d3b":"lgJ39"}],"chTre":[function(require,module,exports) {
+module.exports = require("f21b78a33df32c84").getBundleURL("lf1OY") + "who could that be.1719858b.mp3" + "?" + Date.now();
 
-},{"a42c90818fb8f375":"lgJ39"}],"2bSxl":[function(require,module,exports) {
-module.exports = require("eb7ccb349b9079c2").getBundleURL("lf1OY") + "there it is again.5acfbd24.mp3" + "?" + Date.now();
+},{"f21b78a33df32c84":"lgJ39"}],"2QvYX":[function(require,module,exports) {
+module.exports = require("5c98788a7a360e3b").getBundleURL("lf1OY") + "better check it out.feef2002.mp3" + "?" + Date.now();
 
-},{"eb7ccb349b9079c2":"lgJ39"}],"2QvYX":[function(require,module,exports) {
-module.exports = require("f6f9539362b88f64").getBundleURL("lf1OY") + "better check it out.feef2002.mp3" + "?" + Date.now();
+},{"5c98788a7a360e3b":"lgJ39"}],"5V3sW":[function(require,module,exports) {
+module.exports = require("cb003feee069730d").getBundleURL("lf1OY") + "better be rats.936e36a9.mp3" + "?" + Date.now();
 
-},{"f6f9539362b88f64":"lgJ39"}],"lePkF":[function(require,module,exports) {
-module.exports = require("9b0c3fd92d2d3cb0").getBundleURL("lf1OY") + "what keeps making those noises.11f4ac62.mp3" + "?" + Date.now();
+},{"cb003feee069730d":"lgJ39"}],"8PECt":[function(require,module,exports) {
+module.exports = require("4712845b9a95e9ff").getBundleURL("lf1OY") + "who that.275fc7f3.mp3" + "?" + Date.now();
 
-},{"9b0c3fd92d2d3cb0":"lgJ39"}],"5V3sW":[function(require,module,exports) {
-module.exports = require("231a9f0d65c43a2f").getBundleURL("lf1OY") + "better be rats.936e36a9.mp3" + "?" + Date.now();
+},{"4712845b9a95e9ff":"lgJ39"}],"abuDI":[function(require,module,exports) {
+module.exports = require("9e187e738659dc2e").getBundleURL("lf1OY") + "come out come out.14617e69.mp3" + "?" + Date.now();
 
-},{"231a9f0d65c43a2f":"lgJ39"}],"hUQoD":[function(require,module,exports) {
-module.exports = require("ae338e9ca747fbef").getBundleURL("lf1OY") + "again.d92e61d9.mp3" + "?" + Date.now();
+},{"9e187e738659dc2e":"lgJ39"}],"39DEl":[function(require,module,exports) {
+module.exports = require("b40892e673905c6e").getBundleURL("lf1OY") + "guess nothing.3d80bc80.mp3" + "?" + Date.now();
 
-},{"ae338e9ca747fbef":"lgJ39"}],"8PECt":[function(require,module,exports) {
-module.exports = require("49ea18e4b2cdf05d").getBundleURL("lf1OY") + "who that.275fc7f3.mp3" + "?" + Date.now();
+},{"b40892e673905c6e":"lgJ39"}],"3kmal":[function(require,module,exports) {
+module.exports = require("ed5c1e4afa8c992e").getBundleURL("lf1OY") + "wonder it was.0995203b.mp3" + "?" + Date.now();
 
-},{"49ea18e4b2cdf05d":"lgJ39"}],"abuDI":[function(require,module,exports) {
-module.exports = require("5881618dd56b5e67").getBundleURL("lf1OY") + "come out come out.14617e69.mp3" + "?" + Date.now();
+},{"ed5c1e4afa8c992e":"lgJ39"}],"85RTq":[function(require,module,exports) {
+module.exports = require("dafd82d9299ce16f").getBundleURL("lf1OY") + "back to post.71ea15a2.mp3" + "?" + Date.now();
 
-},{"5881618dd56b5e67":"lgJ39"}],"39DEl":[function(require,module,exports) {
-module.exports = require("2165ff423bf7b65e").getBundleURL("lf1OY") + "guess nothing.3d80bc80.mp3" + "?" + Date.now();
+},{"dafd82d9299ce16f":"lgJ39"}],"6JYFN":[function(require,module,exports) {
+module.exports = require("86dc423010944ae3").getBundleURL("lf1OY") + "quiet now.0be637de.mp3" + "?" + Date.now();
 
-},{"2165ff423bf7b65e":"lgJ39"}],"3kmal":[function(require,module,exports) {
-module.exports = require("a1816f78b0ae35").getBundleURL("lf1OY") + "wonder it was.0995203b.mp3" + "?" + Date.now();
+},{"86dc423010944ae3":"lgJ39"}],"8o6R6":[function(require,module,exports) {
+module.exports = require("e765e29c9f1e2c12").getBundleURL("lf1OY") + "sure I heard something.000bbbca.mp3" + "?" + Date.now();
 
-},{"a1816f78b0ae35":"lgJ39"}],"85RTq":[function(require,module,exports) {
-module.exports = require("cf45d28003fee492").getBundleURL("lf1OY") + "back to post.71ea15a2.mp3" + "?" + Date.now();
+},{"e765e29c9f1e2c12":"lgJ39"}],"g7juJ":[function(require,module,exports) {
+module.exports = require("bc702093df6f71a7").getBundleURL("lf1OY") + "not there anymore.8a26ff97.mp3" + "?" + Date.now();
 
-},{"cf45d28003fee492":"lgJ39"}],"6JYFN":[function(require,module,exports) {
-module.exports = require("bb2b9604ca4f5b40").getBundleURL("lf1OY") + "quiet now.0be637de.mp3" + "?" + Date.now();
+},{"bc702093df6f71a7":"lgJ39"}],"2IFEg":[function(require,module,exports) {
+module.exports = require("4dce113bd6b7c4f8").getBundleURL("lf1OY") + "probably nothing.96183200.mp3" + "?" + Date.now();
 
-},{"bb2b9604ca4f5b40":"lgJ39"}],"8o6R6":[function(require,module,exports) {
-module.exports = require("2272a463d4b23274").getBundleURL("lf1OY") + "sure I heard something.000bbbca.mp3" + "?" + Date.now();
+},{"4dce113bd6b7c4f8":"lgJ39"}],"bCvEE":[function(require,module,exports) {
+module.exports = require("3cfbf8f9cb1c8837").getBundleURL("lf1OY") + "i dont know why i work here.a5dea8b7.mp3" + "?" + Date.now();
 
-},{"2272a463d4b23274":"lgJ39"}],"g7juJ":[function(require,module,exports) {
-module.exports = require("17c184dc76bd47b8").getBundleURL("lf1OY") + "not there anymore.8a26ff97.mp3" + "?" + Date.now();
+},{"3cfbf8f9cb1c8837":"lgJ39"}],"iI2P6":[function(require,module,exports) {
+module.exports = require("c23a66fa9ee7cae8").getBundleURL("lf1OY") + "waste of my time.5c694a4a.mp3" + "?" + Date.now();
 
-},{"17c184dc76bd47b8":"lgJ39"}],"2IFEg":[function(require,module,exports) {
-module.exports = require("f99068aa2c27a978").getBundleURL("lf1OY") + "probably nothing.96183200.mp3" + "?" + Date.now();
+},{"c23a66fa9ee7cae8":"lgJ39"}],"fTTTf":[function(require,module,exports) {
+module.exports = require("d36320e28fa1044b").getBundleURL("lf1OY") + "why do I even try.f1249983.mp3" + "?" + Date.now();
 
-},{"f99068aa2c27a978":"lgJ39"}],"bCvEE":[function(require,module,exports) {
-module.exports = require("45975e9169346725").getBundleURL("lf1OY") + "i dont know why i work here.a5dea8b7.mp3" + "?" + Date.now();
+},{"d36320e28fa1044b":"lgJ39"}],"in1Yk":[function(require,module,exports) {
+module.exports = require("19a0ac93ef9074d1").getBundleURL("lf1OY") + "at least Im not on cleaning duty.e05d8ddf.mp3" + "?" + Date.now();
 
-},{"45975e9169346725":"lgJ39"}],"iI2P6":[function(require,module,exports) {
-module.exports = require("2f6dca6ae5f2129e").getBundleURL("lf1OY") + "waste of my time.5c694a4a.mp3" + "?" + Date.now();
+},{"19a0ac93ef9074d1":"lgJ39"}],"4sFml":[function(require,module,exports) {
+module.exports = require("57b09cb65d945fde").getBundleURL("lf1OY") + "at least my shift ends soon.e9a0264b.mp3" + "?" + Date.now();
 
-},{"2f6dca6ae5f2129e":"lgJ39"}],"fTTTf":[function(require,module,exports) {
-module.exports = require("8eaa24d701d9a367").getBundleURL("lf1OY") + "why do I even try.f1249983.mp3" + "?" + Date.now();
+},{"57b09cb65d945fde":"lgJ39"}],"8DCSZ":[function(require,module,exports) {
+module.exports = require("1ddaa937d3cf8eec").getBundleURL("lf1OY") + "what do you want me to do about it.a0951444.mp3" + "?" + Date.now();
 
-},{"8eaa24d701d9a367":"lgJ39"}],"in1Yk":[function(require,module,exports) {
-module.exports = require("8abf9a040a8522e5").getBundleURL("lf1OY") + "at least Im not on cleaning duty.e05d8ddf.mp3" + "?" + Date.now();
+},{"1ddaa937d3cf8eec":"lgJ39"}],"8HYPW":[function(require,module,exports) {
+module.exports = require("3c4d084e6f442ad8").getBundleURL("lf1OY") + "coming.2fe1e9ab.mp3" + "?" + Date.now();
 
-},{"8abf9a040a8522e5":"lgJ39"}],"4sFml":[function(require,module,exports) {
-module.exports = require("afd64e0309fc08fd").getBundleURL("lf1OY") + "at least my shift ends soon.e9a0264b.mp3" + "?" + Date.now();
+},{"3c4d084e6f442ad8":"lgJ39"}],"gCSP7":[function(require,module,exports) {
+module.exports = require("64e36793d9856e57").getBundleURL("lf1OY") + "to arms.d090e7eb.mp3" + "?" + Date.now();
 
-},{"afd64e0309fc08fd":"lgJ39"}],"8DCSZ":[function(require,module,exports) {
-module.exports = require("435be610030aceee").getBundleURL("lf1OY") + "what do you want me to do about it.a0951444.mp3" + "?" + Date.now();
+},{"64e36793d9856e57":"lgJ39"}],"94LvL":[function(require,module,exports) {
+module.exports = require("62a6f5633041a6dc").getBundleURL("lf1OY") + "whistle.4535aef4.mp3" + "?" + Date.now();
 
-},{"435be610030aceee":"lgJ39"}],"dwonC":[function(require,module,exports) {
-module.exports = require("59ed57dc775795f5").getBundleURL("lf1OY") + "where.c229d90a.mp3" + "?" + Date.now();
+},{"62a6f5633041a6dc":"lgJ39"}],"aD2F4":[function(require,module,exports) {
+module.exports = require("a640deb2e73863ed").getBundleURL("lf1OY") + "whistle-2.7bab7a2a.mp3" + "?" + Date.now();
 
-},{"59ed57dc775795f5":"lgJ39"}],"8HYPW":[function(require,module,exports) {
-module.exports = require("d4570a3ff4379ec5").getBundleURL("lf1OY") + "coming.2fe1e9ab.mp3" + "?" + Date.now();
+},{"a640deb2e73863ed":"lgJ39"}],"1ZglP":[function(require,module,exports) {
+module.exports = require("838c549e29c2619a").getBundleURL("lf1OY") + "whistle-3.8e4b2c7d.mp3" + "?" + Date.now();
 
-},{"d4570a3ff4379ec5":"lgJ39"}],"99UIf":[function(require,module,exports) {
-module.exports = require("14c3f9351cfc65bf").getBundleURL("lf1OY") + "here I come.dc53a595.mp3" + "?" + Date.now();
+},{"838c549e29c2619a":"lgJ39"}],"k7f64":[function(require,module,exports) {
+module.exports = require("c0194bf955b44392").getBundleURL("lf1OY") + "get em.b3cfa67a.mp3" + "?" + Date.now();
 
-},{"14c3f9351cfc65bf":"lgJ39"}],"gCSP7":[function(require,module,exports) {
-module.exports = require("6681af9994b4e2f7").getBundleURL("lf1OY") + "to arms.d090e7eb.mp3" + "?" + Date.now();
+},{"c0194bf955b44392":"lgJ39"}],"cZ0PT":[function(require,module,exports) {
+module.exports = require("dc585e3ae5d3314d").getBundleURL("lf1OY") + "intruder.26c962b0.mp3" + "?" + Date.now();
 
-},{"6681af9994b4e2f7":"lgJ39"}],"fEbIW":[function(require,module,exports) {
-module.exports = require("86d5a64040eaf02").getBundleURL("lf1OY") + "what is it.3ed20fab.mp3" + "?" + Date.now();
+},{"dc585e3ae5d3314d":"lgJ39"}],"4FfLU":[function(require,module,exports) {
+module.exports = require("69802734c0aaf6da").getBundleURL("lf1OY") + "oh no its a thief.08c79d07.mp3" + "?" + Date.now();
 
-},{"86d5a64040eaf02":"lgJ39"}],"daMKt":[function(require,module,exports) {
-module.exports = require("aefec81ce1fadcad").getBundleURL("lf1OY") + "i dont know how to whistle.d73308ad.mp3" + "?" + Date.now();
+},{"69802734c0aaf6da":"lgJ39"}],"4WptE":[function(require,module,exports) {
+module.exports = require("6f7d71a263a6eeed").getBundleURL("lf1OY") + "we coming for you.e3350b58.mp3" + "?" + Date.now();
 
-},{"aefec81ce1fadcad":"lgJ39"}],"94LvL":[function(require,module,exports) {
-module.exports = require("f01dc3a7b29b7c4a").getBundleURL("lf1OY") + "whistle.4535aef4.mp3" + "?" + Date.now();
+},{"6f7d71a263a6eeed":"lgJ39"}],"eODND":[function(require,module,exports) {
+module.exports = require("98b5935538bae087").getBundleURL("lf1OY") + "coming for you.d5bd7177.mp3" + "?" + Date.now();
 
-},{"f01dc3a7b29b7c4a":"lgJ39"}],"aD2F4":[function(require,module,exports) {
-module.exports = require("a052bb8e943fbbea").getBundleURL("lf1OY") + "whistle-2.7bab7a2a.mp3" + "?" + Date.now();
+},{"98b5935538bae087":"lgJ39"}],"hZ2B8":[function(require,module,exports) {
+module.exports = require("38e84941bae725a8").getBundleURL("lf1OY") + "halt.87f5623f.mp3" + "?" + Date.now();
 
-},{"a052bb8e943fbbea":"lgJ39"}],"1ZglP":[function(require,module,exports) {
-module.exports = require("d90eb81886fb794d").getBundleURL("lf1OY") + "whistle-3.8e4b2c7d.mp3" + "?" + Date.now();
+},{"38e84941bae725a8":"lgJ39"}],"AMRHc":[function(require,module,exports) {
+module.exports = require("ea57c0095060ee7").getBundleURL("lf1OY") + "see you.f1a894b8.mp3" + "?" + Date.now();
 
-},{"d90eb81886fb794d":"lgJ39"}],"k7f64":[function(require,module,exports) {
-module.exports = require("684a233db0a18439").getBundleURL("lf1OY") + "get em.b3cfa67a.mp3" + "?" + Date.now();
+},{"ea57c0095060ee7":"lgJ39"}],"6UCsk":[function(require,module,exports) {
+module.exports = require("e5fc488d82ba5e7e").getBundleURL("lf1OY") + "ill get you.3f2c4f5a.mp3" + "?" + Date.now();
 
-},{"684a233db0a18439":"lgJ39"}],"cZ0PT":[function(require,module,exports) {
-module.exports = require("b8d301e5dd741d0").getBundleURL("lf1OY") + "intruder.26c962b0.mp3" + "?" + Date.now();
+},{"e5fc488d82ba5e7e":"lgJ39"}],"g7XAg":[function(require,module,exports) {
+module.exports = require("31e406dcc8c5f4a1").getBundleURL("lf1OY") + "a goner.fbb93c98.mp3" + "?" + Date.now();
 
-},{"b8d301e5dd741d0":"lgJ39"}],"4FfLU":[function(require,module,exports) {
-module.exports = require("d65fc7d6135ef5f7").getBundleURL("lf1OY") + "oh no its a thief.08c79d07.mp3" + "?" + Date.now();
+},{"31e406dcc8c5f4a1":"lgJ39"}],"cFlu7":[function(require,module,exports) {
+module.exports = require("9237ff03dc88e97f").getBundleURL("lf1OY") + "just you wait.f3233a1b.mp3" + "?" + Date.now();
 
-},{"d65fc7d6135ef5f7":"lgJ39"}],"4WptE":[function(require,module,exports) {
-module.exports = require("2b115ba4e50944b2").getBundleURL("lf1OY") + "we coming for you.e3350b58.mp3" + "?" + Date.now();
+},{"9237ff03dc88e97f":"lgJ39"}],"7FJ37":[function(require,module,exports) {
+module.exports = require("84e03eebb3b7926f").getBundleURL("lf1OY") + "you wont get away.9fb1f168.mp3" + "?" + Date.now();
 
-},{"2b115ba4e50944b2":"lgJ39"}],"eODND":[function(require,module,exports) {
-module.exports = require("c5867897434cb7a4").getBundleURL("lf1OY") + "coming for you.d5bd7177.mp3" + "?" + Date.now();
+},{"84e03eebb3b7926f":"lgJ39"}],"3Hs3x":[function(require,module,exports) {
+module.exports = require("150f0ca8a95744b8").getBundleURL("lf1OY") + "no you dont.7a3b744b.mp3" + "?" + Date.now();
 
-},{"c5867897434cb7a4":"lgJ39"}],"hZ2B8":[function(require,module,exports) {
-module.exports = require("799fd3f84736d6bc").getBundleURL("lf1OY") + "halt.87f5623f.mp3" + "?" + Date.now();
+},{"150f0ca8a95744b8":"lgJ39"}],"coNMD":[function(require,module,exports) {
+module.exports = require("c499358488e305b9").getBundleURL("lf1OY") + "thief.61a85088.mp3" + "?" + Date.now();
 
-},{"799fd3f84736d6bc":"lgJ39"}],"AMRHc":[function(require,module,exports) {
-module.exports = require("301f9a78ef928fec").getBundleURL("lf1OY") + "see you.f1a894b8.mp3" + "?" + Date.now();
+},{"c499358488e305b9":"lgJ39"}],"4s9gT":[function(require,module,exports) {
+module.exports = require("8ed8678255cd2eb7").getBundleURL("lf1OY") + "thief-2.51754a24.mp3" + "?" + Date.now();
 
-},{"301f9a78ef928fec":"lgJ39"}],"6UCsk":[function(require,module,exports) {
-module.exports = require("4a7b31cc4a3d09ef").getBundleURL("lf1OY") + "ill get you.3f2c4f5a.mp3" + "?" + Date.now();
+},{"8ed8678255cd2eb7":"lgJ39"}],"ikayr":[function(require,module,exports) {
+module.exports = require("3bb0ea41737f37e9").getBundleURL("lf1OY") + "thief-3.6126aef5.mp3" + "?" + Date.now();
 
-},{"4a7b31cc4a3d09ef":"lgJ39"}],"g7XAg":[function(require,module,exports) {
-module.exports = require("c70aae21d9a549a9").getBundleURL("lf1OY") + "a goner.fbb93c98.mp3" + "?" + Date.now();
+},{"3bb0ea41737f37e9":"lgJ39"}],"bUSG1":[function(require,module,exports) {
+module.exports = require("cde6d3e0a6dbfe13").getBundleURL("lf1OY") + "after them.d8ae69aa.mp3" + "?" + Date.now();
 
-},{"c70aae21d9a549a9":"lgJ39"}],"cFlu7":[function(require,module,exports) {
-module.exports = require("2c680fe9f94f41f9").getBundleURL("lf1OY") + "just you wait.f3233a1b.mp3" + "?" + Date.now();
+},{"cde6d3e0a6dbfe13":"lgJ39"}],"gs4UN":[function(require,module,exports) {
+module.exports = require("a14ee158fe2a2d9c").getBundleURL("lf1OY") + "what is thy business.4d2220bf.mp3" + "?" + Date.now();
 
-},{"2c680fe9f94f41f9":"lgJ39"}],"7FJ37":[function(require,module,exports) {
-module.exports = require("c7e65eb821e7d857").getBundleURL("lf1OY") + "you wont get away.9fb1f168.mp3" + "?" + Date.now();
+},{"a14ee158fe2a2d9c":"lgJ39"}],"j5cRJ":[function(require,module,exports) {
+module.exports = require("6ba5c9bcd0e5d0a1").getBundleURL("lf1OY") + "no mercy for the wicked.81f47509.mp3" + "?" + Date.now();
 
-},{"c7e65eb821e7d857":"lgJ39"}],"3Hs3x":[function(require,module,exports) {
-module.exports = require("a08db60bde8dd464").getBundleURL("lf1OY") + "no you dont.7a3b744b.mp3" + "?" + Date.now();
+},{"6ba5c9bcd0e5d0a1":"lgJ39"}],"hF47h":[function(require,module,exports) {
+module.exports = require("7ef0cc82d57d0982").getBundleURL("lf1OY") + "lost em.0b39dc1c.mp3" + "?" + Date.now();
 
-},{"a08db60bde8dd464":"lgJ39"}],"coNMD":[function(require,module,exports) {
-module.exports = require("7fd97222c1418d8a").getBundleURL("lf1OY") + "thief.61a85088.mp3" + "?" + Date.now();
+},{"7ef0cc82d57d0982":"lgJ39"}],"kYZUc":[function(require,module,exports) {
+module.exports = require("585e387c242de1ed").getBundleURL("lf1OY") + "must have run.5c6304f4.mp3" + "?" + Date.now();
 
-},{"7fd97222c1418d8a":"lgJ39"}],"4s9gT":[function(require,module,exports) {
-module.exports = require("9178f0fa87d00fda").getBundleURL("lf1OY") + "thief-2.51754a24.mp3" + "?" + Date.now();
+},{"585e387c242de1ed":"lgJ39"}],"lqrS2":[function(require,module,exports) {
+module.exports = require("dc251cb13f86a057").getBundleURL("lf1OY") + "where they go.82eb2f61.mp3" + "?" + Date.now();
 
-},{"9178f0fa87d00fda":"lgJ39"}],"ikayr":[function(require,module,exports) {
-module.exports = require("c28879ee8f1742af").getBundleURL("lf1OY") + "thief-3.6126aef5.mp3" + "?" + Date.now();
+},{"dc251cb13f86a057":"lgJ39"}],"kbO4H":[function(require,module,exports) {
+module.exports = require("8f1c1eaebe601b3b").getBundleURL("lf1OY") + "his holiness.4a6fcfcd.mp3" + "?" + Date.now();
 
-},{"c28879ee8f1742af":"lgJ39"}],"bUSG1":[function(require,module,exports) {
-module.exports = require("8384b1c322efe216").getBundleURL("lf1OY") + "after them.d8ae69aa.mp3" + "?" + Date.now();
+},{"8f1c1eaebe601b3b":"lgJ39"}],"ckkdt":[function(require,module,exports) {
+module.exports = require("6cd67f5b911c0e72").getBundleURL("lf1OY") + "the boss.3de0ea38.mp3" + "?" + Date.now();
 
-},{"8384b1c322efe216":"lgJ39"}],"gs4UN":[function(require,module,exports) {
-module.exports = require("9ea79a657c85a952").getBundleURL("lf1OY") + "what is thy business.4d2220bf.mp3" + "?" + Date.now();
+},{"6cd67f5b911c0e72":"lgJ39"}],"3WyJt":[function(require,module,exports) {
+module.exports = require("d5f0cdeb3ecea53f").getBundleURL("lf1OY") + "huff puff give up.99b47dc0.mp3" + "?" + Date.now();
 
-},{"9ea79a657c85a952":"lgJ39"}],"j5cRJ":[function(require,module,exports) {
-module.exports = require("9f00e93c84b96907").getBundleURL("lf1OY") + "no mercy for the wicked.81f47509.mp3" + "?" + Date.now();
+},{"d5f0cdeb3ecea53f":"lgJ39"}],"hlHmX":[function(require,module,exports) {
+module.exports = require("e6e68a3f1ecc31f1").getBundleURL("lf1OY") + "where did he go.37e4fea4.mp3" + "?" + Date.now();
 
-},{"9f00e93c84b96907":"lgJ39"}],"hF47h":[function(require,module,exports) {
-module.exports = require("40f4f8ed883489d1").getBundleURL("lf1OY") + "lost em.0b39dc1c.mp3" + "?" + Date.now();
+},{"e6e68a3f1ecc31f1":"lgJ39"}],"hIFxo":[function(require,module,exports) {
+module.exports = require("f1a6d5be74cdb0b4").getBundleURL("lf1OY") + "drats lost him.2708ad1d.mp3" + "?" + Date.now();
 
-},{"40f4f8ed883489d1":"lgJ39"}],"kYZUc":[function(require,module,exports) {
-module.exports = require("d3f0d8d4bd4c2494").getBundleURL("lf1OY") + "must have run.5c6304f4.mp3" + "?" + Date.now();
+},{"f1a6d5be74cdb0b4":"lgJ39"}],"7eQ6w":[function(require,module,exports) {
+module.exports = require("25e69539234b648b").getBundleURL("lf1OY") + "gone.1debb79d.mp3" + "?" + Date.now();
 
-},{"d3f0d8d4bd4c2494":"lgJ39"}],"lqrS2":[function(require,module,exports) {
-module.exports = require("55be351b1270c57f").getBundleURL("lf1OY") + "where they go.82eb2f61.mp3" + "?" + Date.now();
+},{"25e69539234b648b":"lgJ39"}],"2Pk6f":[function(require,module,exports) {
+module.exports = require("e7ca05dcb84cbf4").getBundleURL("lf1OY") + "come back here.2fb213c2.mp3" + "?" + Date.now();
 
-},{"55be351b1270c57f":"lgJ39"}],"kbO4H":[function(require,module,exports) {
-module.exports = require("4552f472c8f79b87").getBundleURL("lf1OY") + "his holiness.4a6fcfcd.mp3" + "?" + Date.now();
+},{"e7ca05dcb84cbf4":"lgJ39"}],"jovj4":[function(require,module,exports) {
+module.exports = require("4ad001f12453f8f9").getBundleURL("lf1OY") + "rotten scoundrel.9389ebb8.mp3" + "?" + Date.now();
 
-},{"4552f472c8f79b87":"lgJ39"}],"ckkdt":[function(require,module,exports) {
-module.exports = require("e9da03dc6fe8b8c1").getBundleURL("lf1OY") + "the boss.3de0ea38.mp3" + "?" + Date.now();
+},{"4ad001f12453f8f9":"lgJ39"}],"c3U1l":[function(require,module,exports) {
+module.exports = require("48b110baba409dae").getBundleURL("lf1OY") + "aargh.6c11f002.mp3" + "?" + Date.now();
 
-},{"e9da03dc6fe8b8c1":"lgJ39"}],"3WyJt":[function(require,module,exports) {
-module.exports = require("4ba9b35ce57b80cb").getBundleURL("lf1OY") + "huff puff give up.99b47dc0.mp3" + "?" + Date.now();
+},{"48b110baba409dae":"lgJ39"}],"b2ME2":[function(require,module,exports) {
+module.exports = require("a0311d166b3fdaa9").getBundleURL("lf1OY") + "not coming back.c270432d.mp3" + "?" + Date.now();
 
-},{"4ba9b35ce57b80cb":"lgJ39"}],"hlHmX":[function(require,module,exports) {
-module.exports = require("b37a76880e8d53c7").getBundleURL("lf1OY") + "where did he go.37e4fea4.mp3" + "?" + Date.now();
+},{"a0311d166b3fdaa9":"lgJ39"}],"lMgKq":[function(require,module,exports) {
+module.exports = require("5788725ce11c2abd").getBundleURL("lf1OY") + "blast.1d706954.mp3" + "?" + Date.now();
 
-},{"b37a76880e8d53c7":"lgJ39"}],"hIFxo":[function(require,module,exports) {
-module.exports = require("8eb84d3fd58b801d").getBundleURL("lf1OY") + "drats lost him.2708ad1d.mp3" + "?" + Date.now();
+},{"5788725ce11c2abd":"lgJ39"}],"8hWQ7":[function(require,module,exports) {
+module.exports = require("b452dfbb3108bc98").getBundleURL("lf1OY") + "dont come back.8969903f.mp3" + "?" + Date.now();
 
-},{"8eb84d3fd58b801d":"lgJ39"}],"7eQ6w":[function(require,module,exports) {
-module.exports = require("c44d0a773dc770e8").getBundleURL("lf1OY") + "gone.1debb79d.mp3" + "?" + Date.now();
+},{"b452dfbb3108bc98":"lgJ39"}],"f4Hq0":[function(require,module,exports) {
+module.exports = require("1638888fdeef89df").getBundleURL("lf1OY") + "wont get away next time.aa747c7e.mp3" + "?" + Date.now();
 
-},{"c44d0a773dc770e8":"lgJ39"}],"2Pk6f":[function(require,module,exports) {
-module.exports = require("17fcca66f7113f73").getBundleURL("lf1OY") + "come back here.2fb213c2.mp3" + "?" + Date.now();
+},{"1638888fdeef89df":"lgJ39"}],"2Bc7G":[function(require,module,exports) {
+module.exports = require("b8b0f71595db7c9c").getBundleURL("lf1OY") + "for his holiness.55339d5f.mp3" + "?" + Date.now();
 
-},{"17fcca66f7113f73":"lgJ39"}],"jovj4":[function(require,module,exports) {
-module.exports = require("8ed2b9c28aa25a60").getBundleURL("lf1OY") + "rotten scoundrel.9389ebb8.mp3" + "?" + Date.now();
+},{"b8b0f71595db7c9c":"lgJ39"}],"4bzJ9":[function(require,module,exports) {
+module.exports = require("48eff80c989c7515").getBundleURL("lf1OY") + "lousy day at work.77a0f71d.mp3" + "?" + Date.now();
 
-},{"8ed2b9c28aa25a60":"lgJ39"}],"c3U1l":[function(require,module,exports) {
-module.exports = require("10d577827faef479").getBundleURL("lf1OY") + "aargh.6c11f002.mp3" + "?" + Date.now();
+},{"48eff80c989c7515":"lgJ39"}],"lvXdP":[function(require,module,exports) {
+module.exports = require("52ca7d8fc16f43fd").getBundleURL("lf1OY") + "i give up.e37cde88.mp3" + "?" + Date.now();
 
-},{"10d577827faef479":"lgJ39"}],"b2ME2":[function(require,module,exports) {
-module.exports = require("237fb314f1059370").getBundleURL("lf1OY") + "not coming back.c270432d.mp3" + "?" + Date.now();
+},{"52ca7d8fc16f43fd":"lgJ39"}],"gPuPz":[function(require,module,exports) {
+module.exports = require("75a50d14a036978").getBundleURL("lf1OY") + "what do i do help me.f6de8dea.mp3" + "?" + Date.now();
 
-},{"237fb314f1059370":"lgJ39"}],"lMgKq":[function(require,module,exports) {
-module.exports = require("41764b3de782422f").getBundleURL("lf1OY") + "blast.1d706954.mp3" + "?" + Date.now();
+},{"75a50d14a036978":"lgJ39"}],"iZ55y":[function(require,module,exports) {
+module.exports = require("e04d3646189ea938").getBundleURL("lf1OY") + "oh no he got away.2c545080.mp3" + "?" + Date.now();
 
-},{"41764b3de782422f":"lgJ39"}],"8hWQ7":[function(require,module,exports) {
-module.exports = require("cf38e9a4322dc4ed").getBundleURL("lf1OY") + "dont come back.8969903f.mp3" + "?" + Date.now();
+},{"e04d3646189ea938":"lgJ39"}],"cvhbf":[function(require,module,exports) {
+module.exports = require("dadb45e912c1a083").getBundleURL("lf1OY") + "guard rant.5915471e.mp3" + "?" + Date.now();
 
-},{"cf38e9a4322dc4ed":"lgJ39"}],"f4Hq0":[function(require,module,exports) {
-module.exports = require("e1e13adcf95517f5").getBundleURL("lf1OY") + "wont get away next time.aa747c7e.mp3" + "?" + Date.now();
+},{"dadb45e912c1a083":"lgJ39"}],"bgYzw":[function(require,module,exports) {
+module.exports = require("5b46f963cfaeb2ca").getBundleURL("lf1OY") + "take that.2363e886.mp3" + "?" + Date.now();
 
-},{"e1e13adcf95517f5":"lgJ39"}],"2Bc7G":[function(require,module,exports) {
-module.exports = require("6bee240a793dbf30").getBundleURL("lf1OY") + "for his holiness.55339d5f.mp3" + "?" + Date.now();
+},{"5b46f963cfaeb2ca":"lgJ39"}],"fmwYX":[function(require,module,exports) {
+module.exports = require("e805755542861526").getBundleURL("lf1OY") + "oof.853f9b21.mp3" + "?" + Date.now();
 
-},{"6bee240a793dbf30":"lgJ39"}],"4bzJ9":[function(require,module,exports) {
-module.exports = require("5fb86790a241da55").getBundleURL("lf1OY") + "lousy day at work.77a0f71d.mp3" + "?" + Date.now();
+},{"e805755542861526":"lgJ39"}],"1sAT4":[function(require,module,exports) {
+module.exports = require("6d35f771efa03aec").getBundleURL("lf1OY") + "uh.1621da60.mp3" + "?" + Date.now();
 
-},{"5fb86790a241da55":"lgJ39"}],"lvXdP":[function(require,module,exports) {
-module.exports = require("70d05d294a898bfa").getBundleURL("lf1OY") + "i give up.e37cde88.mp3" + "?" + Date.now();
+},{"6d35f771efa03aec":"lgJ39"}],"iT3UI":[function(require,module,exports) {
+module.exports = require("c4e951054a159cad").getBundleURL("lf1OY") + "ah.c51a22c9.mp3" + "?" + Date.now();
 
-},{"70d05d294a898bfa":"lgJ39"}],"gPuPz":[function(require,module,exports) {
-module.exports = require("cf8df36877290263").getBundleURL("lf1OY") + "what do i do help me.f6de8dea.mp3" + "?" + Date.now();
+},{"c4e951054a159cad":"lgJ39"}],"HN7wh":[function(require,module,exports) {
+module.exports = require("9ae0bc4bce89fda1").getBundleURL("lf1OY") + "ah-2.3c91fb45.mp3" + "?" + Date.now();
 
-},{"cf8df36877290263":"lgJ39"}],"iZ55y":[function(require,module,exports) {
-module.exports = require("3d1cd26c914e5b3").getBundleURL("lf1OY") + "oh no he got away.2c545080.mp3" + "?" + Date.now();
+},{"9ae0bc4bce89fda1":"lgJ39"}],"6mKlg":[function(require,module,exports) {
+module.exports = require("dbd1844fc8b0e2ac").getBundleURL("lf1OY") + "ha ya.4e39519f.mp3" + "?" + Date.now();
 
-},{"3d1cd26c914e5b3":"lgJ39"}],"cvhbf":[function(require,module,exports) {
-module.exports = require("8a855e7ba36c2a53").getBundleURL("lf1OY") + "guard rant.5915471e.mp3" + "?" + Date.now();
+},{"dbd1844fc8b0e2ac":"lgJ39"}],"b3mdd":[function(require,module,exports) {
+module.exports = require("ab30f9a8dafaa68e").getBundleURL("lf1OY") + "ha ya-2.2e2702bd.mp3" + "?" + Date.now();
 
-},{"8a855e7ba36c2a53":"lgJ39"}],"bgYzw":[function(require,module,exports) {
-module.exports = require("bcf2909e42187d52").getBundleURL("lf1OY") + "take that.2363e886.mp3" + "?" + Date.now();
+},{"ab30f9a8dafaa68e":"lgJ39"}],"iyQcS":[function(require,module,exports) {
+module.exports = require("35d93c0f6a555803").getBundleURL("lf1OY") + "ha ya-3.004305ba.mp3" + "?" + Date.now();
 
-},{"bcf2909e42187d52":"lgJ39"}],"fmwYX":[function(require,module,exports) {
-module.exports = require("48139c38a19635a7").getBundleURL("lf1OY") + "oof.853f9b21.mp3" + "?" + Date.now();
-
-},{"48139c38a19635a7":"lgJ39"}],"1sAT4":[function(require,module,exports) {
-module.exports = require("ed2244d191d759fd").getBundleURL("lf1OY") + "uh.1621da60.mp3" + "?" + Date.now();
-
-},{"ed2244d191d759fd":"lgJ39"}],"iT3UI":[function(require,module,exports) {
-module.exports = require("cb709f03013cb612").getBundleURL("lf1OY") + "ah.c51a22c9.mp3" + "?" + Date.now();
-
-},{"cb709f03013cb612":"lgJ39"}],"HN7wh":[function(require,module,exports) {
-module.exports = require("6d39f11b8cb5888e").getBundleURL("lf1OY") + "ah-2.3c91fb45.mp3" + "?" + Date.now();
-
-},{"6d39f11b8cb5888e":"lgJ39"}],"6mKlg":[function(require,module,exports) {
-module.exports = require("7d9e00b7bdb2138f").getBundleURL("lf1OY") + "ha ya.4e39519f.mp3" + "?" + Date.now();
-
-},{"7d9e00b7bdb2138f":"lgJ39"}],"b3mdd":[function(require,module,exports) {
-module.exports = require("84f6fa2778b43943").getBundleURL("lf1OY") + "ha ya-2.2e2702bd.mp3" + "?" + Date.now();
-
-},{"84f6fa2778b43943":"lgJ39"}],"iyQcS":[function(require,module,exports) {
-module.exports = require("66aafb15676fee16").getBundleURL("lf1OY") + "ha ya-3.004305ba.mp3" + "?" + Date.now();
-
-},{"66aafb15676fee16":"lgJ39"}],"ldPU4":[function(require,module,exports) {
+},{"35d93c0f6a555803":"lgJ39"}],"ldPU4":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "lastController", ()=>lastController);
@@ -15388,7 +15395,6 @@ var _game = require("./game");
 var _random = require("./random");
 var _tilesets = require("./tilesets");
 var _gameMap = require("./game-map");
-const menuCharSizeX = 43;
 function scoreToClipboard(stats) {
     const numGhostedLevels = stats.numGhostedLevels;
     const totalScore = stats.totalScore;
@@ -15545,11 +15551,7 @@ class TextWindow {
         }
     }
     updateScreenSize(screenSize) {
-        const minCharsX = menuCharSizeX + 2;
-        const minCharsY = 22;
-        const scaleLargestX = Math.max(1, Math.floor(screenSize[0] / (this.textW * minCharsX)));
-        const scaleLargestY = Math.max(1, Math.floor(screenSize[1] / (this.textH * minCharsY)));
-        const scaleFactor = Math.min(scaleLargestX, scaleLargestY);
+        const scaleFactor = _game.statusBarZoom(screenSize);
         this.pixelsPerCharX = this.textW * scaleFactor;
         this.pixelsPerCharY = this.textH * scaleFactor;
         const linesPixelSizeX = this.maxLineLength * this.pixelsPerCharX;
