@@ -563,9 +563,11 @@ parcelHelpers.export(exports, "gameConfig", ()=>gameConfig);
 parcelHelpers.export(exports, "setupLevel", ()=>setupLevel);
 parcelHelpers.export(exports, "numTurnsParForCurrentMap", ()=>numTurnsParForCurrentMap);
 parcelHelpers.export(exports, "advanceToWin", ()=>advanceToWin);
+parcelHelpers.export(exports, "joltCamera", ()=>joltCamera);
 parcelHelpers.export(exports, "setSoundVolume", ()=>setSoundVolume);
 parcelHelpers.export(exports, "setVolumeMute", ()=>setVolumeMute);
 parcelHelpers.export(exports, "setGuardMute", ()=>setGuardMute);
+parcelHelpers.export(exports, "setScreenShakeEnabled", ()=>setScreenShakeEnabled);
 //TODO: should do some runtime type checking here to validate what's being written
 parcelHelpers.export(exports, "getStat", ()=>getStat);
 parcelHelpers.export(exports, "setStat", ()=>setStat);
@@ -764,7 +766,22 @@ function updateControllerState(state) {
         else if (activated("zoomOut")) zoomOut(state);
         else if (activated("seeAll")) state.seeAll = !state.seeAll;
         else if (activated("guardMute")) setGuardMute(state, !state.guardMute);
-        else if (activated("volumeMute")) setVolumeMute(state, !state.volumeMute);
+        else if (activated("idleCursorToggle")) {
+            switch(state.player.idleCursorType){
+                case "orbs":
+                    state.player.idleCursorType = "bracket";
+                    break;
+                case "bracket":
+                    state.player.idleCursorType = "off";
+                    break;
+                case "off":
+                    state.player.idleCursorType = "orbs";
+                    break;
+            }
+            state.player.idle = false;
+            state.idleTimer = 2;
+            setStatusMessage(state, "Setting player idle cursor to " + state.player.idleCursorType);
+        } else if (activated("volumeMute")) setVolumeMute(state, !state.volumeMute);
         else if (activated("volumeDown")) {
             const soundVolume = Math.max(0.1, state.soundVolume - 0.1);
             setSoundVolume(state, soundVolume);
@@ -1209,12 +1226,17 @@ function blocksPushedGuard(state, posGuardNew) {
     }
     return false;
 }
+function joltCamera(state, dx, dy) {
+    if (!state.screenShakeEnabled) return;
+    (0, _myMatrix.vec2).scaleAndAdd(state.camera.joltVelocity, state.camera.joltVelocity, (0, _myMatrix.vec2).fromValues(dx, dy), -8);
+}
 function tryMakeBangNoise(state, dx, dy, stepType) {
     if (stepType === StepType.AttemptedLeap) {
         preTurn(state);
         state.player.pickTarget = null;
-        bumpAnim(state, dx, dy);
-        makeNoise(state.gameMap, state.player, NoiseType.BangDoor, 17, state.sounds);
+        bumpAnim(state, dx * 1.25, dy * 1.25);
+        joltCamera(state, dx, dy);
+        makeNoise(state.gameMap, state.player, NoiseType.BangDoor, dx, dy, state.sounds);
         advanceTime(state);
     } else bumpFail(state, dx, dy);
 }
@@ -1222,6 +1244,7 @@ function tryPlayerWait(state) {
     const player = state.player;
     // Can't move if you're dead.
     if (player.health <= 0) return;
+    player.idle = false;
     state.idleTimer = 5;
     // Move camera with player by releasing any panning motion
     state.camera.panning = false;
@@ -1236,6 +1259,7 @@ function tryPlayerStep(state, dx, dy, stepType) {
     // Can't move if you're dead
     const player = state.player;
     if (player.health <= 0) return;
+    player.idle = false;
     state.idleTimer = 5;
     // Move camera with player by releasing any panning motion
     state.camera.panning = false;
@@ -1390,7 +1414,7 @@ function tryPlayerStep(state, dx, dy, stepType) {
     // Animate player moving
     const start = (0, _myMatrix.vec2).clone(posOld).subtract(posNew);
     const end = (0, _myMatrix.vec2).create();
-    let mid = start.add(end).scale(0.5).add((0, _myMatrix.vec2).fromValues(0, 0.0625));
+    const mid = start.add(end).scale(0.5).add((0, _myMatrix.vec2).fromValues(0, 0.0625));
     const hid = player.hidden(state.gameMap);
     let tweenSeq;
     if (guard !== undefined && guard.mode === (0, _guard.GuardMode).Unconscious) {
@@ -1410,17 +1434,18 @@ function tryPlayerStep(state, dx, dy, stepType) {
             }
         ];
     } else {
+        const dtStep = stepType === StepType.AttemptedLeapBounceBack ? 0.05 : 0.1;
         tweenSeq = [
             {
                 pt0: start,
                 pt1: mid,
-                duration: 0.1,
+                duration: dtStep,
                 fn: (0, _animation.tween).easeInQuad
             },
             {
                 pt0: mid,
                 pt1: end,
-                duration: 0.1,
+                duration: dtStep,
                 fn: (0, _animation.tween).easeOutQuad
             },
             {
@@ -1450,7 +1475,7 @@ function tryPlayerStep(state, dx, dy, stepType) {
     // Collect loot
     collectLoot(state, player.pos, posNew);
     // Generate movement AI noises
-    if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
+    if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 0, -1, state.sounds);
     // Let guards take a turn
     advanceTime(state);
     // Play sound for terrain type changes
@@ -1460,6 +1485,7 @@ function tryPlayerLeap(state, dx, dy) {
     // Can't move if you're dead
     const player = state.player;
     if (player.health <= 0) return;
+    player.idle = false;
     state.idleTimer = 5;
     // Move camera with player by releasing any panning motion
     state.camera.panning = false;
@@ -1492,6 +1518,7 @@ function tryPlayerLeap(state, dx, dy) {
             state.sounds.hitGuard.play(0.25);
             advanceTime(state);
             bumpAnim(state, dx, dy);
+            joltCamera(state, dx, dy);
         }
         return;
     }
@@ -1621,13 +1648,10 @@ function tryPlayerLeap(state, dx, dy) {
     // Generate movement AI noises
     /*
     if (state.gameMap.items.find((item)=>item.pos.equals(posNew) && item.type === ItemType.Chair)) {
-        makeNoise(state.gameMap, player, NoiseType.BangChair, 17, state.sounds);
+        makeNoise(state.gameMap, player, NoiseType.BangChair, 0, 0, state.sounds);
     } else
-    */ if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
-    else if (cellNew.type === (0, _gameMap.TerrainType).GroundWater) {
-        makeNoise(state.gameMap, player, NoiseType.Splash, 17, state.sounds);
-        state.sounds["splash"].play(0.5);
-    }
+    */ if (cellNew.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 0, -1, state.sounds);
+    else if (cellNew.type === (0, _gameMap.TerrainType).GroundWater) makeNoise(state.gameMap, player, NoiseType.Splash, 0, 0, state.sounds);
     // Let guards take a turn
     advanceTime(state);
     // Play sound for terrain type changes
@@ -1693,9 +1717,10 @@ function executeLeapAttack(state, player, target, dx, dy, posOld, posMid, posNew
         tileSet.playerTiles.left
     ]);
     // Generate movement AI noises
-    makeNoise(state.gameMap, player, NoiseType.Thud, 17, state.sounds);
-    if (cellMid.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 17, state.sounds);
-    else if (cellMid.type === (0, _gameMap.TerrainType).GroundWater) makeNoise(state.gameMap, player, NoiseType.Splash, 17, state.sounds);
+    if (cellMid.type === (0, _gameMap.TerrainType).GroundWoodCreaky) makeNoise(state.gameMap, player, NoiseType.Creak, 0, -1, state.sounds);
+    else if (cellMid.type === (0, _gameMap.TerrainType).GroundWater) makeNoise(state.gameMap, player, NoiseType.Splash, 0, 0, state.sounds);
+    joltCamera(state, dx, dy);
+    makeNoise(state.gameMap, player, NoiseType.Thud, dx, dy, state.sounds);
     // Let guards take a turn
     advanceTime(state);
     // Play sound for terrain type changes
@@ -1722,8 +1747,11 @@ function isOneWayWindowTerrainType(terrainType) {
             return false;
     }
 }
-function makeNoise(map, player, noiseType, radius, sounds) {
+function makeNoise(map, player, noiseType, dx, dy, sounds) {
     player.noisy = true;
+    player.noiseOffset[0] = dx / 2;
+    player.noiseOffset[1] = dy / 2;
+    const radius = 23;
     switch(noiseType){
         case NoiseType.Creak:
             sounds.footstepCreaky.play(0.6);
@@ -1734,21 +1762,19 @@ function makeNoise(map, player, noiseType, radius, sounds) {
         case NoiseType.Thud:
             break;
         case NoiseType.BangDoor:
+            sounds.thump.play(0.5);
             break;
         case NoiseType.BangChair:
             break;
     }
-    let closestGuardDist = Infinity;
-    let closestGuard = null;
+    let foundClosestGuard = false;
     for (const guard of map.guardsInEarshot(player.pos, radius)){
         guard.heardThief = true;
-        const dist = player.pos.squaredDistance(guard.pos);
-        if (dist < closestGuardDist && (0, _guard.isRelaxedGuardMode)(guard.mode)) {
-            closestGuardDist = dist;
-            closestGuard = guard;
+        if (!foundClosestGuard) {
+            foundClosestGuard = true;
+            guard.heardThiefClosest = true;
         }
     }
-    if (closestGuard !== null) closestGuard.heardThiefClosest = true;
 }
 function preTurn(state) {
     state.popups.clear();
@@ -1853,7 +1879,10 @@ function updateAnimatedLight(cells, lightStates, seeAll) {
     }
 }
 function litVertices(x, y, cells) {
-    const scale = (cells.at(x, y).lit ? 1 : 0.03) / 4;
+    // The scale of 0.1 for unlit tiles creates a hard-ish edge at the boundary of lit and unlit tiles
+    // 0 would give a completely hard edge, while 1 will be smooth but hard for the player to tell
+    // which tiles at the boundary are lit
+    const scale = (cells.at(x, y).lit ? 1 : 0.1) / 4;
     const l = cells.at(x, y).litAnim;
     const lld = cells.at(x - 1, y - 1).litAnim;
     const ld = cells.at(x, y - 1).litAnim;
@@ -1883,6 +1912,7 @@ function renderTouchButtons(renderer, touchController) {
 function renderWorld(state, renderer) {
     updateAnimatedLight(state.gameMap.cells, state.lightStates, state.seeAll);
     // Draw terrain
+    const terrTiles = state.level < 9 ? renderer.tileSet.terrainTiles : renderer.tileSet.fortressTerrainTiles;
     for(let x = 0; x < state.gameMap.cells.sizeX; ++x)for(let y = state.gameMap.cells.sizeY - 1; y >= 0; --y){
         const cell = state.gameMap.cells.at(x, y);
         if (!cell.seen && !state.seeAll) continue;
@@ -1892,9 +1922,9 @@ function renderWorld(state, renderer) {
         }
         const lv = litVertices(x, y, state.gameMap.cells);
         // Draw tile
-        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW && state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, renderer.tileSet.terrainTiles[(0, _gameMap.TerrainType).PortcullisNS], lv);
+        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW && state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, terrTiles[(0, _gameMap.TerrainType).PortcullisNS], lv);
         else {
-            const tile = cell.animation ? cell.animation.currentTile() : renderer.tileSet.terrainTiles[terrainType];
+            const tile = cell.animation ? cell.animation.currentTile() : terrTiles[terrainType];
             renderer.addGlyphLit4(x, y, x + 1, y + 1, tile, lv);
         }
         // Draw border for water
@@ -1926,6 +1956,7 @@ function renderWorld(state, renderer) {
         }
     }
     // Draw items
+    const itemTiles = state.level < 9 ? renderer.tileSet.itemTiles : renderer.tileSet.fortressItemTiles;
     for (const item of state.gameMap.items){
         let x = item.pos[0];
         let y = item.pos[1];
@@ -1933,7 +1964,7 @@ function renderWorld(state, renderer) {
         if (!cell.seen && !state.seeAll) continue;
         const terrainType = cell.type;
         const lv = litVertices(x, y, state.gameMap.cells);
-        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW && state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, renderer.tileSet.itemTiles[(0, _gameMap.ItemType).PortcullisNS], lv);
+        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW && state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, itemTiles[(0, _gameMap.ItemType).PortcullisNS], lv);
         else {
             //Don't draw the door if someone standing in it
             if ([
@@ -1942,7 +1973,7 @@ function renderWorld(state, renderer) {
             ].includes(terrainType)) {
                 if (state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y) || state.player.pos[0] == x && state.player.pos[1] == y) continue;
             }
-            const ti = item.animation ? item.animation.currentTile() : renderer.tileSet.itemTiles[item.type];
+            const ti = item.animation ? item.animation.currentTile() : itemTiles[item.type];
             if (item.animation instanceof (0, _animation.SpriteAnimation)) {
                 const o = item.animation.offset;
                 x += o[0];
@@ -2012,8 +2043,31 @@ function renderPlayer(state, renderer) {
         const p = renderer.tileSet.playerTiles;
         tileInfo = dead ? p.dead : hidden ? p.hidden : p.normal;
     }
+    const frontRenders = [];
     const tileInfoTinted = structuredClone(tileInfo);
     if (!dead) {
+        if (player.idle) {
+            // const idleTileInfo = renderer.tileSet.namedTiles['idleIndicatorAlt'];
+            if (player.idleCursorAnimation !== null && player.idleCursorAnimation.length === 1 && player.idleCursorAnimation[0] instanceof (0, _animation.PulsingColorAnimation)) {
+                const tile = player.idleCursorAnimation[0].currentTile();
+                renderer.addGlyphLit(x0, y0, x0 + 1, y0 + 1, tile, 1);
+            }
+            if (player.idleCursorAnimation !== null && player.idleCursorAnimation.length > 1) {
+                for (let anim of player.idleCursorAnimation)if (anim instanceof (0, _animation.RadialAnimation)) {
+                    const tile = anim.currentTile();
+                    const off = anim.offset;
+                    if (off[1] > 0) renderer.addGlyphLit(x0 + off[0], y0 + off[1] / 4 - 0.125, x0 + off[0] + 1, y0 + off[1] / 4 + 1 - 0.125, tile, 1);
+                    else frontRenders.push([
+                        x0 + off[0],
+                        y0 + off[1] / 4 - 0.125,
+                        x0 + off[0] + 1,
+                        y0 + off[1] / 4 + 1 - 0.125,
+                        tile,
+                        1
+                    ]);
+                }
+            }
+        }
         if (player.damagedLastTurn) {
             tileInfoTinted.color = _colorPreset.lightRed;
             tileInfoTinted.unlitColor = _colorPreset.darkRed;
@@ -2023,6 +2077,7 @@ function renderPlayer(state, renderer) {
         }
     }
     renderer.addGlyphLit(x, y, x + 1, y + 1, tileInfoTinted, lit);
+    for (let dr of frontRenders)renderer.addGlyphLit(...dr);
 }
 function renderGuards(state, renderer) {
     for (const guard of state.gameMap.guards){
@@ -2075,7 +2130,7 @@ function renderGuards(state, renderer) {
 function renderParticles(state, renderer) {
     for (let p of state.particles)if (p.animation) {
         const a = p.animation;
-        const offset = a instanceof (0, _animation.SpriteAnimation) ? a.offset : (0, _myMatrix.vec2).create();
+        const offset = a instanceof (0, _animation.SpriteAnimation) || a instanceof (0, _animation.RadialAnimation) ? a.offset : (0, _myMatrix.vec2).create();
         const x = p.pos[0] + offset[0];
         const y = p.pos[1] + offset[1];
         const tileInfo = a.currentTile();
@@ -2121,9 +2176,13 @@ function renderIconOverlays(state, renderer) {
     // }
     // Render an icon over the player if the player is being noisy
     if (player.noisy) {
-        const x = player.pos[0];
-        const y = player.pos[1] - 0.5;
-        renderer.addGlyph(x, y, x + 1, y + 1, tileSet.namedTiles["noise"]);
+        const a = player.animation;
+        const offset = a && a instanceof (0, _animation.SpriteAnimation) ? a.offset : (0, _myMatrix.vec2).create();
+        if (Math.abs(offset[0]) < 0.5 && Math.abs(offset[1]) < 0.5) {
+            const x = player.pos[0] + player.noiseOffset[0];
+            const y = player.pos[1] + player.noiseOffset[1];
+            renderer.addGlyph(x, y, x + 1, y + 1, tileSet.namedTiles["noise"]);
+        }
     }
 }
 function renderGuardSight(state, renderer) {
@@ -2171,6 +2230,8 @@ function createCamera(posPlayer, zoomLevel) {
     const camera = {
         position: (0, _myMatrix.vec2).create(),
         velocity: (0, _myMatrix.vec2).create(),
+        joltOffset: (0, _myMatrix.vec2).create(),
+        joltVelocity: (0, _myMatrix.vec2).create(),
         zoom: zoomLevel,
         zoomVelocity: 0,
         scale: Math.pow(zoomPower, zoomLevel),
@@ -2197,6 +2258,10 @@ function setGuardMute(state, guardMute) {
     state.guardMute = guardMute;
     window.localStorage.setItem("LLL/guardMute", guardMute ? "true" : "false");
     for(const s in state.subtitledSounds)state.subtitledSounds[s].mute = guardMute;
+}
+function setScreenShakeEnabled(state, screenShakeEnabled) {
+    state.screenShakeEnabled = screenShakeEnabled;
+    window.localStorage.setItem("LLL/screenShakeEnabled", screenShakeEnabled ? "true" : "false");
 }
 function getStat(name) {
     const statJson = window.localStorage.getItem("LLL/stat/" + name);
@@ -2258,6 +2323,8 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
     const volumeMute = volumeMuteSaved === null ? false : volumeMuteSaved === "true";
     let guardMuteSaved = window.localStorage.getItem("LLL/guardMute");
     const guardMute = guardMuteSaved === null ? false : guardMuteSaved === "true";
+    let screenShakeEnabledSaved = window.localStorage.getItem("LLL/screenShakeEnabled");
+    const screenShakeEnabled = screenShakeEnabledSaved === null ? true : screenShakeEnabledSaved === "true";
     const state = {
         gameStats: {
             totalScore: 0,
@@ -2279,7 +2346,7 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
         particles: [],
         tLast: undefined,
         dt: 0,
-        idleTimer: 0,
+        idleTimer: 5,
         rng: rng,
         dailyRun: null,
         leapToggleActive: false,
@@ -2324,6 +2391,7 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
         soundVolume: soundVolume,
         guardMute: guardMute,
         volumeMute: volumeMute,
+        screenShakeEnabled: screenShakeEnabled,
         keyRepeatActive: undefined,
         keyRepeatRate: keyRepeatRate,
         keyRepeatDelay: keyRepeatDelay,
@@ -2463,13 +2531,12 @@ function resetState(state) {
     (0, _audio.Howler).stop();
 }
 function updateIdle(state, dt) {
+    const player = state.player;
     if (state.player.health <= 0) return;
-    if (state.gameMode === (0, _types.GameMode).MansionComplete || state.gameMode === (0, _types.GameMode).Win) return;
+    if (state.gameMode !== (0, _types.GameMode).Mansion) return;
     if (state.player.animation !== null) return;
     state.idleTimer -= dt;
     if (state.idleTimer > 0) return;
-    state.idleTimer = 5;
-    const player = state.player;
     const start = (0, _myMatrix.vec2).create();
     const left = (0, _myMatrix.vec2).fromValues(-0.125, 0);
     const right = (0, _myMatrix.vec2).fromValues(0.125, 0);
@@ -2564,6 +2631,25 @@ function updateIdle(state, dt) {
         ];
     }
     player.animation = new (0, _animation.SpriteAnimation)(tweenSeq, tiles);
+    if (!player.idle) {
+        if (player.idleCursorType === "bracket") {
+            const tile = tileSet.namedTiles["idleIndicatorAlt"];
+            if (tile.color) {
+                tile.color = 0xa0FFFFFF & tile.color;
+                tile.unlitColor = 0x00FFFFFF & tile.color;
+            }
+            player.idleCursorAnimation = [
+                new (0, _animation.PulsingColorAnimation)(tile, 0, 1 / Math.PI)
+            ];
+        } else if (player.idleCursorType === "orbs") player.idleCursorAnimation = [
+            new (0, _animation.RadialAnimation)(tileSet.namedTiles["idleIndicator"], 0.6, Math.PI, 0, 0),
+            new (0, _animation.RadialAnimation)(tileSet.namedTiles["idleIndicator"], 0.6, Math.PI, 2 * Math.PI / 3, 0),
+            new (0, _animation.RadialAnimation)(tileSet.namedTiles["idleIndicator"], 0.6, Math.PI, 4 * Math.PI / 3, 0)
+        ];
+        else player.idleCursorAnimation = [];
+    }
+    player.idle = true;
+    state.idleTimer = 5; //Time to next movement
 }
 function updateAndRender(now, renderer, state) {
     const t = now / 1000;
@@ -2601,6 +2687,7 @@ function updateState(state, screenSize, dt) {
     if (state.player.animation) {
         if (state.player.animation.update(dt)) state.player.animation = null;
     }
+    if (state.player.idle && state.player.idleCursorAnimation) state.player.idleCursorAnimation = state.player.idleCursorAnimation.filter((anim)=>!anim.update(dt));
     for (let c of state.gameMap.cells.values)c.animation?.update(dt);
     for (let g of state.gameMap.guards){
         if (g.animation?.update(dt)) g.animation = null;
@@ -2772,6 +2859,16 @@ function updateCamera(state, screenSize, dt) {
     (0, _myMatrix.vec2).scaleAndAdd(state.camera.position, state.camera.position, state.camera.velocity, 0.5 * dt);
     (0, _myMatrix.vec2).scaleAndAdd(state.camera.position, state.camera.position, velNew, 0.5 * dt);
     (0, _myMatrix.vec2).copy(state.camera.velocity, velNew);
+    // Animate jolt
+    const kSpringJolt = 24;
+    const joltAcc = (0, _myMatrix.vec2).create();
+    (0, _myMatrix.vec2).scale(joltAcc, state.camera.joltOffset, -(kSpringJolt ** 2));
+    (0, _myMatrix.vec2).scaleAndAdd(joltAcc, joltAcc, state.camera.joltVelocity, -2 * kSpringJolt);
+    const joltVelNew = (0, _myMatrix.vec2).create();
+    (0, _myMatrix.vec2).scaleAndAdd(joltVelNew, state.camera.joltVelocity, joltAcc, dt);
+    (0, _myMatrix.vec2).scaleAndAdd(state.camera.joltOffset, state.camera.joltOffset, state.camera.joltVelocity, 0.5 * dt);
+    (0, _myMatrix.vec2).scaleAndAdd(state.camera.joltOffset, state.camera.joltOffset, joltVelNew, 0.5 * dt);
+    (0, _myMatrix.vec2).copy(state.camera.joltVelocity, joltVelNew);
 }
 function zoomToFitCamera(state, screenSize) {
     const statusBarPixelSizeY = statusBarCharPixelSizeY * statusBarZoom(screenSize);
@@ -2791,6 +2888,8 @@ function snapCamera(state, screenSize) {
     state.camera.scale = Math.pow(zoomPower, state.camera.zoom);
     cameraTargetCenterPosition(state.camera.position, (0, _myMatrix.vec2).fromValues(state.gameMap.cells.sizeX, state.gameMap.cells.sizeY), state.camera.scale, screenSize, state.player.pos);
     (0, _myMatrix.vec2).zero(state.camera.velocity);
+    (0, _myMatrix.vec2).zero(state.camera.joltOffset);
+    (0, _myMatrix.vec2).zero(state.camera.joltVelocity);
 }
 function cameraTargetCenterPosition(posCameraCenter, worldSize, zoomScale, screenSize, posPlayer) {
     const posCenterMin = (0, _myMatrix.vec2).create();
@@ -2820,8 +2919,8 @@ function setupViewMatrix(state, screenSize, matScreenFromWorld) {
     const statusBarPixelSizeY = statusBarCharPixelSizeY * statusBarZoom(screenSize);
     const viewportPixelSize = (0, _myMatrix.vec2).fromValues(screenSize[0], screenSize[1] - 2 * statusBarPixelSizeY);
     const [viewWorldSizeX, viewWorldSizeY] = viewWorldSize(viewportPixelSize, state.camera.scale);
-    const viewWorldCenterX = state.camera.position[0];
-    const viewWorldCenterY = state.camera.position[1];
+    const viewWorldCenterX = state.camera.position[0] + state.camera.joltOffset[0];
+    const viewWorldCenterY = state.camera.position[1] + state.camera.joltOffset[1];
     const statusBarWorldSizeY = statusBarPixelSizeY / (pixelsPerTileY * state.camera.scale);
     const viewWorldMinX = viewWorldCenterX - viewWorldSizeX / 2;
     const viewWorldMinY = viewWorldCenterY - viewWorldSizeY / 2;
@@ -2843,7 +2942,8 @@ function statusBarZoom(screenSize) {
     const scaleLargestX = Math.max(1, screenSize[0] / (statusBarCharPixelSizeX * minCharsX));
     const scaleLargestY = Math.max(1, screenSize[1] / (statusBarCharPixelSizeY * minCharsY));
     const scaleFactor = Math.min(scaleLargestX, scaleLargestY);
-    return scaleFactor;
+    const scaleFactorSnapped = Math.floor(scaleFactor * 2) / 2;
+    return scaleFactorSnapped;
 }
 function renderTextBox(renderer, screenSize, state) {
     if (state.popups.currentPopupTimeRemaining <= 0) return;
@@ -2856,8 +2956,8 @@ function renderTextBox(renderer, screenSize, state) {
     const worldToPixelScaleY = pixelsPerTileY * state.camera.scale;
     const viewportPixelSize = (0, _myMatrix.vec2).fromValues(screenSize[0], screenSize[1] - 2 * pixelsPerCharY);
     const [viewWorldSizeX, viewWorldSizeY] = viewWorldSize(viewportPixelSize, state.camera.scale);
-    const viewWorldCenterX = state.camera.position[0];
-    const viewWorldCenterY = state.camera.position[1];
+    const viewWorldCenterX = state.camera.position[0] + state.camera.joltOffset[0];
+    const viewWorldCenterY = state.camera.position[1] + state.camera.joltOffset[1];
     const playerPixelY = Math.floor((state.player.pos[1] + 0.5 - viewWorldCenterY + viewWorldSizeY / 2) * worldToPixelScaleY) + pixelsPerCharY;
     const posPopupWorld = state.popups.currentPopupWorldPos();
     const popupPixelX = Math.floor((posPopupWorld[0] + 0.5 - viewWorldCenterX + viewWorldSizeX / 2) * worldToPixelScaleX);
@@ -2874,8 +2974,8 @@ function renderTextBox(renderer, screenSize, state) {
     const rectSizeY = numCharsY * pixelsPerCharY + 2 * (marginY + border);
     let yMin;
     const xMin = Math.floor(Math.max(0, Math.min(screenSize[0] - rectSizeX, popupPixelX - rectSizeX / 2)));
-    if (playerPixelY <= popupPixelY) yMin = Math.floor(popupPixelY + 1.0 * worldToPixelScaleY);
-    else yMin = Math.floor(popupPixelY + -0.5 * worldToPixelScaleY - rectSizeY);
+    if (state.popups.currentPopupBelow) yMin = Math.floor(popupPixelY + -0.5 * worldToPixelScaleY - rectSizeY);
+    else yMin = Math.floor(popupPixelY + 1.0 * worldToPixelScaleY);
     yMin = Math.max(pixelsPerCharY, Math.min(screenSize[1] - (pixelsPerCharY + rectSizeY), yMin));
     renderer.start(matScreenFromWorld, 0);
     renderer.addGlyph(xMin, yMin, xMin + numCharsX * pixelsPerCharX + 2 * (marginX + border), yMin + numCharsY * pixelsPerCharY + 2 * (marginY + border), {
@@ -3483,7 +3583,7 @@ function createGameMap(level, plan) {
     // Make a set of rooms.
     const [rooms, roomIndex] = createRooms(inside, offsetX, offsetY);
     // Compute a list of room adjacencies.
-    const mirrorAdjacencies = rng.randomInRange(24) >= level;
+    const mirrorAdjacencies = levelType !== LevelType.Fortress && rng.randomInRange(24) >= level;
     const mirrorAdjacenciesX = mirrorRoomsX && mirrorAdjacencies;
     const mirrorAdjacenciesY = mirrorRoomsY && mirrorAdjacencies;
     const adjacencies = computeAdjacencies(mirrorAdjacenciesX, mirrorAdjacenciesY, offsetX, offsetY, rooms, roomIndex);
@@ -3493,10 +3593,18 @@ function createGameMap(level, plan) {
     // Join a pair of rooms together.
     makeDoubleRooms(rooms, adjacencies, rng);
     // Compute room distances from entrance.
-    computeRoomBetweenness(rooms);
     computeRoomDepths(rooms);
+    // In fortresses, connectRooms added only the bare minimum of doors necessary to connect the level.
+    //  Add additional doors now, but lock them.
+    if (levelType === LevelType.Fortress) {
+        assignVaultRoom(rooms, levelType, rng);
+        addAdditionalFortressDoors(adjacencies, rng);
+        computeRoomDepths(rooms);
+    }
+    // Compute a measure of how much each room is on paths between other rooms.
+    computeRoomBetweenness(rooms);
     // Assign types to the rooms.
-    assignRoomTypes(rooms, level, rng);
+    assignRoomTypes(rooms, level, levelType, rng);
     // Create the actual map
     const map = createBlankGameMap(rooms);
     // Render doors and windows.
@@ -3528,7 +3636,7 @@ function createGameMap(level, plan) {
     const needKey = map.items.find((item)=>item.type === (0, _gameMap.ItemType).LockedDoorNS || item.type === (0, _gameMap.ItemType).LockedDoorEW) !== undefined;
     const guardsAvailableForLoot = patrolRoutes.length - (needKey ? 1 : 0);
     const guardLoot = Math.min(Math.floor(level / 3), Math.min(guardsAvailableForLoot, plan.totalLoot));
-    placeLoot(plan.totalLoot - guardLoot, rooms, map, rng);
+    placeLoot(plan.totalLoot - guardLoot, rooms, map, levelType, rng);
     placeHealth(level, map, rooms, rng);
     // Put guards on the patrol routes
     placeGuards(level, map, patrolRoutes, guardLoot, needKey, rng);
@@ -4027,7 +4135,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
             if (adj.roomLeft.roomType !== RoomType.PublicRoom) break;
             if (adj.roomRight.roomType !== RoomType.PublicRoom) break;
             if (adj.roomLeft.group !== adj.roomRight.group) addDoor = true;
-            else if (rng.random() < 0.4) addDoor = true;
+            else if (levelType !== LevelType.Fortress && rng.random() < 0.4) addDoor = true;
             break;
         }
         if (addDoor) for (const adj of edgeSet){
@@ -4048,7 +4156,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
             if (adj.roomLeft.roomType === RoomType.Exterior) break;
             if (adj.roomRight.roomType === RoomType.Exterior) break;
             if (adj.roomLeft.group !== adj.roomRight.group) addDoor = true;
-            else if (rng.random() < (levelType === LevelType.Fortress ? 0.1 : 0.4)) addDoor = true;
+            else if (levelType !== LevelType.Fortress && rng.random() < 0.4) addDoor = true;
             break;
         }
         if (addDoor) for (const adj of edgeSet){
@@ -4074,7 +4182,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
         }
     }
     // Occasionally create a back door to the exterior.
-    if (rng.randomInRange(30) < rooms.length) {
+    if (levelType !== LevelType.Fortress && rng.randomInRange(30) < rooms.length) {
         const adjDoor = backDoorAdjacency(edgeSets);
         if (adjDoor !== undefined) {
             adjDoor.door = true;
@@ -4088,7 +4196,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
         }
     }
     // Also create side doors sometimes.
-    if (rng.randomInRange(30) < rooms.length) {
+    if (levelType !== LevelType.Fortress && rng.randomInRange(30) < rooms.length) {
         const adjDoor = sideDoorAdjacency(edgeSets);
         if (adjDoor !== undefined) {
             const doorType = level < 3 ? DoorType.GateBack : DoorType.Locked;
@@ -4162,6 +4270,19 @@ function sideDoorAdjacency(edgeSets) {
     adjs.sort((adj0, adj1)=>adj0.origin[1] + adj0.dir[1] * adj0.length / 2 - (adj1.origin[1] + adj1.dir[1] * adj1.length / 2));
     if (adjs.length <= 0) return undefined;
     return adjs[Math.floor(adjs.length / 2)];
+}
+function addAdditionalFortressDoors(adjacencies, rng) {
+    for (const adj of adjacencies){
+        if (adj.door) continue;
+        if (adj.length < 2) continue;
+        const room0 = adj.roomLeft;
+        const room1 = adj.roomRight;
+        if (room0.roomType !== RoomType.PublicRoom) continue;
+        if (room1.roomType !== RoomType.PublicRoom) continue;
+        if (rng.random() >= 0.4) continue;
+        adj.door = true;
+        adj.doorType = DoorType.Locked;
+    }
 }
 function computeRoomDepths(rooms) {
     // Start from rooms with exterior doors
@@ -4253,7 +4374,24 @@ function hasExteriorDoor(room) {
     }
     return false;
 }
-function assignRoomTypes(rooms, level, rng) {
+function assignVaultRoom(rooms, levelType, rng) {
+    const deadEndRooms = [];
+    for (const room of rooms){
+        if (room.roomType === RoomType.Exterior) continue;
+        if (levelType === LevelType.Fortress && isCourtyardRoomType(room.roomType)) continue;
+        let numDoors = 0;
+        for (const adj of room.edges)if (adj.door) ++numDoors;
+        if (numDoors <= 1) deadEndRooms.push(room);
+    }
+    if (deadEndRooms.length > 0) {
+        rng.shuffleArray(deadEndRooms);
+        deadEndRooms.sort((a, b)=>roomArea(a) - roomArea(b));
+        const vaultRoom = deadEndRooms[0];
+        vaultRoom.roomType = RoomType.Vault;
+        for (const adj of vaultRoom.edges)if (adj.door) adj.doorType = DoorType.Locked;
+    }
+}
+function assignRoomTypes(rooms, level, levelType, rng) {
     // Assign master-suite room type to the inner rooms.
     let maxDepth = 0;
     for (const room of rooms)maxDepth = Math.max(maxDepth, room.depth);
@@ -4290,22 +4428,8 @@ function assignRoomTypes(rooms, level, rng) {
         if (!changed) break;
     }
     // Pick a dead-end room to be a Vault room
-    if (level > 4) {
-        const deadEndRooms = [];
-        for (const room of rooms){
-            if (room.roomType === RoomType.Exterior) continue;
-            let numDoors = 0;
-            for (const adj of room.edges)if (adj.door) ++numDoors;
-            if (numDoors <= 1) deadEndRooms.push(room);
-        }
-        if (deadEndRooms.length > 0) {
-            rng.shuffleArray(deadEndRooms);
-            deadEndRooms.sort((a, b)=>roomArea(a) - roomArea(b));
-            const vaultRoom = deadEndRooms[0];
-            vaultRoom.roomType = RoomType.Vault;
-            for (const adj of vaultRoom.edges)if (adj.door) adj.doorType = DoorType.Locked;
-        }
-    }
+    // Note: On Fortress levels we did this in a previous step
+    if (level > 4 && levelType !== LevelType.Fortress) assignVaultRoom(rooms, levelType, rng);
     // Assign private rooms with only one or two entrances to be bedrooms, if they are large enough
     // TODO: Ideally bedrooms need to be on a dead-end branch of the house (low betweenness)
     for (const room of rooms){
@@ -5501,7 +5625,6 @@ function renderWalls(levelType, adjacencies, map, rng) {
     }
     // Add windows and doors to the walls.
     const adjHandled = new Set();
-    const allowExteriorWindows = levelType !== LevelType.Fortress;
     for (const adj0 of adjacencies){
         if (adjHandled.has(adj0)) continue;
         adjHandled.add(adj0);
@@ -5517,13 +5640,22 @@ function renderWalls(levelType, adjacencies, map, rng) {
             if (roomTypeL === RoomType.Vault || roomTypeR === RoomType.Vault) continue;
             const dir = (0, _myMatrix.vec2).clone(a.dir);
             if (roomTypeL === RoomType.Exterior !== (roomTypeR === RoomType.Exterior)) {
-                if (!allowExteriorWindows) continue;
                 if (roomTypeR == RoomType.Exterior) (0, _myMatrix.vec2).negate(dir, dir);
             } else if (isCourtyardRoomType(roomTypeL) !== isCourtyardRoomType(roomTypeR)) {
-                if (isCourtyardRoomType(roomTypeR)) (0, _myMatrix.vec2).negate(dir, dir);
+                if (isCourtyardRoomType(roomTypeR)) {
+                    if (levelType === LevelType.Fortress && a.roomLeft.depth < a.roomRight.depth) continue;
+                    (0, _myMatrix.vec2).negate(dir, dir);
+                } else {
+                    if (levelType === LevelType.Fortress && a.roomRight.depth < a.roomLeft.depth) continue;
+                }
             } else continue;
             const windowType = oneWayWindowTerrainTypeFromDir(dir);
-            if (a.length === 5) {
+            if (levelType === LevelType.Fortress) {
+                if (a.length > 2 && (a.length & 1) === 0) {
+                    const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, a.length / 2);
+                    map.cells.atVec(p).type = windowType;
+                }
+            } else if (a.length === 5) {
                 const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, 2 + (a.origin[0] + a.origin[1] & 1));
                 map.cells.atVec(p).type = windowType;
             } else {
@@ -6225,12 +6357,15 @@ function placeItem(map, pos, type) {
         type: type
     });
 }
-function placeLoot(totalLootToPlace, rooms, map, rng) {
+function placeLoot(totalLootToPlace, rooms, map, levelType, rng) {
     let totalLootPlaced = 0;
     // Vault rooms (may) get loot.
     for (const room of rooms){
         if (room.roomType !== RoomType.Vault) continue;
-        for(let i = rng.randomInRange(3) + rng.randomInRange(3); i > 0; --i){
+        let i = rng.randomInRange(3) + rng.randomInRange(3);
+        if (levelType === LevelType.Fortress) i += 2;
+        while(i > 0){
+            --i;
             if (totalLootPlaced >= totalLootToPlace) break;
             if (tryPlaceLoot(room.posMin, room.posMax, map, rng)) ++totalLootPlaced;
         }
@@ -6775,12 +6910,16 @@ const maxPlayerTurnsUnderwater = 7;
 class Player {
     animation = null;
     pickTarget = null;
+    idle = false;
+    idleCursorAnimation = null;
+    idleCursorType = "orbs";
     constructor(pos){
         this.pos = (0, _myMatrix.vec2).clone(pos);
         this.dir = (0, _myMatrix.vec2).fromValues(0, -1);
         this.health = maxPlayerHealth;
         this.loot = 0;
         this.noisy = false;
+        this.noiseOffset = (0, _myMatrix.vec2).fromValues(0, 0);
         this.hasVaultKey = false;
         this.damagedLastTurn = false;
         this.turnsRemainingUnderwater = maxPlayerTurnsUnderwater;
@@ -7348,16 +7487,19 @@ class GameMap {
         }
         return distField;
     }
-    guardsInEarshot(soundPos, radius) {
-        const coords = this.coordsInEarshot(soundPos, radius);
-        return this.guards.filter((guard)=>coords.has(this.cells.sizeX * guard.pos[1] + guard.pos[0]));
-    }
-    coordsInEarshot(soundPos, costCutoff) {
-        let sizeX = this.cells.sizeX;
-        let sizeY = this.cells.sizeY;
+    guardsInEarshot(soundPos, costCutoff) {
+        const sizeX = this.cells.sizeX;
+        const sizeY = this.cells.sizeY;
+        // Make a map for quickly seeing what guard (if any) is at a given location
+        const guardAtPos = new Map();
+        for (const guard of this.guards){
+            if (guard.mode === (0, _guard.GuardMode).Unconscious) continue;
+            guardAtPos.set(sizeX * guard.pos[1] + guard.pos[0], guard);
+        }
+        // Visit squares in the map, recording guards as we encounter them.
         const toVisit = [];
         const distField = new Float64Grid(sizeX, sizeY, Infinity);
-        const coordsVisited = new Set();
+        const guards = [];
         priorityQueuePush(toVisit, {
             priority: 0,
             pos: soundPos
@@ -7366,7 +7508,8 @@ class GameMap {
             const distPos = priorityQueuePop(toVisit);
             if (distPos.priority >= distField.get(distPos.pos[0], distPos.pos[1])) continue;
             distField.set(distPos.pos[0], distPos.pos[1], distPos.priority);
-            coordsVisited.add(sizeX * distPos.pos[1] + distPos.pos[0]);
+            const guard = guardAtPos.get(sizeX * distPos.pos[1] + distPos.pos[0]);
+            if (guard !== undefined) guards.push(guard);
             for (const adjacentMove of adjacentMoves){
                 const posNew = (0, _myMatrix.vec2).fromValues(distPos.pos[0] + adjacentMove.dx, distPos.pos[1] + adjacentMove.dy);
                 if (posNew[0] < 0 || posNew[1] < 0 || posNew[0] >= sizeX || posNew[1] >= sizeY) continue;
@@ -7380,7 +7523,7 @@ class GameMap {
                 });
             }
         }
-        return coordsVisited;
+        return guards;
     }
 }
 function isWindowTerrainType(terrainType) {
@@ -7438,6 +7581,7 @@ var _myMatrix = require("./my-matrix");
 var _random = require("./random");
 var _popups = require("./popups");
 var _animation = require("./animation");
+var _game = require("./game");
 let GuardMode;
 (function(GuardMode) {
     GuardMode[GuardMode["Patrol"] = 0] = "Patrol";
@@ -7557,8 +7701,12 @@ class Guard {
             bumpedPlayer
         ];
     }
-    act(map, popups, player, levelStats, shouts) {
+    act(state, shouts) {
         const posPrev = (0, _myMatrix.vec2).clone(this.pos);
+        const map = state.gameMap;
+        const player = state.player;
+        const popups = state.popups;
+        const levelStats = state.levelStats;
         // Immediately upgrade to chasing if we see the player while investigating;
         // this lets us start moving toward the player on this turn rather than
         // wait for next turn.
@@ -7589,7 +7737,7 @@ class Guard {
                     updateDir(this.dir, this.pos, this.goal);
                     if (this.modePrev === GuardMode.ChaseVisibleTarget) {
                         if (!player.damagedLastTurn) {
-                            popups.add((0, _popups.PopupType).Damage, ()=>this.posAnimated());
+                            popups.add((0, _popups.PopupType).Damage, ()=>this.posAnimated(), player.pos);
                             this.speaking = true;
                         }
                         const startend = (0, _myMatrix.vec2).create();
@@ -7611,6 +7759,7 @@ class Guard {
                             }
                         ], []);
                         player.applyDamage(1);
+                        (0, _game.joltCamera)(state, player.pos[0] - this.pos[0], player.pos[1] - this.pos[1]);
                         ++levelStats.damageTaken;
                     }
                 } else {
@@ -7685,7 +7834,7 @@ class Guard {
                 // this.modeTimeout -= 1;
                 if (this.modeTimeout === 5) {
                     const popup = (0, _popups.PopupType).GuardStirring;
-                    popups.add(popup, ()=>this.posAnimated());
+                    popups.add(popup, ()=>this.posAnimated(), player.pos);
                     this.speaking = true;
                 } else if (this.modeTimeout <= 0) {
                     this.enterPatrolMode(map);
@@ -7696,7 +7845,7 @@ class Guard {
                         pos_target: this.pos,
                         target: this
                     });
-                    popups.add((0, _popups.PopupType).GuardAwakesWarning, ()=>this.posAnimated());
+                    popups.add((0, _popups.PopupType).GuardAwakesWarning, ()=>this.posAnimated(), player.pos);
                     this.speaking = true;
                 }
                 break;
@@ -7769,7 +7918,7 @@ class Guard {
         // Say something to indicate state changes
         const popupType = popupTypeForStateChange(this.modePrev, this.mode);
         if (popupType !== undefined) {
-            popups.add(popupType, ()=>this.posAnimated());
+            popups.add(popupType, ()=>this.posAnimated(), player.pos);
             this.speaking = true;
         }
         if (this.mode === GuardMode.ChaseVisibleTarget && this.modePrev !== GuardMode.ChaseVisibleTarget) {
@@ -7924,7 +8073,7 @@ function guardActAll(state, map, popups, player) {
     let ontoGate = false;
     for (const guard of map.guards){
         const oldPos = (0, _myMatrix.vec2).clone(guard.pos);
-        guard.act(map, popups, player, state.levelStats, shouts);
+        guard.act(state, shouts);
         guard.hasMoved = true;
         ontoGate = ontoGate || guardOnGate(guard, map) && !oldPos.equals(guard.pos);
     }
@@ -7979,7 +8128,9 @@ function popupTypeForStateChange(modePrev, modeNext) {
     return undefined;
 }
 function alertNearbyGuards(map, shout) {
-    for (const guard of map.guardsInEarshot(shout.pos_shouter, 25))if (guard.pos[0] != shout.pos_shouter[0] || guard.pos[1] != shout.pos_shouter[1]) {
+    for (const guard of map.guardsInEarshot(shout.pos_shouter, 25)){
+        if (guard.mode === GuardMode.Unconscious) continue;
+        if (guard.pos.equals(shout.pos_shouter)) continue;
         guard.hearingGuard = true;
         if (shout.target instanceof Guard) guard.angry = true;
         (0, _myMatrix.vec2).copy(guard.heardGuardPos, shout.pos_shouter);
@@ -8078,7 +8229,7 @@ function lineOfSightToTorch(map, from, to) {
     return true;
 }
 
-},{"./game-map":"3bH7G","./my-matrix":"21x0k","./random":"gUC1v","./popups":"eiIYq","./animation":"iKgaV","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"gUC1v":[function(require,module,exports) {
+},{"./game-map":"3bH7G","./my-matrix":"21x0k","./random":"gUC1v","./popups":"eiIYq","./animation":"iKgaV","./game":"edeGs","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"gUC1v":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "randomInRange", ()=>randomInRange);
@@ -8956,12 +9107,15 @@ class Popups {
         this.popups = [];
         this.currentPopup = "";
         this.currentPopupWorldPos = ()=>(0, _myMatrix.vec2).create();
+        this.currentPopupBelow = false;
         this.currentPopupTimeRemaining = 0;
     }
-    add(popupType, posWorld) {
+    add(popupType, posWorld, playerPos) {
+        const below = posWorld()[1] < playerPos[1];
         this.popups.push({
             popupType: popupType,
-            posWorld: posWorld
+            posWorld: posWorld,
+            below: below
         });
     }
     clear() {
@@ -8970,6 +9124,7 @@ class Popups {
     reset() {
         this.popups.length = 0;
         this.currentPopup = "";
+        this.currentPopupBelow = false;
         this.currentPopupTimeRemaining = 0;
     }
     endOfUpdate(posPlayer, subtitledSounds) {
@@ -8990,6 +9145,7 @@ class Popups {
         const subtitledSound = subtitledSounds[soundName].play(0.6);
         this.currentPopup = subtitledSound.subtitle;
         this.currentPopupWorldPos = popup.posWorld;
+        this.currentPopupBelow = popup.below;
         this.currentPopupTimeRemaining = 2.0;
         return subtitledSound.subtitle;
     }
@@ -9036,6 +9192,8 @@ parcelHelpers.export(exports, "FrameAnimator", ()=>FrameAnimator);
 parcelHelpers.export(exports, "LightSourceAnimation", ()=>LightSourceAnimation);
 parcelHelpers.export(exports, "tween", ()=>tween);
 parcelHelpers.export(exports, "LightState", ()=>LightState);
+parcelHelpers.export(exports, "PulsingColorAnimation", ()=>PulsingColorAnimation);
+parcelHelpers.export(exports, "RadialAnimation", ()=>RadialAnimation);
 var _myMatrix = require("./my-matrix");
 var _gameMap = require("./game-map");
 var tween = require("126a265403e2534c");
@@ -9100,6 +9258,99 @@ class SpriteAnimation extends Animator {
     }
     currentTile() {
         return this.tileInfo[this.activeFrame];
+    }
+}
+class PulsingColorAnimation extends Animator {
+    offset = new (0, _myMatrix.vec2)();
+    duration = 0;
+    period = 1;
+    time = 0;
+    /**
+     * 
+     * @param tile Tile index and optional color tint values for lit and unlit states
+     * @param duration Lenght of time the animation will run for
+     * @param period 
+     */ constructor(tile, duration, period){
+        super();
+        this.tile = tile;
+        this.duration = duration;
+        this.period = period;
+    }
+    update(dt) {
+        if (this.duration > 0) this.time = Math.min(this.time + dt, this.duration);
+        else this.time += dt;
+        return this.duration > 0 && this.time === this.duration;
+    }
+    get intensity() {
+        return Math.sin(this.time / this.period);
+    }
+    agbr_color_to_tuple(color) {
+        // Extract the alpha, blue, green, and red components from the first color
+        const a1 = color >> 24 & 0xFF;
+        const b1 = color >> 16 & 0xFF;
+        const g1 = color >> 8 & 0xFF;
+        const r1 = color & 0xFF;
+        return [
+            a1,
+            b1,
+            g1,
+            r1
+        ];
+    }
+    abgr_tuple_to_color(a, b, g, r) {
+        return (Math.floor(a % 256) << 24 | Math.floor(b % 256) << 16 | Math.floor(g % 256) << 8 | Math.floor(r % 256)) >>> 0;
+    }
+    blend(color1, color2, weight) {
+        const c1 = this.agbr_color_to_tuple(color1);
+        const c2 = this.agbr_color_to_tuple(color2);
+        const blended = c1.map((v, ind)=>v * weight + c2[ind] * (1 - weight));
+        return this.abgr_tuple_to_color(blended[0], blended[1], blended[2], blended[3]);
+    }
+    currentTile() {
+        const intensity = this.intensity;
+        const weight = (1 + intensity) / 2;
+        return {
+            textureIndex: this.tile.textureIndex,
+            color: this.tile.color !== undefined && this.tile.unlitColor !== undefined ? this.blend(this.tile.color, this.tile.unlitColor, weight) : 0xffffffff
+        };
+    }
+}
+class RadialAnimation extends Animator {
+    /**
+     * 
+     * @param tile tile texture index and color tint values
+     * @param radius 
+     * @param speed 
+     * @param startingPos 
+     * @param duration 
+     * @param centerPos
+     * @param oscillationRadius
+     * @param oscillationPeriod
+     * 
+     */ constructor(tile, radius, speed, startingPos, duration, centerPos = new (0, _myMatrix.vec2)(0, 0), oscillationRadius = 0, oscillationPeriod = 0){
+        super();
+        this.time = 0;
+        this.tileInfo = tile;
+        this.offset = new (0, _myMatrix.vec2)();
+        this.centerPos = centerPos;
+        this.radius = radius;
+        this.speed = speed;
+        this.startingPos = startingPos;
+        this.duration = duration;
+        this.posRadians = startingPos;
+        this.removeOnFinish = false;
+    }
+    update(dt) {
+        if (this.duration > 0) this.time = Math.min(this.time + dt, this.duration);
+        else this.time += dt;
+        this.posRadians += this.speed * dt;
+        this.offset[0] = this.centerPos[0] + Math.cos(this.posRadians) * this.radius;
+        this.offset[1] = this.centerPos[1] + Math.sin(this.posRadians) * this.radius;
+        console.log(this.posRadians, this.radius, this.speed, Math.cos(this.posRadians) * this.radius);
+        return this.time === this.duration;
+    }
+    currentTile() {
+        return this.tileInfo;
     }
 }
 let LightState;
@@ -9729,6 +9980,14 @@ const tileSet31Color = {
         speechBubbleL: {
             textureIndex: 0xb8,
             color: 0xffffffff
+        },
+        idleIndicator: {
+            textureIndex: 0xbc,
+            color: 0xffffffff
+        },
+        idleIndicatorAlt: {
+            textureIndex: 0xfd,
+            color: 0xffffffff
         }
     },
     touchButtons: {
@@ -10119,6 +10378,272 @@ const tileSet31Color = {
             unlitColor: colorGroundUnlit
         }
     ],
+    fortressTerrainTiles: [
+        {
+            textureIndex: r([
+                5,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                10,
+                4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                6,
+                4
+            ]),
+            color: colorWoodFloorLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                6,
+                5
+            ]),
+            color: colorWoodFloorLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                2
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                2
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                6,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                1,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                12,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                3,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                10,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                14,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                13,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                15,
+                6
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                3,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                1,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        }
+    ],
     itemTiles: [
         {
             textureIndex: r([
@@ -10260,6 +10785,200 @@ const tileSet31Color = {
             textureIndex: r([
                 11,
                 3
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                1,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                12,
+                13
+            ]),
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.yellowTint
+        },
+        {
+            textureIndex: r([
+                0,
+                15
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                6,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                1,
+                15
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        }
+    ],
+    fortressItemTiles: [
+        {
+            textureIndex: r([
+                3,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                10,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                12
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                12
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                14,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                15,
+                11
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                7,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                6,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                7
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                7
             ]),
             color: colorWallLit,
             unlitColor: colorWallUnlit
@@ -10817,6 +11536,9 @@ const gateSet = [
     require("bcd7c16ba7d7d61"),
     require("e78deec06d901d3a"),
     require("f394a2a4f193774b")
+];
+const thumpSet = [
+    require("42399af19f218c5b")
 ];
 const splashSet = [
     require("da67478315c5f9c"),
@@ -11705,7 +12427,18 @@ function setupSounds(sounds, subtitledSounds, howlPool) {
     sounds.hitPlayer = new HowlGroup(hitPlayerSet);
     sounds.hitGuard = new HowlGroup(hitGuardSet);
     sounds.coin = new HowlGroup(coinSet);
-    sounds.grunt = new HowlGroup(gruntSet), sounds.douse = new HowlGroup(douseSet), sounds.ignite = new HowlGroup(igniteSet), sounds.hide = new HowlGroup(hideSet), sounds.gate = new HowlGroup(gateSet), sounds.splash = new HowlGroup(splashSet), sounds.waterEnter = new HowlGroup(waterEnterSet), sounds.waterExit = new HowlGroup(waterExitSet), sounds.jump = new HowlGroup(jumpSet), sounds.tooHigh = new HowlGroup(tooHighSet), subtitledSounds.guardInvestigate = new SubtitledHowlGroup(guardInvestigateSet, howlPool);
+    sounds.grunt = new HowlGroup(gruntSet);
+    sounds.douse = new HowlGroup(douseSet);
+    sounds.ignite = new HowlGroup(igniteSet);
+    sounds.hide = new HowlGroup(hideSet);
+    sounds.gate = new HowlGroup(gateSet);
+    sounds.thump = new HowlGroup(thumpSet);
+    sounds.splash = new HowlGroup(splashSet);
+    sounds.waterEnter = new HowlGroup(waterEnterSet);
+    sounds.waterExit = new HowlGroup(waterExitSet);
+    sounds.jump = new HowlGroup(jumpSet);
+    sounds.tooHigh = new HowlGroup(tooHighSet);
+    subtitledSounds.guardInvestigate = new SubtitledHowlGroup(guardInvestigateSet, howlPool);
     subtitledSounds.guardFinishInvestigating = new SubtitledHowlGroup(guardFinishInvestigatingSet, howlPool);
     subtitledSounds.guardSeeThief = new SubtitledHowlGroup(guardSeeThiefSet), howlPool;
     subtitledSounds.guardFinishLooking = new SubtitledHowlGroup(guardFinishLookingSet, howlPool);
@@ -11722,7 +12455,7 @@ function setupSounds(sounds, subtitledSounds, howlPool) {
     subtitledSounds.guardRest = new SubtitledHowlGroup(guardRestSet, howlPool);
 }
 
-},{"howler":"5Vjgk","./random":"gUC1v","f0665be29a76364f":"9zKUC","8ee4b45ed4305ffe":"cHoSB","744d49c14cf3bd64":"iNzdT","bcd7cf6a0b64acb2":"04Z21","352a1308c22a1e56":"1SIsy","d74976564eabf9e4":"9JVPU","4cc04d2b3f9932d":"fGTkM","9bfaf4c4f4128feb":"k14gH","306aae0e4d4a043b":"5GAcE","3558e8405095caac":"f1aB8","87b50c685d8423a0":"kGQAb","c01f582973819430":"2XGfn","7c2f92882c19e0cc":"2r6eZ","cc049c7c517bba2c":"7ei1H","41416a4f73637d98":"jg9uN","12be1db3c1725433":"gj9kS","e0765626201a3b82":"26zV0","f328e12481fdd79":"5s0T0","ce97ba434fd185c3":"36S8f","efd1dac51efba792":"6ptWC","266db93e07a61201":"dvdqa","c0d78fffcf346c82":"aBtts","f5bb8cbdd21f5342":"8mLsA","43a9e46d8ea7cd81":"ajJoe","1172555423365d87":"wy2ST","b1a21bee33b6e90f":"jPeF6","ab56bd8b2de1ccfc":"2ZtkO","5fdcb53fa5673aef":"jZaET","91c6e5f5d386663b":"4dkLh","6d93f942c434b176":"kvn87","e49f1f5764e00901":"JMLiq","becc902d0316f6cc":"8Lw3Q","e9696568bef5d9b8":"2nUq5","265960cf8a3c9220":"lHBqN","580710a44af1d25c":"4X6eo","ba891949d514fa31":"ltpKK","42fa7fdeb51b9be6":"iPB70","ee01e021b25eefa9":"9tbU5","2396c11a4aa1da8f":"a46JQ","1ff4195689ab20cd":"epH9n","61cd0b5d8fc06e59":"dwcOP","22ab6fd9e4daca1c":"4Rqw7","8c07257dee09846b":"hEMO1","e21bc160ecafd4cd":"6uN4N","f6c90b38141e2ace":"denBs","38c34066f7055b70":"ai87a","a025b5eb5484ff46":"e4yW2","ac6f442f76de79b":"e0rLU","b3335efda7b6af04":"5mFUd","c5ed7272e7cb3587":"e5ksw","d1dcc0a946567529":"bFfhf","ab293f84a67c8d99":"ewAQQ","1891a9aba3708a53":"gELii","5865dbd8bae7c96b":"5nU87","bcd7c16ba7d7d61":"7uWJZ","e78deec06d901d3a":"bYumL","f394a2a4f193774b":"6gY1x","da67478315c5f9c":"fTvDo","ac1cce7696e2e28f":"3E807","91d3d82a23a7f2a6":"8n85h","fa0de2a4aaced4aa":"3Nd3F","74431cc7db6e18c":"2vWH3","f5bdd46198a870f2":"8rRS9","a23fc5e626d3bd70":"iQKP6","bcc23937980b90cf":"5Wuxs","6de92d5fb4e57e1d":"s2Q2L","d25948602b9f0ec4":"224to","8edeba5e41e9fe07":"fzuGN","e5d78107540b029c":"6RqV3","1f3be94fb6cf8421":"h3YyP","79c08e91e327e3b6":"3zmDf","943813e688572223":"bVmQ3","47dd61530dd9f68d":"9Ktkp","74be602c333f9f10":"9x3D3","b9007e2781c8ee20":"fd0c0","568cc259fedf00bd":"hqU6N","142501f6fd66cfe5":"bx4BT","b39f735b9213825f":"ffzGR","a46d950f1c8847f6":"cghPs","d9a30d4970e974d5":"8T7H4","dace3e3b8595d572":"7z9d9","86eb3dabc7348e5f":"agX7A","21b0fca0793efdb4":"8aQyK","224b720952fd21ac":"dJQsj","ca8652950eea7433":"gKhEi","90cf32e28e1410d9":"lITH8","395b6e78f128e720":"inZis","4edb014b66a8648e":"cFuxm","7e4780586df1d42":"gCVVo","fd884530210b7540":"2E6Ey","99dbdd06a964d404":"g90E0","ae72d688a53c23ff":"eBH2o","511c3be8d5db6a3b":"7tUMg","777ec5f8c5a13e72":"LWHfM","3d39a0baa84ae221":"3taIr","487dd58d8afaed00":"6HKZl","ea583a9536558ce4":"9s0IZ","5127cbf04c818c89":"bmUje","17d495b82c9a6548":"r8pEn","67f2d90328b3956d":"gmBDQ","54115fb2810e4778":"cZw51","354312d52bb443e":"cnzN4","350f5fda52fe072d":"jefVX","87d9a412cc379454":"aPaoT","dbac7c2d662b6cae":"g0dhG","7f6c92e0cf0ed649":"kDwJ2","86118448d5815fb6":"2x9nC","604c5e0c7b422b4c":"9fVaC","b84d87dd9b0ef6bd":"k1uRF","6ce1930c6823684":"fLNJF","9b5d0dcf56fcdc89":"chTre","f5fb3e952820b04b":"2QvYX","4c0e7002d45fcb92":"5V3sW","74f5de3cc2585e47":"8PECt","e70917b8c836c082":"abuDI","cf4fdad406947277":"39DEl","6a71d42b37875a29":"3kmal","4d50e92e752dd3c4":"85RTq","482dc5e14b7be46b":"6JYFN","8f5442e9228bec91":"8o6R6","4ef580c005f4327c":"g7juJ","dc13b9229da0b357":"2IFEg","533eaa8e0e0b8f94":"bCvEE","621d805e99e5af5":"iI2P6","ddef5abb720f71fc":"fTTTf","6302957cdde9b758":"in1Yk","768d22e87bfa9812":"4sFml","5a415b70efd49466":"8DCSZ","4d5149e8114ba50a":"8HYPW","a0175914b3fe88fd":"gCSP7","ab778be72001d61":"94LvL","270489758d0f9c16":"aD2F4","1428c9f21452d721":"1ZglP","443597fce9dba5e7":"k7f64","bbf6a0263d0a948e":"cZ0PT","f4cb02350d7af827":"4FfLU","1f6838e48e98dcb1":"4WptE","aecae72693944788":"eODND","d3fce0947127664c":"hZ2B8","7d031e9458050173":"AMRHc","b883ae2827b679eb":"6UCsk","ef2c85c3dc835679":"g7XAg","704c5d63255692d7":"cFlu7","84fee459c99cfae4":"7FJ37","4bbf9dd9aa23f007":"3Hs3x","9e7041e68b24c7bf":"coNMD","ee9f186cac76a511":"4s9gT","1ae79f75082baf33":"ikayr","af843efae160d9c9":"bUSG1","2f9dc2ad0435f181":"gs4UN","1e53c1f4d7f380e2":"j5cRJ","bbfb2ff46a8d9255":"hF47h","546e5b3efc94c094":"kYZUc","3aba4d3856fa8e51":"lqrS2","6fcc3058c27618ec":"kbO4H","b20f033b705a9076":"ckkdt","80928ef071a4c62f":"3WyJt","3c487dfeb4c006d4":"hlHmX","23acf8e1c462b589":"hIFxo","e15bc68d0ea7ce88":"7eQ6w","be08925e1437b3a4":"2Pk6f","a64116f7dce39ac4":"jovj4","113aff5d788496dd":"c3U1l","af88d9f43b998c5b":"b2ME2","577ecaebe0b8be5d":"lMgKq","d7f9f45e68e6a652":"8hWQ7","ec5991ba0f70294e":"f4Hq0","fb20d33233fe0332":"2Bc7G","b65eb609bdb5cde8":"4bzJ9","de7d039eeeba0e99":"lvXdP","d6761317e96464b0":"gPuPz","46632fd56311f5ed":"iZ55y","812793c8407b7767":"cvhbf","8e3c4a5899f9d44f":"bgYzw","869814f5994bfd60":"fmwYX","536bee59109a4784":"1sAT4","3abfb09928f0a785":"iT3UI","27062fd0189b252e":"HN7wh","8d400b0ed672a639":"6mKlg","6ab2cc733fe4eb61":"b3mdd","4af601d250e1994b":"iyQcS","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"5Vjgk":[function(require,module,exports) {
+},{"howler":"5Vjgk","./random":"gUC1v","f0665be29a76364f":"9zKUC","8ee4b45ed4305ffe":"cHoSB","744d49c14cf3bd64":"iNzdT","bcd7cf6a0b64acb2":"04Z21","352a1308c22a1e56":"1SIsy","d74976564eabf9e4":"9JVPU","4cc04d2b3f9932d":"fGTkM","9bfaf4c4f4128feb":"k14gH","306aae0e4d4a043b":"5GAcE","3558e8405095caac":"f1aB8","87b50c685d8423a0":"kGQAb","c01f582973819430":"2XGfn","7c2f92882c19e0cc":"2r6eZ","cc049c7c517bba2c":"7ei1H","41416a4f73637d98":"jg9uN","12be1db3c1725433":"gj9kS","e0765626201a3b82":"26zV0","f328e12481fdd79":"5s0T0","ce97ba434fd185c3":"36S8f","efd1dac51efba792":"6ptWC","266db93e07a61201":"dvdqa","c0d78fffcf346c82":"aBtts","f5bb8cbdd21f5342":"8mLsA","43a9e46d8ea7cd81":"ajJoe","1172555423365d87":"wy2ST","b1a21bee33b6e90f":"jPeF6","ab56bd8b2de1ccfc":"2ZtkO","5fdcb53fa5673aef":"jZaET","91c6e5f5d386663b":"4dkLh","6d93f942c434b176":"kvn87","e49f1f5764e00901":"JMLiq","becc902d0316f6cc":"8Lw3Q","e9696568bef5d9b8":"2nUq5","265960cf8a3c9220":"lHBqN","580710a44af1d25c":"4X6eo","ba891949d514fa31":"ltpKK","42fa7fdeb51b9be6":"iPB70","ee01e021b25eefa9":"9tbU5","2396c11a4aa1da8f":"a46JQ","1ff4195689ab20cd":"epH9n","61cd0b5d8fc06e59":"dwcOP","22ab6fd9e4daca1c":"4Rqw7","8c07257dee09846b":"hEMO1","e21bc160ecafd4cd":"6uN4N","f6c90b38141e2ace":"denBs","38c34066f7055b70":"ai87a","a025b5eb5484ff46":"e4yW2","ac6f442f76de79b":"e0rLU","b3335efda7b6af04":"5mFUd","c5ed7272e7cb3587":"e5ksw","d1dcc0a946567529":"bFfhf","ab293f84a67c8d99":"ewAQQ","1891a9aba3708a53":"gELii","5865dbd8bae7c96b":"5nU87","bcd7c16ba7d7d61":"7uWJZ","e78deec06d901d3a":"bYumL","f394a2a4f193774b":"6gY1x","42399af19f218c5b":"8OUj9","da67478315c5f9c":"fTvDo","ac1cce7696e2e28f":"3E807","91d3d82a23a7f2a6":"8n85h","fa0de2a4aaced4aa":"3Nd3F","74431cc7db6e18c":"2vWH3","f5bdd46198a870f2":"8rRS9","a23fc5e626d3bd70":"iQKP6","bcc23937980b90cf":"5Wuxs","6de92d5fb4e57e1d":"s2Q2L","d25948602b9f0ec4":"224to","8edeba5e41e9fe07":"fzuGN","e5d78107540b029c":"6RqV3","1f3be94fb6cf8421":"h3YyP","79c08e91e327e3b6":"3zmDf","943813e688572223":"bVmQ3","47dd61530dd9f68d":"9Ktkp","74be602c333f9f10":"9x3D3","b9007e2781c8ee20":"fd0c0","568cc259fedf00bd":"hqU6N","142501f6fd66cfe5":"bx4BT","b39f735b9213825f":"ffzGR","a46d950f1c8847f6":"cghPs","d9a30d4970e974d5":"8T7H4","dace3e3b8595d572":"7z9d9","86eb3dabc7348e5f":"agX7A","21b0fca0793efdb4":"8aQyK","224b720952fd21ac":"dJQsj","ca8652950eea7433":"gKhEi","90cf32e28e1410d9":"lITH8","fd884530210b7540":"2E6Ey","99dbdd06a964d404":"g90E0","395b6e78f128e720":"inZis","ae72d688a53c23ff":"eBH2o","4edb014b66a8648e":"cFuxm","7e4780586df1d42":"gCVVo","511c3be8d5db6a3b":"7tUMg","777ec5f8c5a13e72":"LWHfM","3d39a0baa84ae221":"3taIr","487dd58d8afaed00":"6HKZl","ea583a9536558ce4":"9s0IZ","5127cbf04c818c89":"bmUje","17d495b82c9a6548":"r8pEn","67f2d90328b3956d":"gmBDQ","54115fb2810e4778":"cZw51","354312d52bb443e":"cnzN4","350f5fda52fe072d":"jefVX","87d9a412cc379454":"aPaoT","dbac7c2d662b6cae":"g0dhG","7f6c92e0cf0ed649":"kDwJ2","86118448d5815fb6":"2x9nC","604c5e0c7b422b4c":"9fVaC","b84d87dd9b0ef6bd":"k1uRF","6ce1930c6823684":"fLNJF","9b5d0dcf56fcdc89":"chTre","f5fb3e952820b04b":"2QvYX","4c0e7002d45fcb92":"5V3sW","74f5de3cc2585e47":"8PECt","e70917b8c836c082":"abuDI","cf4fdad406947277":"39DEl","6a71d42b37875a29":"3kmal","4d50e92e752dd3c4":"85RTq","482dc5e14b7be46b":"6JYFN","8f5442e9228bec91":"8o6R6","4ef580c005f4327c":"g7juJ","dc13b9229da0b357":"2IFEg","533eaa8e0e0b8f94":"bCvEE","621d805e99e5af5":"iI2P6","ddef5abb720f71fc":"fTTTf","6302957cdde9b758":"in1Yk","768d22e87bfa9812":"4sFml","5a415b70efd49466":"8DCSZ","4d5149e8114ba50a":"8HYPW","a0175914b3fe88fd":"gCSP7","ab778be72001d61":"94LvL","270489758d0f9c16":"aD2F4","1428c9f21452d721":"1ZglP","443597fce9dba5e7":"k7f64","bbf6a0263d0a948e":"cZ0PT","f4cb02350d7af827":"4FfLU","1f6838e48e98dcb1":"4WptE","aecae72693944788":"eODND","d3fce0947127664c":"hZ2B8","7d031e9458050173":"AMRHc","b883ae2827b679eb":"6UCsk","ef2c85c3dc835679":"g7XAg","704c5d63255692d7":"cFlu7","84fee459c99cfae4":"7FJ37","4bbf9dd9aa23f007":"3Hs3x","9e7041e68b24c7bf":"coNMD","ee9f186cac76a511":"4s9gT","1ae79f75082baf33":"ikayr","af843efae160d9c9":"bUSG1","2f9dc2ad0435f181":"gs4UN","1e53c1f4d7f380e2":"j5cRJ","bbfb2ff46a8d9255":"hF47h","546e5b3efc94c094":"kYZUc","3aba4d3856fa8e51":"lqrS2","6fcc3058c27618ec":"kbO4H","b20f033b705a9076":"ckkdt","80928ef071a4c62f":"3WyJt","3c487dfeb4c006d4":"hlHmX","23acf8e1c462b589":"hIFxo","e15bc68d0ea7ce88":"7eQ6w","be08925e1437b3a4":"2Pk6f","a64116f7dce39ac4":"jovj4","113aff5d788496dd":"c3U1l","af88d9f43b998c5b":"b2ME2","577ecaebe0b8be5d":"lMgKq","d7f9f45e68e6a652":"8hWQ7","ec5991ba0f70294e":"f4Hq0","fb20d33233fe0332":"2Bc7G","b65eb609bdb5cde8":"4bzJ9","de7d039eeeba0e99":"lvXdP","d6761317e96464b0":"gPuPz","46632fd56311f5ed":"iZ55y","812793c8407b7767":"cvhbf","8e3c4a5899f9d44f":"bgYzw","869814f5994bfd60":"fmwYX","536bee59109a4784":"1sAT4","3abfb09928f0a785":"iT3UI","27062fd0189b252e":"HN7wh","8d400b0ed672a639":"6mKlg","6ab2cc733fe4eb61":"b3mdd","4af601d250e1994b":"iyQcS","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"5Vjgk":[function(require,module,exports) {
 var global = arguments[3];
 /*!
  *  howler.js v2.2.3
@@ -14348,7 +15081,10 @@ module.exports = require("13e82efcbe129931").getBundleURL("lf1OY") + "gate-4.2ad
 },{"13e82efcbe129931":"lgJ39"}],"6gY1x":[function(require,module,exports) {
 module.exports = require("352933970cef37e1").getBundleURL("lf1OY") + "gate-5.ab6675de.mp3" + "?" + Date.now();
 
-},{"352933970cef37e1":"lgJ39"}],"fTvDo":[function(require,module,exports) {
+},{"352933970cef37e1":"lgJ39"}],"8OUj9":[function(require,module,exports) {
+module.exports = require("a3c357bb8e3aa94d").getBundleURL("lf1OY") + "thump.300b8f94.mp3" + "?" + Date.now();
+
+},{"a3c357bb8e3aa94d":"lgJ39"}],"fTvDo":[function(require,module,exports) {
 module.exports = require("82e2fa45db47cbcc").getBundleURL("lf1OY") + "splash1.752ee478.mp3" + "?" + Date.now();
 
 },{"82e2fa45db47cbcc":"lgJ39"}],"3E807":[function(require,module,exports) {
@@ -14435,25 +15171,25 @@ module.exports = require("8b6a12788dbf0059").getBundleURL("lf1OY") + "hello.a532
 },{"8b6a12788dbf0059":"lgJ39"}],"lITH8":[function(require,module,exports) {
 module.exports = require("c452d88b7e290b63").getBundleURL("lf1OY") + "ugh.04a1dfba.mp3" + "?" + Date.now();
 
-},{"c452d88b7e290b63":"lgJ39"}],"inZis":[function(require,module,exports) {
-module.exports = require("878d725d3890dcd1").getBundleURL("lf1OY") + "quiet out.f7ea726c.mp3" + "?" + Date.now();
-
-},{"878d725d3890dcd1":"lgJ39"}],"cFuxm":[function(require,module,exports) {
-module.exports = require("a624eefa4ab6657c").getBundleURL("lf1OY") + "jumpy.717ed28d.mp3" + "?" + Date.now();
-
-},{"a624eefa4ab6657c":"lgJ39"}],"gCVVo":[function(require,module,exports) {
-module.exports = require("f50c30657d43e02c").getBundleURL("lf1OY") + "jumpin shadows.f5b3f61f.mp3" + "?" + Date.now();
-
-},{"f50c30657d43e02c":"lgJ39"}],"2E6Ey":[function(require,module,exports) {
+},{"c452d88b7e290b63":"lgJ39"}],"2E6Ey":[function(require,module,exports) {
 module.exports = require("45ff25e87603169c").getBundleURL("lf1OY") + "ahh.176e0d5e.mp3" + "?" + Date.now();
 
 },{"45ff25e87603169c":"lgJ39"}],"g90E0":[function(require,module,exports) {
 module.exports = require("1cf48b7ba4282e89").getBundleURL("lf1OY") + "aww.f9d5ccbe.mp3" + "?" + Date.now();
 
-},{"1cf48b7ba4282e89":"lgJ39"}],"eBH2o":[function(require,module,exports) {
+},{"1cf48b7ba4282e89":"lgJ39"}],"inZis":[function(require,module,exports) {
+module.exports = require("878d725d3890dcd1").getBundleURL("lf1OY") + "quiet out.f7ea726c.mp3" + "?" + Date.now();
+
+},{"878d725d3890dcd1":"lgJ39"}],"eBH2o":[function(require,module,exports) {
 module.exports = require("40fb9115a1326d91").getBundleURL("lf1OY") + "rest me bones.1a3842d9.mp3" + "?" + Date.now();
 
-},{"40fb9115a1326d91":"lgJ39"}],"7tUMg":[function(require,module,exports) {
+},{"40fb9115a1326d91":"lgJ39"}],"cFuxm":[function(require,module,exports) {
+module.exports = require("a624eefa4ab6657c").getBundleURL("lf1OY") + "jumpy.717ed28d.mp3" + "?" + Date.now();
+
+},{"a624eefa4ab6657c":"lgJ39"}],"gCVVo":[function(require,module,exports) {
+module.exports = require("f50c30657d43e02c").getBundleURL("lf1OY") + "jumpin shadows.f5b3f61f.mp3" + "?" + Date.now();
+
+},{"f50c30657d43e02c":"lgJ39"}],"7tUMg":[function(require,module,exports) {
 module.exports = require("d748ab5ff8df6df8").getBundleURL("lf1OY") + "oh well.8f730a7f.mp3" + "?" + Date.now();
 
 },{"d748ab5ff8df6df8":"lgJ39"}],"LWHfM":[function(require,module,exports) {
@@ -14765,7 +15501,8 @@ const controlStates0 = {
     "nextLevel": false,
     "prevLevel": false,
     "fullscreen": false,
-    "showSpeech": false
+    "showSpeech": false,
+    "idleCursorToggle": false
 };
 var lastController = null;
 const defaultKeyMap = {
@@ -14846,8 +15583,12 @@ const defaultKeyMap = {
     "KeyG": [
         "guardMute"
     ],
+    "KeyI": [
+        "idleCursorToggle"
+    ],
     "KeyJ": [
-        "down"
+        "down",
+        "screenShakeEnabled"
     ],
     "KeyK": [
         "up",
@@ -15765,6 +16506,7 @@ class OptionsScreen extends TextWindow {
 [-|volumeDown]      Volume down
 [0|volumeMute]      Volume mute: $volumeMute$
 [9|guardMute]      Guard mute: $guardMute$
+[J|screenShakeEnabled]      Jolt screen: $screenShakeEnabled$
 [K|keyRepeatRate]      Key repeat rate $keyRepeatRate$ms
 [D|keyRepeatDelay]      Key repeat delay $keyRepeatDelay$ms
 [Ctrl+R|forceRestart] Reset data
@@ -15775,6 +16517,7 @@ class OptionsScreen extends TextWindow {
         this.state.set("volumeLevel", (state.soundVolume * 100).toFixed(0));
         this.state.set("volumeMute", state.volumeMute ? "Yes" : "No");
         this.state.set("guardMute", state.guardMute ? "Yes" : "No");
+        this.state.set("screenShakeEnabled", state.screenShakeEnabled ? "Yes" : "No");
         this.state.set("keyRepeatRate", state.keyRepeatRate.toString());
         this.state.set("keyRepeatDelay", state.keyRepeatDelay.toString());
     }
@@ -15789,6 +16532,7 @@ class OptionsScreen extends TextWindow {
             _game.setSoundVolume(state, soundVolume);
         } else if (activated("volumeMute") || action == "volumeMute") _game.setVolumeMute(state, !state.volumeMute);
         else if (activated("guardMute") || action == "guardMute") _game.setGuardMute(state, !state.guardMute);
+        else if (activated("screenShakeEnabled") || action === "screenShakeEnabled") _game.setScreenShakeEnabled(state, !state.screenShakeEnabled);
         else if (activated("keyRepeatRate") || action == "keyRepeatRate") {
             state.keyRepeatRate -= 50;
             if (state.keyRepeatRate < 100) state.keyRepeatRate = 400;
