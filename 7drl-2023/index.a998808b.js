@@ -564,6 +564,7 @@ parcelHelpers.export(exports, "setupLevel", ()=>setupLevel);
 parcelHelpers.export(exports, "numTurnsParForCurrentMap", ()=>numTurnsParForCurrentMap);
 parcelHelpers.export(exports, "advanceToWin", ()=>advanceToWin);
 parcelHelpers.export(exports, "joltCamera", ()=>joltCamera);
+parcelHelpers.export(exports, "setStatusMessage", ()=>setStatusMessage);
 parcelHelpers.export(exports, "setSoundVolume", ()=>setSoundVolume);
 parcelHelpers.export(exports, "setVolumeMute", ()=>setVolumeMute);
 parcelHelpers.export(exports, "setGuardMute", ()=>setGuardMute);
@@ -592,6 +593,7 @@ var _controllers = require("./controllers");
 var _ui = require("./ui");
 var _types = require("./types");
 var _colorPreset = require("./color-preset");
+var _achievements = require("./achievements");
 const gameConfig = {
     numGameMaps: 10,
     totalGameLoot: 100
@@ -627,7 +629,6 @@ const zoomPower = 1.1892;
 const initZoomLevel = 4;
 const minZoomLevel = -4;
 const maxZoomLevel = 16;
-const leapPrompt = "Shift+Move: Leap/Run";
 function loadResourcesThenRun() {
     Promise.all([
         loadImage(fontTileSet.imageSrc, fontTileSet.image),
@@ -668,7 +669,7 @@ function main(images) {
 function updateControllerState(state) {
     state.gamepadManager.updateGamepadStates();
     if ((0, _controllers.lastController) !== null) {
-        if (state.gameMode == (0, _types.GameMode).Mansion) onControlsInMansion((0, _controllers.lastController));
+        if (state.gameMode === (0, _types.GameMode).Mansion) onControlsInMansion((0, _controllers.lastController));
         else state.textWindows[state.gameMode]?.onControls(state, menuActivated);
         state.touchController.endFrame();
         state.keyboardController.endFrame();
@@ -765,8 +766,10 @@ function updateControllerState(state) {
         } else if (activated("zoomIn")) zoomIn(state);
         else if (activated("zoomOut")) zoomOut(state);
         else if (activated("seeAll")) state.seeAll = !state.seeAll;
-        else if (activated("guardMute")) setGuardMute(state, !state.guardMute);
-        else if (activated("idleCursorToggle")) {
+        else if (activated("guardMute")) {
+            setGuardMute(state, !state.guardMute);
+            setStatusMessage(state, "Guard speech " + (state.guardMute ? "disabled" : "enabled"));
+        } else if (activated("idleCursorToggle")) {
             switch(state.player.idleCursorType){
                 case "orbs":
                     state.player.idleCursorType = "bracket";
@@ -781,14 +784,18 @@ function updateControllerState(state) {
             state.player.idle = false;
             state.idleTimer = 2;
             setStatusMessage(state, "Setting player idle cursor to " + state.player.idleCursorType);
-        } else if (activated("volumeMute")) setVolumeMute(state, !state.volumeMute);
-        else if (activated("volumeDown")) {
+        } else if (activated("volumeMute")) {
+            setVolumeMute(state, !state.volumeMute);
+            setStatusMessage(state, "Sound " + (state.volumeMute ? "disabled" : "enabled"));
+        } else if (activated("volumeDown")) {
             const soundVolume = Math.max(0.1, state.soundVolume - 0.1);
             setSoundVolume(state, soundVolume);
+            setStatusMessage(state, "Sound volume " + Math.floor(state.soundVolume * 100 + 0.5) + "%");
         } else if (activated("volumeUp")) {
             const soundVolume = Math.min(1.0, state.soundVolume + 0.1);
             setSoundVolume(state, soundVolume);
-        } else if (activated("showSpeech")) state.popups.currentPopupTimeRemaining = 2.0;
+            setStatusMessage(state, "Sound volume " + Math.floor(state.soundVolume * 100 + 0.5) + "%");
+        } else if (activated("showSpeech")) state.popups.currentPopupTimeRemaining = state.popups.currentPopupTimeRemaining > 0 ? 0 : 2;
     }
 }
 function scoreCompletedLevel(state) {
@@ -798,8 +805,10 @@ function scoreCompletedLevel(state) {
     const numTurnsPar = numTurnsParForCurrentMap(state);
     const timeBonus = Math.max(0, numTurnsPar - state.turns);
     const lootScore = state.lootStolen * 10;
+    const treasureScore = state.treasureStolen * 40;
+    const foodScore = state.levelStats.extraFoodCollected * 5;
     const ghostBonus = ghosted ? lootScore : 0;
-    const score = lootScore + timeBonus + ghostBonus;
+    const score = lootScore + treasureScore + foodScore + timeBonus + ghostBonus;
     state.gameStats.totalScore += score;
     state.gameStats.turns += state.totalTurns;
     state.gameStats.numLevels = state.gameMapRoughPlans.length;
@@ -811,7 +820,7 @@ function scoreCompletedLevel(state) {
 function scoreIncompleteLevel(state) {
     if (state.gameMapRoughPlans[state.level].played) return;
     state.gameMapRoughPlans[state.level].played = true;
-    const score = state.lootStolen * 10;
+    const score = state.lootStolen * 10 + state.levelStats.extraFoodCollected * 5;
     state.gameStats.totalScore += score;
     state.gameStats.turns += state.totalTurns;
     state.gameStats.numLevels = state.gameMapRoughPlans.length;
@@ -823,6 +832,22 @@ function clearLevelStats(levelStats) {
     levelStats.numKnockouts = 0;
     levelStats.numSpottings = 0;
     levelStats.damageTaken = 0;
+    levelStats.extraFoodCollected = 0;
+}
+function updateAchievements(state, type) {
+    let key;
+    for(key in state.achievements)state.achievements[key].update(state, type);
+}
+function persistAchievements(state) {
+    let key;
+    let pKey;
+    for(key in state.achievements)if (key in state.persistedStats) {
+        pKey = key;
+        if (state.achievements[key].complete) {
+            state.persistedStats[pKey]++;
+            setStat(pKey, state.persistedStats[pKey]);
+        }
+    }
 }
 function setupLevel(state, level) {
     state.level = level;
@@ -836,16 +861,17 @@ function setupLevel(state, level) {
     setLights(state.gameMap, state);
     setCellAnimations(state.gameMap, state);
     state.topStatusMessage = "";
-    state.topStatusMessageSticky = false;
-    state.topStatusMessageAnim = 0;
+    state.topStatusMessageSlide = 1;
     state.finishedLevel = false;
     state.turns = 0;
     state.lootStolen = 0;
+    state.treasureStolen = 0;
     state.lootAvailable = state.gameMapRoughPlans[state.level].totalLoot;
     clearLevelStats(state.levelStats);
     state.player.pos = state.gameMap.playerStartPos;
     state.player.dir = (0, _myMatrix.vec2).fromValues(0, -1);
     state.player.noisy = false;
+    state.player.preNoisy = false;
     state.player.hasVaultKey = false;
     state.player.damagedLastTurn = false;
     state.player.turnsRemainingUnderwater = (0, _gameMap.maxPlayerTurnsUnderwater);
@@ -860,39 +886,52 @@ function setupLevel(state, level) {
 }
 function analyzeLevel(state) {
     const numDiscoverableCells = state.gameMap.numCells() - state.gameMap.numPreRevealedCells;
+    const numCellsTraversal = numDiscoverableCells * state.gameMap.backtrackingCoefficient;
     const numGuards = state.gameMap.guards.length;
-    const guardsPerCell = numGuards / numDiscoverableCells;
-    const turnsForDiscovery = numDiscoverableCells / 3;
-    const turnsForGuardAvoidance = 8 * numGuards + 800 * guardsPerCell;
-    const par = 10 * Math.ceil((turnsForDiscovery + turnsForGuardAvoidance) / 10);
+    const guardsPerCell = numGuards / numCellsTraversal;
+    const turnsForTraversal = numCellsTraversal / 3.5;
+    const turnsForGuardAvoidance = 8 * numGuards + 1000 * guardsPerCell;
+    const par = 10 * Math.ceil((turnsForTraversal + turnsForGuardAvoidance) / 10);
     console.log("Level:", state.level);
     console.log("Discoverable cells:", numDiscoverableCells);
+    console.log("Backtracking coefficient:", state.gameMap.backtrackingCoefficient);
     console.log("Number of guards:", numGuards);
     console.log("Guards per cell:", guardsPerCell);
-    console.log("Turns for discovery:", turnsForDiscovery);
+    console.log("Turns for discovery:", turnsForTraversal);
     console.log("Turns for guards:", turnsForGuardAvoidance);
     console.log("Par:", par);
 }
 function numTurnsParForCurrentMap(state) {
     const numDiscoverableCells = state.gameMap.numCells() - state.gameMap.numPreRevealedCells;
+    const numCellsTraversal = numDiscoverableCells * state.gameMap.backtrackingCoefficient;
     const numGuards = state.gameMap.guards.length;
-    const guardsPerCell = numGuards / numDiscoverableCells;
-    const turnsForDiscovery = numDiscoverableCells / 3;
+    const guardsPerCell = numGuards / numCellsTraversal;
+    const turnsForTraversal = numCellsTraversal / 3.5;
     const turnsForGuardAvoidance = 8 * numGuards + 1000 * guardsPerCell;
-    const par = 10 * Math.ceil((turnsForDiscovery + turnsForGuardAvoidance) / 10);
+    const par = 10 * Math.ceil((turnsForTraversal + turnsForGuardAvoidance) / 10);
     return par;
 }
+const mansionCompleteTopStatusHint = [
+    "Use darkness or hiding places to avoid guards",
+    "Escape out windows with Shift+Dir",
+    "Knock out adjacent, unaware guards with Shift+Dir",
+    "Pickpocket by following exactly for two turns",
+    "Zoom view with [ and ]",
+    "Bang walls to make noise with Shift+Dir",
+    "'Ghost' by never being fully seen",
+    "Knock out spotting guard by leaping onto them"
+];
 function advanceToMansionComplete(state) {
     scoreCompletedLevel(state);
+    updateAchievements(state, "levelEnd");
     state.activeSoundPool.empty();
     state.sounds["levelCompleteJingle"].play(0.35);
     if (state.levelStats.numSpottings === 0) {
         state.persistedStats.totalGhosts++;
         setStat("totalGhosts", state.persistedStats.totalGhosts);
     }
-    state.topStatusMessage = "";
-    state.topStatusMessageSticky = false;
-    state.topStatusMessageAnim = 0;
+    if (state.level < mansionCompleteTopStatusHint.length) setStatusMessage(state, mansionCompleteTopStatusHint[state.level], true);
+    else state.topStatusMessage = "";
     state.gameMode = (0, _types.GameMode).MansionComplete;
 }
 function advanceToWin(state) {
@@ -907,6 +946,7 @@ function advanceToWin(state) {
         turns: state.totalTurns,
         level: state.level + 1
     };
+    updateAchievements(state, "gameEnd");
     state.persistedStats.scores.push(scoreEntry);
     if (state.dailyRun) {
         state.persistedStats.currentDailyBestScore = Math.max(state.persistedStats.currentDailyBestScore, score);
@@ -919,6 +959,7 @@ function advanceToWin(state) {
     // if(state.dailyRun===getCurrentDateFormatted()) state.scoreServer.addScore(score, state.totalTurns, state.level+1);
     }
     saveStats(state.persistedStats);
+    persistAchievements(state);
     state.gameMode = (0, _types.GameMode).Win;
 }
 function collectLoot(state, pos, posFlyToward) {
@@ -927,17 +968,23 @@ function collectLoot(state, pos, posFlyToward) {
     let coinCollected = false;
     let healthCollected = false;
     for (const item of itemsCollected){
+        let offset = 0;
         if (item.type === (0, _gameMap.ItemType).Coin) {
             ++state.player.loot;
             ++state.lootStolen;
             coinCollected = true;
+        } else if (item.type === (0, _gameMap.ItemType).Treasure) {
+            coinCollected = true;
+            ++state.treasureStolen;
+            offset = 0.625;
         } else if (item.type === (0, _gameMap.ItemType).Health) {
+            if (state.player.health >= (0, _gameMap.maxPlayerHealth)) ++state.levelStats.extraFoodCollected;
             state.player.health = Math.min((0, _gameMap.maxPlayerHealth), state.player.health + 1);
             healthCollected = true;
         }
         const pt0 = (0, _myMatrix.vec2).create();
-        const pt2 = (0, _myMatrix.vec2).fromValues(posFlyToward[0] - item.pos[0], posFlyToward[1] - item.pos[1]);
-        const pt1 = pt2.scale(0.3333).add((0, _myMatrix.vec2).fromValues(0, 0.5));
+        const pt2 = (0, _myMatrix.vec2).fromValues(posFlyToward[0] - item.pos[0], posFlyToward[1] - item.pos[1] + offset);
+        const pt1 = pt2.scale(0.3333).add((0, _myMatrix.vec2).fromValues(0, 0.5 + offset / 2));
         const animation = new (0, _animation.SpriteAnimation)([
             {
                 pt0: pt0,
@@ -972,13 +1019,15 @@ function canStepToPos(state, pos) {
     const cellNew = state.gameMap.cells.atVec(pos);
     if (cellNew.blocksPlayerMove) return false;
     if (isOneWayWindowTerrainType(cellNew.type)) return false;
-    // Cannot step onto torches or portcullises
+    // Cannot step onto torches, portcullises, treasure boxes or treasure
     for (const item of state.gameMap.items.filter((item)=>item.pos.equals(pos)))switch(item.type){
         case (0, _gameMap.ItemType).DrawersShort:
         case (0, _gameMap.ItemType).TorchUnlit:
         case (0, _gameMap.ItemType).TorchLit:
         case (0, _gameMap.ItemType).PortcullisEW:
         case (0, _gameMap.ItemType).PortcullisNS:
+        case (0, _gameMap.ItemType).TreasureLockBox:
+        case (0, _gameMap.ItemType).Treasure:
             return false;
     }
     // Cannot step onto guards
@@ -1232,13 +1281,68 @@ function joltCamera(state, dx, dy) {
 }
 function tryMakeBangNoise(state, dx, dy, stepType) {
     if (stepType === StepType.AttemptedLeap) {
-        preTurn(state);
-        state.player.pickTarget = null;
-        bumpAnim(state, dx * 1.25, dy * 1.25);
-        joltCamera(state, dx, dy);
-        makeNoise(state.gameMap, state.player, NoiseType.BangDoor, dx, dy, state.sounds);
-        advanceTime(state);
-    } else bumpFail(state, dx, dy);
+        if (state.player.preNoisy && dx === state.player.noiseOffset[0] && dy === state.player.noiseOffset[1]) {
+            preTurn(state);
+            state.player.pickTarget = null;
+            bumpAnim(state, dx * 1.25, dy * 1.25);
+            joltCamera(state, dx, dy);
+            makeNoise(state.gameMap, state.player, NoiseType.BangDoor, dx, dy, state.sounds);
+            advanceTime(state);
+            if (state.level === 0) setStatusMessage(state, "Noise attracts people", true);
+        } else {
+            state.player.preNoisy = true;
+            state.player.noiseOffset[0] = dx;
+            state.player.noiseOffset[1] = dy;
+            state.player.pickTarget = null;
+            if (state.level === 0) setStatusMessage(state, "Make Noise (repeat): Shift+" + directionArrowCharacter(dx, dy), true);
+        }
+    } else {
+        // See if we are bumping a bookshelf; display the book title, if so.
+        const x = state.player.pos[0] + dx;
+        const y = state.player.pos[1] + dy;
+        const item = state.gameMap.items.find((item)=>item.pos[0] === x && item.pos[1] === y && item.type === (0, _gameMap.ItemType).Bookshelf);
+        if (item !== undefined) {
+            preTurn(state);
+            state.player.pickTarget = null;
+            if (!state.gameMap.cells.at(x, y).lit) state.player.lightActive = true;
+            bumpAnim(state, dx, dy);
+            advanceTime(state);
+            let title = state.gameMap.bookTitle.get(item);
+            if (title === undefined) title = "Untitled";
+            title = '"' + title + '"';
+            if (state.gameMap.treasureUnlock.numSwitchesUsed < state.gameMap.treasureUnlock.switches.length) for(let i = 0; i < state.gameMap.treasureUnlock.switches.length; ++i){
+                if (state.gameMap.treasureUnlock.switches[i][0] !== x || state.gameMap.treasureUnlock.switches[i][1] !== y) continue;
+                if (i === state.gameMap.treasureUnlock.numSwitchesUsed) {
+                    ++state.gameMap.treasureUnlock.numSwitchesUsed;
+                    if (state.gameMap.treasureUnlock.numSwitchesUsed >= state.gameMap.treasureUnlock.switches.length) {
+                        state.sounds.switchSuccess.play(0.5);
+                        title = "(rumble) " + title;
+                        joltCamera(state, dx, dy);
+                        state.gameMap.items.push({
+                            pos: (0, _myMatrix.vec2).clone(state.gameMap.treasureUnlock.posTreasure),
+                            type: (0, _gameMap.ItemType).Treasure
+                        });
+                    } else {
+                        state.sounds.switchProgress.play(0.5);
+                        title = "(click) " + title;
+                    }
+                } else if (i === 0) {
+                    state.sounds.switchProgress.play(0.5);
+                    title = "(click) " + title;
+                    state.gameMap.treasureUnlock.numSwitchesUsed = 1;
+                } else {
+                    state.sounds.switchReset.play(0.5);
+                    title = "(clunk) " + title;
+                    state.gameMap.treasureUnlock.numSwitchesUsed = 0;
+                }
+                break;
+            }
+            setStatusMessage(state, title);
+        } else {
+            bumpFail(state, dx, dy);
+            if (state.level === 0) setStatusMessage(state, "Make Noise: Shift+" + directionArrowCharacter(dx, dy), true);
+        }
+    }
 }
 function tryPlayerWait(state) {
     const player = state.player;
@@ -1252,6 +1356,7 @@ function tryPlayerWait(state) {
     preTurn(state);
     state.gameMap.identifyAdjacentCells(player.pos);
     player.pickTarget = null;
+    player.preNoisy = false;
     ++state.numWaitMoves;
     advanceTime(state);
 }
@@ -1259,6 +1364,7 @@ function tryPlayerStep(state, dx, dy, stepType) {
     // Can't move if you're dead
     const player = state.player;
     if (player.health <= 0) return;
+    if (stepType !== StepType.AttemptedLeap) player.preNoisy = false;
     player.idle = false;
     state.idleTimer = 5;
     // Move camera with player by releasing any panning motion
@@ -1270,7 +1376,7 @@ function tryPlayerStep(state, dx, dy, stepType) {
     // Trying to move off the map?
     if (posNew[0] < 0 || posNew[0] >= state.gameMap.cells.sizeX || posNew[1] < 0 || posNew[1] >= state.gameMap.cells.sizeY) {
         if (!state.finishedLevel) {
-            setStatusMessage(state, "Collect all loot before leaving");
+            setStatusMessage(state, "Collect all loot before leaving", true);
             bumpFail(state, dx, dy);
         } else {
             preTurn(state);
@@ -1324,14 +1430,14 @@ function tryPlayerStep(state, dx, dy, stepType) {
     }
     // Trying to go through the wrong way through a one-way window?
     if (cellNew.type == (0, _gameMap.TerrainType).OneWayWindowE && posNew[0] <= posOld[0] || cellNew.type == (0, _gameMap.TerrainType).OneWayWindowW && posNew[0] >= posOld[0] || cellNew.type == (0, _gameMap.TerrainType).OneWayWindowN && posNew[1] <= posOld[1] || cellNew.type == (0, _gameMap.TerrainType).OneWayWindowS && posNew[1] >= posOld[1]) {
-        setStatusMessage(state, "Window cannot be accessed from outside");
+        setStatusMessage(state, "Window cannot be accessed from outside", true);
         if (state.level === 0) setTimeout(()=>state.sounds["tooHigh"].play(0.3), 250);
         tryMakeBangNoise(state, dx, dy, stepType);
         return;
     }
     // Trying to move into a one-way window instead of leaping through?
     if (isOneWayWindowTerrainType(cellNew.type)) {
-        setStatusMessage(state, leapPrompt);
+        setLeapStatusMessage(state, dx, dy);
         if (state.level === 0) setTimeout(()=>state.sounds["jump"].play(0.3), 250);
         bumpFail(state, dx, dy);
         return;
@@ -1339,7 +1445,7 @@ function tryPlayerStep(state, dx, dy, stepType) {
     // Trying to move into an item that blocks movement?
     for (const item of state.gameMap.items.filter((item)=>item.pos.equals(posNew)))switch(item.type){
         case (0, _gameMap.ItemType).DrawersShort:
-            if (canLeapToPos(state, (0, _myMatrix.vec2).fromValues(posOld[0] + 2 * dx, posOld[1] + 2 * dy))) setStatusMessage(state, leapPrompt);
+            if (canLeapToPos(state, (0, _myMatrix.vec2).fromValues(posOld[0] + 2 * dx, posOld[1] + 2 * dy))) setLeapStatusMessage(state, dx, dy);
             if (collectLoot(state, posNew, player.pos)) {
                 preTurn(state);
                 player.pickTarget = null;
@@ -1347,11 +1453,24 @@ function tryPlayerStep(state, dx, dy, stepType) {
                 advanceTime(state);
             } else tryMakeBangNoise(state, dx, dy, stepType);
             return;
+        case (0, _gameMap.ItemType).TreasureLockBox:
+            preTurn(state);
+            if (collectLoot(state, posNew, player.pos)) {
+                player.pickTarget = null;
+                player.itemUsed = item;
+                bumpAnim(state, dx, dy);
+                advanceTime(state);
+            } else {
+                bumpAnim(state, dx, dy);
+                setLeapStatusMessage(state, dx, dy);
+            }
+            return;
         case (0, _gameMap.ItemType).TorchUnlit:
             preTurn(state);
             state.sounds["ignite"].play(0.08);
             item.type = (0, _gameMap.ItemType).TorchLit;
             player.pickTarget = null;
+            player.itemUsed = item;
             bumpAnim(state, dx, dy);
             advanceTime(state);
             return;
@@ -1360,12 +1479,13 @@ function tryPlayerStep(state, dx, dy, stepType) {
             state.sounds["douse"].play(0.05);
             item.type = (0, _gameMap.ItemType).TorchUnlit;
             player.pickTarget = null;
+            player.itemUsed = item;
             bumpAnim(state, dx, dy);
             advanceTime(state);
             return;
         case (0, _gameMap.ItemType).PortcullisEW:
         case (0, _gameMap.ItemType).PortcullisNS:
-            setStatusMessage(state, leapPrompt);
+            setLeapStatusMessage(state, dx, dy);
             state.sounds["gate"].play(0.3);
             if (state.level === 0) setTimeout(()=>state.sounds["jump"].play(0.3), 1000);
             bumpAnim(state, dx, dy);
@@ -1564,6 +1684,13 @@ function tryPlayerLeap(state, dx, dy) {
     preTurn(state);
     // Collect any loot from posMid
     collectLoot(state, posMid, posNew);
+    // Extinguish torch at posMid
+    const torchMid = state.gameMap.items.find((item)=>item.pos.equals(posMid) && item.type === (0, _gameMap.ItemType).TorchLit);
+    if (torchMid !== undefined) {
+        state.sounds["douse"].play(0.05);
+        torchMid.type = (0, _gameMap.ItemType).TorchUnlit;
+        player.itemUsed = torchMid;
+    }
     // End level if moving off the map
     if (posNew[0] < 0 || posNew[1] < 0 || posNew[0] >= state.gameMap.cells.sizeX || posNew[1] >= state.gameMap.cells.sizeY) {
         advanceToMansionComplete(state);
@@ -1731,6 +1858,8 @@ function canLeapOntoItemType(itemType) {
         case (0, _gameMap.ItemType).DrawersShort:
         case (0, _gameMap.ItemType).TorchUnlit:
         case (0, _gameMap.ItemType).TorchLit:
+        case (0, _gameMap.ItemType).TreasureLockBox:
+        case (0, _gameMap.ItemType).Treasure:
             return false;
         default:
             return true;
@@ -1749,8 +1878,8 @@ function isOneWayWindowTerrainType(terrainType) {
 }
 function makeNoise(map, player, noiseType, dx, dy, sounds) {
     player.noisy = true;
-    player.noiseOffset[0] = dx / 2;
-    player.noiseOffset[1] = dy / 2;
+    player.noiseOffset[0] = dx;
+    player.noiseOffset[1] = dy;
     const radius = 23;
     switch(noiseType){
         case NoiseType.Creak:
@@ -1777,12 +1906,14 @@ function makeNoise(map, player, noiseType, dx, dy, sounds) {
     }
 }
 function preTurn(state) {
-    state.popups.clear();
     state.player.noisy = false;
     state.player.damagedLastTurn = false;
+    state.player.itemUsed = null;
+    state.player.lightActive = false;
 }
 function advanceTime(state) {
-    let oldHealth = state.player.health;
+    const oldHealth = state.player.health;
+    state.player.preNoisy = false;
     ++state.turns;
     ++state.totalTurns;
     if (state.gameMap.cells.atVec(state.player.pos).type == (0, _gameMap.TerrainType).GroundWater) {
@@ -1791,8 +1922,8 @@ function advanceTime(state) {
             if (state.player.turnsRemainingUnderwater <= 0) state.sounds["waterExit"].play(0.25);
         }
     } else state.player.turnsRemainingUnderwater = (0, _gameMap.maxPlayerTurnsUnderwater);
-    state.gameMap.computeLighting(state.gameMap.cells.atVec(state.player.pos));
-    (0, _guard.guardActAll)(state, state.gameMap, state.popups, state.player);
+    state.gameMap.computeLighting(state.player);
+    (0, _guard.guardActAll)(state);
     state.gameMap.recomputeVisibility(state.player.pos);
     (0, _guard.chooseGuardMoves)(state);
     postTurn(state);
@@ -1815,9 +1946,9 @@ function advanceTime(state) {
             //                setStat('lastDaily', state.gameStats);
             }
             saveStats(state.persistedStats);
-            setStatusMessageSticky(state, "You were killed. Press Escape/Menu to see score.");
         }
     }
+    updateAchievements(state, "turnEnd");
 }
 function postTurn(state) {
     const allSeen = state.gameMap.allSeen();
@@ -1826,32 +1957,82 @@ function postTurn(state) {
         if (!state.finishedLevel) state.sounds["levelRequirementJingle"].play(0.5);
         state.finishedLevel = true;
     }
-    // Update top status-bar message
-    state.popups.endOfUpdate(state.player.pos, state.subtitledSounds);
+    setStatusMessage(state, statusBarMessage(state), true);
+}
+function statusBarMessage(state) {
+    if (state.player.health <= 0) return "You were killed. Press Escape/Menu to see score.";
+    const allSeen = state.gameMap.allSeen();
+    const allLooted = state.lootStolen >= state.lootAvailable;
     if (allSeen) {
-        if (allLooted) setStatusMessage(state, "Loot collected! Exit any map edge");
-        else setStatusMessage(state, "Collect all loot");
-    } else if (state.numStepMoves < 4) setStatusMessage(state, "Left, Right, Up, Down: Move");
-    else if (state.numLeapMoves < 4) setStatusMessage(state, leapPrompt);
-    else if (state.level === 0) setStatusMessage(state, "Map entire mansion");
-    else if (state.level === 1) {
-        if (state.numWaitMoves < 4) setStatusMessage(state, "Z, Period, or Space: Wait");
-        else if (!state.hasOpenedMenu) setStatusMessage(state, "Esc or Slash: More help");
-        else if (!state.topStatusMessageSticky) setStatusMessage(state, "");
-    } else if (state.level === 3 && state.turns === 0) setStatusMessage(state, "Zoom view with brackets [ and ]");
-    else if (!state.topStatusMessageSticky) setStatusMessage(state, "");
+        if (allLooted) return "Loot collected! Exit any map edge";
+        else if (state.level < 3) return "Collect all loot";
+    }
+    if (state.level === 0) {
+        const item = state.gameMap.items.find((item)=>item.pos.equals(state.player.pos));
+        const cell = state.gameMap.cells.atVec(state.player.pos);
+        if (cell.type == (0, _gameMap.TerrainType).GroundWater) {
+            if (state.player.turnsRemainingUnderwater > 0) return "Hold breath and hide underwater";
+            else return "Exit water regain your breath";
+        } else if (item !== undefined && item.type === (0, _gameMap.ItemType).Bush) return "Hide in bushes";
+        else if (item !== undefined && item.type === (0, _gameMap.ItemType).Table) return "Hide under tables";
+        else if (item !== undefined && (item.type === (0, _gameMap.ItemType).BedL || item.type === (0, _gameMap.ItemType).BedR)) return "Hide under beds";
+        else if (state.numStepMoves < 4) {
+            const counter = "\xfb".repeat(state.numStepMoves) + "\x07".repeat(4 - state.numStepMoves);
+            return "Move: \x18\x19\x1b\x1a " + counter;
+        } else if (state.numLeapMoves < 4) {
+            const counter = "\xfb".repeat(state.numLeapMoves) + "\x07".repeat(4 - state.numLeapMoves);
+            return "Leap/Run: Shift+Direction " + counter;
+        } else return "Explore entire mansion";
+    } else if (state.level === 1) {
+        if (state.turns < 10) {
+            if (state.numWaitMoves < 4) {
+                const counter = "\xfb".repeat(state.numWaitMoves) + "\x07".repeat(4 - state.numWaitMoves);
+                return "Wait: Z, Period, or Space " + counter;
+            } else if (!state.hasOpenedMenu) return "Esc or Slash: Menu and more help";
+        }
+    } else if (state.level === 3) {
+        if (allSeen && !allLooted && remainingLootIsOnGuard(state)) {
+            if (state.player.pickTarget !== null || adjacentToUnawareGuardWithLoot(state)) return "Step to pickpocket or leap to knock out";
+            else return "Move or leap from behind into loot-carrying guard";
+        } else if (state.numZoomMoves < 4 && state.turns < 10) {
+            const counter = "\xfb".repeat(state.numWaitMoves) + "\x07".repeat(4 - state.numWaitMoves);
+            return "Zoom View: [ or ] " + counter;
+        }
+    }
+    return "";
 }
-function setStatusMessage(state, msg) {
-    if (state.topStatusMessage === msg) return;
-    state.topStatusMessage = msg;
-    state.topStatusMessageSticky = false;
-    state.topStatusMessageAnim = msg.length === 0 ? 0 : 1;
+function setLeapStatusMessage(state, dx, dy) {
+    setStatusMessage(state, "Leap: Shift+" + directionArrowCharacter(dx, dy), true);
 }
-function setStatusMessageSticky(state, msg) {
-    if (state.topStatusMessage === msg) return;
+function directionArrowCharacter(dx, dy) {
+    if (dx > 0) return "\x1a";
+    else if (dx < 0) return "\x1b";
+    else if (dy > 0) return "\x18";
+    else if (dy < 0) return "\x19";
+    return "\x07";
+}
+function remainingLootIsOnGuard(state) {
+    const lootOnGround = state.gameMap.items.reduce((count, item)=>count + (item.type === (0, _gameMap.ItemType).Coin ? 1 : 0), 0);
+    const lootOnGuards = state.gameMap.guards.reduce((count, guard)=>count + (guard.hasPurse ? 1 : 0), 0);
+    return lootOnGround === 0 && lootOnGuards > 0;
+}
+function adjacentToUnawareGuardWithLoot(state) {
+    return state.gameMap.guards.some((guard)=>{
+        const dx = Math.abs(guard.pos[0] - state.player.pos[0]);
+        const dy = Math.abs(guard.pos[1] - state.player.pos[1]);
+        return (dx === 1 && dy === 0 || dx === 0 && dy === 1) && (0, _guard.isRelaxedGuardMode)(guard.mode) && guard.hasPurse;
+    });
+}
+function setStatusMessage(state, msg, playerHint = false) {
+    if (playerHint && msg != "") {
+        state.playerHintMessageIsNew = state.playerHintMessage !== msg && msg !== "";
+        state.playerHintMessage = msg;
+        msg = "\xff " + msg;
+    } else {
+        state.playerHintMessage = "";
+        state.playerHintMessageIsNew = false;
+    }
     state.topStatusMessage = msg;
-    state.topStatusMessageSticky = true;
-    state.topStatusMessageAnim = msg.length === 0 ? 0 : 1;
 }
 function loadImage(src, img) {
     return new Promise((resolve, reject)=>{
@@ -1883,11 +2064,11 @@ function litVertices(x, y, cells) {
     // 0 would give a completely hard edge, while 1 will be smooth but hard for the player to tell
     // which tiles at the boundary are lit
     const scale = (cells.at(x, y).lit ? 1 : 0.1) / 4;
-    const l = cells.at(x, y).litAnim;
     const lld = cells.at(x - 1, y - 1).litAnim;
     const ld = cells.at(x, y - 1).litAnim;
     const lrd = cells.at(x + 1, y - 1).litAnim;
     const ll = cells.at(x - 1, y).litAnim;
+    const l = cells.at(x, y).litAnim;
     const lr = cells.at(x + 1, y).litAnim;
     const llu = cells.at(x - 1, y + 1).litAnim;
     const lu = cells.at(x, y + 1).litAnim;
@@ -1909,10 +2090,40 @@ function renderTouchButtons(renderer, touchController) {
     }
     renderer.flush();
 }
+function waterTileSetForLevelType(levelType, tileset) {
+    switch(levelType){
+        case (0, _gameMap.LevelType).Manor:
+            return tileset.waterAnimation;
+        case (0, _gameMap.LevelType).Mansion:
+            return tileset.manseWaterAnimation;
+        case (0, _gameMap.LevelType).Fortress:
+            return tileset.fortressWaterAnimation;
+    }
+}
+function terrainTileSetForLevelType(levelType, tileset) {
+    switch(levelType){
+        case (0, _gameMap.LevelType).Manor:
+            return tileset.terrainTiles;
+        case (0, _gameMap.LevelType).Mansion:
+            return tileset.manseTerrainTiles;
+        case (0, _gameMap.LevelType).Fortress:
+            return tileset.fortressTerrainTiles;
+    }
+}
+function itemTileSetForLevelType(levelType, tileset) {
+    switch(levelType){
+        case (0, _gameMap.LevelType).Manor:
+            return tileset.itemTiles;
+        case (0, _gameMap.LevelType).Mansion:
+            return tileset.manseItemTiles;
+        case (0, _gameMap.LevelType).Fortress:
+            return tileset.fortressItemTiles;
+    }
+}
 function renderWorld(state, renderer) {
     updateAnimatedLight(state.gameMap.cells, state.lightStates, state.seeAll);
     // Draw terrain
-    const terrTiles = state.level < 9 ? renderer.tileSet.terrainTiles : renderer.tileSet.fortressTerrainTiles;
+    const terrTiles = terrainTileSetForLevelType(state.gameMapRoughPlans[state.level].levelType, renderer.tileSet);
     for(let x = 0; x < state.gameMap.cells.sizeX; ++x)for(let y = state.gameMap.cells.sizeY - 1; y >= 0; --y){
         const cell = state.gameMap.cells.at(x, y);
         if (!cell.seen && !state.seeAll) continue;
@@ -1922,8 +2133,13 @@ function renderWorld(state, renderer) {
         }
         const lv = litVertices(x, y, state.gameMap.cells);
         // Draw tile
-        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW && state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, terrTiles[(0, _gameMap.TerrainType).PortcullisNS], lv);
-        else {
+        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW || terrainType === (0, _gameMap.TerrainType).PortcullisNS || terrainType === (0, _gameMap.TerrainType).DoorEW || terrainType === (0, _gameMap.TerrainType).DoorNS) {
+            //The door/portcullis terrain renders the door/gate open
+            if (!state.gameMap.items.find((item)=>{
+                return item.pos[0] === x && item.pos[1] === y && item.type >= (0, _gameMap.ItemType).DoorNS && item.type <= (0, _gameMap.ItemType).PortcullisEW;
+            })) renderer.addGlyphLit4(x, y, x + 1, y + 1, terrTiles[terrainType], lv);
+            else if (state.gameMap.guards.find((guard)=>guard.pos[0] === x && guard.pos[1] === y) || state.player.pos[0] === x && state.player.pos[1] === y) renderer.addGlyphLit4(x, y, x + 1, y + 1, terrTiles[terrainType], lv);
+        } else {
             const tile = cell.animation ? cell.animation.currentTile() : terrTiles[terrainType];
             renderer.addGlyphLit4(x, y, x + 1, y + 1, tile, lv);
         }
@@ -1956,7 +2172,7 @@ function renderWorld(state, renderer) {
         }
     }
     // Draw items
-    const itemTiles = state.level < 9 ? renderer.tileSet.itemTiles : renderer.tileSet.fortressItemTiles;
+    const itemTiles = itemTileSetForLevelType(state.gameMapRoughPlans[state.level].levelType, renderer.tileSet);
     for (const item of state.gameMap.items){
         let x = item.pos[0];
         let y = item.pos[1];
@@ -1964,15 +2180,13 @@ function renderWorld(state, renderer) {
         if (!cell.seen && !state.seeAll) continue;
         const terrainType = cell.type;
         const lv = litVertices(x, y, state.gameMap.cells);
-        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW && state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, itemTiles[(0, _gameMap.ItemType).PortcullisNS], lv);
-        else {
-            //Don't draw the door if someone standing in it
-            if ([
-                (0, _gameMap.TerrainType).DoorEW,
-                (0, _gameMap.TerrainType).DoorNS
-            ].includes(terrainType)) {
-                if (state.gameMap.guards.find((guard)=>guard.pos[0] == x && guard.pos[1] == y) || state.player.pos[0] == x && state.player.pos[1] == y) continue;
-            }
+        if (terrainType === (0, _gameMap.TerrainType).PortcullisEW || terrainType === (0, _gameMap.TerrainType).PortcullisNS || terrainType === (0, _gameMap.TerrainType).DoorEW || terrainType === (0, _gameMap.TerrainType).DoorNS) //The door/portcullis item renders the door/gate closed if there is no guard or player present
+        {
+            if (!state.gameMap.guards.find((guard)=>guard.pos[0] === x && guard.pos[1] === y) && !(state.player.pos[0] === x && state.player.pos[1] === y)) renderer.addGlyphLit4(x, y, x + 1, y + 1, itemTiles[item.type], lv);
+        } else if (item.type === (0, _gameMap.ItemType).Treasure) {
+            const ti = item.animation ? item.animation.currentTile() : itemTiles[item.type];
+            renderer.addGlyphLit4(x, y + 0.625, x + 1, y + 1.625, ti, lv);
+        } else {
             const ti = item.animation ? item.animation.currentTile() : itemTiles[item.type];
             if (item.animation instanceof (0, _animation.SpriteAnimation)) {
                 const o = item.animation.offset;
@@ -2077,6 +2291,11 @@ function renderPlayer(state, renderer) {
         }
     }
     renderer.addGlyphLit(x, y, x + 1, y + 1, tileInfoTinted, lit);
+    if (hidden && player.idle) renderer.addGlyphLit(x, y, x + 1, y + 1, renderer.tileSet.playerTiles.litFace, 0.15);
+    if (player.lightActive) {
+        const torchTile = player.torchAnimation ? player.torchAnimation.currentTile() : renderer.tileSet.itemTiles[(0, _gameMap.ItemType).TorchCarry];
+        renderer.addGlyphLit(x, y, x + 1, y + 1, torchTile, lit);
+    }
     for (let dr of frontRenders)renderer.addGlyphLit(...dr);
 }
 function renderGuards(state, renderer) {
@@ -2106,7 +2325,7 @@ function renderGuards(state, renderer) {
         if (guard.hasTorch || guard.hasPurse || guard.hasVaultKey) {
             let t0 = x + guard.dir[0] * 0.375 + guard.dir[1] * 0.375;
             let t1 = y - 0.125;
-            const tti = guard.torchAnimation?.currentTile() ?? renderer.tileSet.itemTiles[(0, _gameMap.ItemType).TorchCarry];
+            const tti = guard.mode !== (0, _guard.GuardMode).Unconscious && guard.torchAnimation ? guard.torchAnimation.currentTile() : renderer.tileSet.itemTiles[(0, _gameMap.ItemType).TorchCarry];
             let p0 = x - guard.dir[0] * 0.250 + (guard.dir[1] < 0 ? 0.375 : 0);
             let p1 = y - 0.125;
             const pti = guard.hasVaultKey ? tileSet.itemTiles[(0, _gameMap.ItemType).KeyCarry] : renderer.tileSet.itemTiles[(0, _gameMap.ItemType).PurseCarry];
@@ -2141,6 +2360,13 @@ function renderIconOverlays(state, renderer) {
     const player = state.player;
     const bubble_right = renderer.tileSet.namedTiles["speechBubbleR"];
     const bubble_left = renderer.tileSet.namedTiles["speechBubbleL"];
+    if (state.playerHintMessageIsNew && !player.idle) {
+        const a = state.player.animation;
+        const offset = a && a instanceof (0, _animation.SpriteAnimation) ? a.offset : (0, _myMatrix.vec2).create();
+        const [x, y] = player.pos.add(offset);
+        const ptile = renderer.tileSet.namedTiles["playerHint"];
+        renderer.addGlyph(x, y + 0.625, x + 1, y + 1.625, ptile);
+    }
     for (const guard of state.gameMap.guards){
         const cell = state.gameMap.cells.atVec(guard.pos);
         const visible = state.seeAll || cell.seen || guard.speaking;
@@ -2148,7 +2374,7 @@ function renderIconOverlays(state, renderer) {
         let offset = guard.animation?.offset ?? (0, _myMatrix.vec2).create();
         const x = guard.pos[0] + offset[0];
         const y = guard.pos[1] + offset[1];
-        if (guard.speaking) {
+        if (guard.speaking && state.popups.currentPopupTimeRemaining <= 0) {
             const dir = guard.dir[0];
             if (dir >= 0) renderer.addGlyph(x + 1, y, x + 2, y + 1, bubble_right);
             else renderer.addGlyph(x - 1, y, x, y + 1, bubble_left);
@@ -2164,24 +2390,18 @@ function renderIconOverlays(state, renderer) {
             renderer.addGlyph(x, y + 0.625, x + 1, y + 1.625, gtile);
         }
     }
-    // DISABLING BUT MIGHT BE USEFUL AS AN ACCESSIBILITY OPTION
-    // Render the light status indicator if player is standing in the light
-    // const litVal = state.gameMap.cells.atVec(player.pos).lit?1:0;
-    // if(litVal) {
-    //     const litTile = tileSet.namedTiles['litPlayer'];
-    //     const offset = player.animation?.offset?? vec2.create();
-    //     const x = player.pos[0] + offset[0];
-    //     const y = player.pos[1] + offset[1];
-    //     renderer.addGlyph(x, y+0.625, x+1, y+1.625, litTile, litVal);                
-    // }
     // Render an icon over the player if the player is being noisy
-    if (player.noisy) {
+    if (player.preNoisy || player.noisy) {
         const a = player.animation;
         const offset = a && a instanceof (0, _animation.SpriteAnimation) ? a.offset : (0, _myMatrix.vec2).create();
         if (Math.abs(offset[0]) < 0.5 && Math.abs(offset[1]) < 0.5) {
-            const x = player.pos[0] + player.noiseOffset[0];
-            const y = player.pos[1] + player.noiseOffset[1];
-            renderer.addGlyph(x, y, x + 1, y + 1, tileSet.namedTiles["noise"]);
+            const x = player.pos[0] + player.noiseOffset[0] / 2;
+            const y = player.pos[1] + player.noiseOffset[1] / 2;
+            if (player.preNoisy) renderer.addGlyph(x, y, x + 1, y + 1, tileSet.namedTiles["pickTarget"]);
+            else {
+                const s = 0.0625 * Math.sin(player.noisyAnim * Math.PI * 2);
+                renderer.addGlyph(x - s, y - s, x + 1 + s, y + 1 + s, tileSet.namedTiles["noise"]);
+            }
         }
     }
 }
@@ -2193,20 +2413,21 @@ function renderGuardSight(state, renderer) {
     const pos = (0, _myMatrix.vec2).create();
     const dpos = (0, _myMatrix.vec2).create();
     for (const guard of state.gameMap.guards){
-        const maxSightCutoff = 3;
+        const maxSightCutoff = 10;
         const xMin = Math.max(0, Math.floor(guard.pos[0] - maxSightCutoff));
         const xMax = Math.min(mapSizeX, Math.floor(guard.pos[0] + maxSightCutoff) + 1);
         const yMin = Math.max(0, Math.floor(guard.pos[1] - maxSightCutoff));
         const yMax = Math.min(mapSizeY, Math.floor(guard.pos[1] + maxSightCutoff) + 1);
         for(let y = yMin; y < yMax; ++y)for(let x = xMin; x < xMax; ++x){
+            if (seenByGuard.get(x, y)) continue;
             (0, _myMatrix.vec2).set(pos, x, y);
             (0, _myMatrix.vec2).subtract(dpos, pos, guard.pos);
-            const cell = state.gameMap.cells.at(x, y);
-            if (seenByGuard.get(x, y)) continue;
-            if (cell.blocksPlayerMove) continue;
+            const cell = state.gameMap.cells.atVec(pos);
             if (!state.seeAll && !cell.seen) continue;
-            if ((0, _myMatrix.vec2).dot(guard.dir, dpos) < 0) continue;
-            if ((0, _myMatrix.vec2).squaredLen(dpos) >= guard.sightCutoff(cell.lit > 0)) continue;
+            if (cell.blocksPlayerMove) continue;
+            if (guard.mode !== (0, _guard.GuardMode).ChaseVisibleTarget && (0, _myMatrix.vec2).dot(guard.dir, dpos) < 0) continue;
+            if ((0, _myMatrix.vec2).squaredLen(dpos) >= guard.sightCutoff(cell.lit > 0) && !(dpos[0] === guard.dir[0] * 2 && dpos[1] === guard.dir[1] * 2)) continue;
+            if (cell.hidesPlayer && (Math.abs(dpos[0]) > 1 || Math.abs(dpos[1]) > 1 || (0, _guard.isRelaxedGuardMode)(guard.mode))) continue;
             if (!(0, _guard.lineOfSight)(state.gameMap, guard.pos, pos)) continue;
             seenByGuard.set(x, y, true);
         }
@@ -2288,7 +2509,17 @@ function loadStats() {
         totalGhosts: getStat("totalGhosts") ?? 0,
         allDailyPlays: getStat("allDailyPlays") ?? 0,
         allDailyWins: getStat("allDailyWins") ?? 0,
-        allDailyWinsFirstTry: getStat("allDailyWinsFirstTry") ?? 0
+        allDailyWinsFirstTry: getStat("allDailyWinsFirstTry") ?? 0,
+        achievementGhosty: getStat("achievementGhosty") ?? 0,
+        achievementZippy: getStat("achievementZippy") ?? 0,
+        achievementHungry: getStat("achievementHungry") ?? 0,
+        achievementThumpy: getStat("achievementThumpy") ?? 0,
+        achievementSofty: getStat("achievementSofty") ?? 0,
+        achievementNoisy: getStat("achievementNoisy") ?? 0,
+        achievementLeapy: getStat("achievementLeapy") ?? 0,
+        achievementSteppy: getStat("achievementSteppy") ?? 0,
+        achievementHurty: getStat("achievementHurty") ?? 0,
+        achievementVictory: getStat("achievementVictory") ?? 0
     };
 }
 function saveStats(persistedStats) {
@@ -2306,6 +2537,15 @@ function saveStats(persistedStats) {
     setStat("totalPlays", persistedStats.totalPlays);
     setStat("totalWins", persistedStats.totalWins);
     setStat("totalGhosts", persistedStats.totalGhosts);
+    setStat("achievementGhosty", persistedStats.achievementGhosty);
+    setStat("achievementZippy", persistedStats.achievementZippy);
+    setStat("achievementHungry", persistedStats.achievementHungry);
+    setStat("achievementThumpy", persistedStats.achievementThumpy);
+    setStat("achievementSofty", persistedStats.achievementSofty);
+    setStat("achievementNoisy", persistedStats.achievementNoisy);
+    setStat("achievementLeapy", persistedStats.achievementLeapy);
+    setStat("achievementSteppy", persistedStats.achievementSteppy);
+    setStat("achievementHurty", persistedStats.achievementHurty);
 }
 function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
     const rng = new (0, _random.RNG)();
@@ -2340,8 +2580,10 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
         levelStats: {
             numKnockouts: 0,
             numSpottings: 0,
-            damageTaken: 0
+            damageTaken: 0,
+            extraFoodCollected: 0
         },
+        achievements: (0, _achievements.getAchievements)(),
         lightStates: Array(gameMap.lightCount).fill(0),
         particles: [],
         tLast: undefined,
@@ -2350,11 +2592,14 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
         rng: rng,
         dailyRun: null,
         leapToggleActive: false,
+        playerHintMessage: "",
+        playerHintMessageIsNew: false,
         gameMode: (0, _types.GameMode).HomeScreen,
         textWindows: {
             [(0, _types.GameMode).HomeScreen]: new (0, _ui.HomeScreen)(),
             [(0, _types.GameMode).OptionsScreen]: new (0, _ui.OptionsScreen)(),
             [(0, _types.GameMode).StatsScreen]: new (0, _ui.StatsScreen)(),
+            [(0, _types.GameMode).AchievementsScreen]: new (0, _ui.AchievementsScreen)(),
             [(0, _types.GameMode).DailyHub]: new (0, _ui.DailyHubScreen)(),
             [(0, _types.GameMode).HelpControls]: new (0, _ui.HelpControls)(),
             [(0, _types.GameMode).HelpKey]: new (0, _ui.HelpKey)(),
@@ -2364,13 +2609,15 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
             [(0, _types.GameMode).CreditsScreen]: new (0, _ui.CreditsScreen)()
         },
         player: new (0, _gameMap.Player)(gameMap.playerStartPos),
+        oldPlayerPos: gameMap.playerStartPos,
         topStatusMessage: "",
-        topStatusMessageSticky: false,
-        topStatusMessageAnim: 0,
+        topStatusMessageSlide: 1,
         numStepMoves: 0,
         numLeapMoves: 0,
         numWaitMoves: 0,
+        numZoomMoves: 0,
         hasOpenedMenu: false,
+        hasClosedMenu: false,
         finishedLevel: false,
         hasStartedGame: false,
         zoomLevel: initZoomLevel,
@@ -2383,6 +2630,7 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
         totalTurns: 0,
         lootStolen: 0,
         lootAvailable: gameMapRoughPlans[initialLevel].totalLoot,
+        treasureStolen: 0,
         gameMapRoughPlans: gameMapRoughPlans,
         gameMap: gameMap,
         sounds: sounds,
@@ -2409,13 +2657,23 @@ function initState(sounds, subtitledSounds, activeSoundPool, touchController) {
 function zoomIn(state) {
     state.zoomLevel = Math.min(maxZoomLevel, state.zoomLevel + 1);
     state.camera.panning = false;
+    ++state.numZoomMoves;
+    postTurn(state);
 }
 function zoomOut(state) {
     state.zoomLevel = Math.max(minZoomLevel, state.zoomLevel - 1);
     state.camera.panning = false;
+    ++state.numZoomMoves;
+    postTurn(state);
 }
 function setCellAnimations(gameMap, state) {
-    for (let c of gameMap.cells.values)if (c.type === (0, _gameMap.TerrainType).GroundWater) c.animation = new (0, _animation.FrameAnimator)(tileSet.waterAnimation, .5);
+    const levelType = state.gameMapRoughPlans[state.level].levelType;
+    const tileSet = (0, _tilesets.getTileSet)();
+    let counter = 1;
+    for (let c of gameMap.cells.values)if (c.type === (0, _gameMap.TerrainType).GroundWater) {
+        c.animation = new (0, _animation.FrameAnimator)(waterTileSetForLevelType(levelType, tileSet), 1, counter * 1369 % 4);
+        counter++;
+    }
 }
 function setLights(gameMap, state) {
     let id = 0;
@@ -2457,6 +2715,17 @@ function setLights(gameMap, state) {
             id++;
         }
     }
+    if (tileSet.playerTorchAnimation.length >= 2) {
+        const torchSeq = tileSet.playerTorchAnimation.slice(0, 2).map((t)=>[
+                t,
+                0.5
+            ]);
+        const torchDim = tileSet.playerTorchAnimation.at(-2);
+        const torchOff = tileSet.playerTorchAnimation.at(-1);
+        const p = state.player;
+        p.torchAnimation = new (0, _animation.LightSourceAnimation)((0, _animation.LightState).idle, id, state.lightStates, null, torchSeq, torchDim, torchOff);
+        id++;
+    }
 }
 function restartGame(state) {
     state.gameMapRoughPlans = (0, _createMap.createGameMapRoughPlans)(gameConfig.numGameMaps, gameConfig.totalGameLoot, state.rng);
@@ -2485,18 +2754,20 @@ function restartGame(state) {
     setCellAnimations(gameMap, state);
     state.gameMode = (0, _types.GameMode).Mansion;
     state.topStatusMessage = "";
-    state.topStatusMessageSticky = false;
-    state.topStatusMessageAnim = 0;
     state.numStepMoves = 0;
     state.numLeapMoves = 0;
     state.numWaitMoves = 0;
+    state.numZoomMoves = 0;
     state.hasOpenedMenu = false;
+    state.hasClosedMenu = false;
     state.finishedLevel = false;
     state.turns = 0;
     state.totalTurns = 0;
     state.lootStolen = 0;
     state.lootAvailable = state.gameMapRoughPlans[state.level].totalLoot;
+    state.treasureStolen = 0;
     clearLevelStats(state.levelStats);
+    updateAchievements(state, "gameStart");
     state.player = new (0, _gameMap.Player)(gameMap.playerStartPos);
     state.camera = createCamera(gameMap.playerStartPos, state.zoomLevel);
     state.gameMap = gameMap;
@@ -2516,10 +2787,10 @@ function resetState(state) {
     state.totalTurns = 0;
     state.lootStolen = 0;
     state.lootAvailable = state.gameMapRoughPlans[state.level].totalLoot;
+    state.treasureStolen = 0;
     clearLevelStats(state.levelStats);
+    updateAchievements(state, "gameStart");
     state.topStatusMessage = "";
-    state.topStatusMessageSticky = false;
-    state.topStatusMessageAnim = 0;
     state.finishedLevel = false;
     state.player = new (0, _gameMap.Player)(gameMap.playerStartPos);
     state.camera = createCamera(gameMap.playerStartPos, state.zoomLevel);
@@ -2659,8 +2930,12 @@ function updateAndRender(now, renderer, state) {
     canvas.width = canvasSizeX;
     canvas.height = canvasSizeY;
     const screenSize = (0, _myMatrix.vec2).fromValues(canvasSizeX, canvasSizeY);
+    state.oldPlayerPos = (0, _myMatrix.vec2).clone(state.player.pos);
     updateControllerState(state);
-    state.topStatusMessageAnim = Math.max(0, state.topStatusMessageAnim - 4 * dt);
+    const topStatusMessageTargetUpper = state.player.pos[1] >= state.gameMap.cells.sizeY / 2;
+    const slideRate = 4.0 * dt;
+    if (topStatusMessageTargetUpper) state.topStatusMessageSlide = Math.min(1, state.topStatusMessageSlide + slideRate);
+    else state.topStatusMessageSlide = Math.max(0, state.topStatusMessageSlide - slideRate);
     if (!state.camera.zoomed) {
         state.camera.zoomed = true;
         zoomToFitCamera(state, screenSize);
@@ -2684,18 +2959,51 @@ function updateState(state, screenSize, dt) {
     updateCamera(state, screenSize, dt);
     updateIdle(state, dt);
     state.popups.currentPopupTimeRemaining = Math.max(0, state.popups.currentPopupTimeRemaining - dt);
+    state.player.noisyAnim += 2.0 * dt;
+    state.player.noisyAnim -= Math.floor(state.player.noisyAnim);
     if (state.player.animation) {
         if (state.player.animation.update(dt)) state.player.animation = null;
     }
+    if (state.player.lightActive && state.player.torchAnimation?.update(dt)) state.player.torchAnimation = null;
     if (state.player.idle && state.player.idleCursorAnimation) state.player.idleCursorAnimation = state.player.idleCursorAnimation.filter((anim)=>!anim.update(dt));
     for (let c of state.gameMap.cells.values)c.animation?.update(dt);
     for (let g of state.gameMap.guards){
         if (g.animation?.update(dt)) g.animation = null;
         if (g.torchAnimation?.update(dt)) g.torchAnimation = null;
     }
+    if (state.gameMapRoughPlans[state.level].levelType === (0, _gameMap.LevelType).Fortress && !state.oldPlayerPos.equals(state.player.pos)) {
+        const item = state.gameMap.items.find((item)=>item.pos.equals(state.oldPlayerPos));
+        if (item && item.type === (0, _gameMap.ItemType).Bush) {
+            const ti0 = itemTileSetForLevelType((0, _gameMap.LevelType).Fortress, (0, _tilesets.getTileSet)())[item.type];
+            const ti1 = {
+                ...ti0
+            };
+            const ti2 = {
+                ...ti0
+            };
+            const ti3 = {
+                ...ti0
+            };
+            ti1.textureIndex = ti0.textureIndex ? ti0.textureIndex + 1 : 0;
+            ti2.textureIndex = ti0.textureIndex ? ti0.textureIndex + 2 : 0;
+            ti3.textureIndex = ti0.textureIndex ? ti0.textureIndex + 3 : 0;
+            item.animation = new (0, _animation.FrameAnimator)([
+                ti0,
+                ti1,
+                ti2,
+                ti3,
+                ti3,
+                ti3,
+                ti2,
+                ti1,
+                ti0
+            ], 1, 0, 1);
+        }
+    }
     state.gameMap.items = state.gameMap.items.filter((i)=>{
         const done = i.animation?.update(dt);
-        if (i.animation instanceof (0, _animation.SpriteAnimation)) return !(i.animation.removeOnFinish && done);
+        if (done === true) i.animation = undefined;
+        if ((i instanceof (0, _animation.SpriteAnimation) || i instanceof (0, _animation.FrameAnimator)) && i.removeOnFinish) return done !== true;
         return true;
     });
     state.particles = state.particles.filter((p)=>{
@@ -2721,9 +3029,9 @@ function renderScene(renderer, screenSize, state) {
     renderWorldBorder(state, renderer);
     renderer.flush();
     if (state.gameMode === (0, _types.GameMode).Mansion || state.gameMode === (0, _types.GameMode).MansionComplete) renderTextBox(renderer, screenSize, state);
+    if (state.gameMode === (0, _types.GameMode).Mansion || state.gameMode === (0, _types.GameMode).MansionComplete) renderStatusOverlay(renderer, screenSize, state);
     const menuWindow = state.textWindows[state.gameMode];
     if (menuWindow !== undefined) menuWindow.render(renderer);
-    if (state.gameMode === (0, _types.GameMode).Mansion || state.gameMode === (0, _types.GameMode).MansionComplete) renderTopStatusBar(renderer, screenSize, state);
     renderBottomStatusBar(renderer, screenSize, state);
     if ((0, _controllers.lastController) === state.touchController) {
         const matScreenFromPixel = (0, _myMatrix.mat4).create();
@@ -2890,6 +3198,7 @@ function snapCamera(state, screenSize) {
     (0, _myMatrix.vec2).zero(state.camera.velocity);
     (0, _myMatrix.vec2).zero(state.camera.joltOffset);
     (0, _myMatrix.vec2).zero(state.camera.joltVelocity);
+    state.topStatusMessageSlide = state.player.pos[1] >= state.gameMap.cells.sizeY / 2 ? 1 : 0;
 }
 function cameraTargetCenterPosition(posCameraCenter, worldSize, zoomScale, screenSize, posPlayer) {
     const posCenterMin = (0, _myMatrix.vec2).create();
@@ -2901,7 +3210,7 @@ function cameraTargetCenterPosition(posCameraCenter, worldSize, zoomScale, scree
 function cameraCenterPositionLegalRange(worldSize, screenSize, zoomScale, posLegalMin, posLegalMax) {
     const statusBarPixelSizeY = statusBarCharPixelSizeY * statusBarZoom(screenSize);
     const viewPixelSizeX = screenSize[0];
-    const viewPixelSizeY = screenSize[1] - 2 * statusBarPixelSizeY;
+    const viewPixelSizeY = screenSize[1] - statusBarPixelSizeY;
     const viewWorldSizeX = viewPixelSizeX / (pixelsPerTileX * zoomScale);
     const viewWorldSizeY = viewPixelSizeY / (pixelsPerTileY * zoomScale);
     let viewCenterMinX = viewWorldSizeX / 2;
@@ -2917,14 +3226,14 @@ function cameraCenterPositionLegalRange(worldSize, screenSize, zoomScale, posLeg
 }
 function setupViewMatrix(state, screenSize, matScreenFromWorld) {
     const statusBarPixelSizeY = statusBarCharPixelSizeY * statusBarZoom(screenSize);
-    const viewportPixelSize = (0, _myMatrix.vec2).fromValues(screenSize[0], screenSize[1] - 2 * statusBarPixelSizeY);
+    const viewportPixelSize = (0, _myMatrix.vec2).fromValues(screenSize[0], screenSize[1] - statusBarPixelSizeY);
     const [viewWorldSizeX, viewWorldSizeY] = viewWorldSize(viewportPixelSize, state.camera.scale);
     const viewWorldCenterX = state.camera.position[0] + state.camera.joltOffset[0];
     const viewWorldCenterY = state.camera.position[1] + state.camera.joltOffset[1];
     const statusBarWorldSizeY = statusBarPixelSizeY / (pixelsPerTileY * state.camera.scale);
     const viewWorldMinX = viewWorldCenterX - viewWorldSizeX / 2;
     const viewWorldMinY = viewWorldCenterY - viewWorldSizeY / 2;
-    (0, _myMatrix.mat4).ortho(matScreenFromWorld, viewWorldMinX, viewWorldMinX + viewWorldSizeX, viewWorldMinY - statusBarWorldSizeY, viewWorldMinY + viewWorldSizeY + statusBarWorldSizeY, 1, -1);
+    (0, _myMatrix.mat4).ortho(matScreenFromWorld, viewWorldMinX, viewWorldMinX + viewWorldSizeX, viewWorldMinY - statusBarWorldSizeY, viewWorldMinY + viewWorldSizeY, 1, -1);
 }
 function viewWorldSize(viewportPixelSize, zoomScale) {
     const zoomedPixelsPerTileX = pixelsPerTileX * zoomScale;
@@ -2937,7 +3246,7 @@ function viewWorldSize(viewportPixelSize, zoomScale) {
     ];
 }
 function statusBarZoom(screenSize) {
-    const minCharsX = 45;
+    const minCharsX = 56;
     const minCharsY = 25;
     const scaleLargestX = Math.max(1, screenSize[0] / (statusBarCharPixelSizeX * minCharsX));
     const scaleLargestY = Math.max(1, screenSize[1] / (statusBarCharPixelSizeY * minCharsY));
@@ -2954,11 +3263,10 @@ function renderTextBox(renderer, screenSize, state) {
     const pixelsPerCharY = tileZoom * statusBarCharPixelSizeY;
     const worldToPixelScaleX = pixelsPerTileX * state.camera.scale;
     const worldToPixelScaleY = pixelsPerTileY * state.camera.scale;
-    const viewportPixelSize = (0, _myMatrix.vec2).fromValues(screenSize[0], screenSize[1] - 2 * pixelsPerCharY);
+    const viewportPixelSize = (0, _myMatrix.vec2).fromValues(screenSize[0], screenSize[1] - pixelsPerCharY);
     const [viewWorldSizeX, viewWorldSizeY] = viewWorldSize(viewportPixelSize, state.camera.scale);
     const viewWorldCenterX = state.camera.position[0] + state.camera.joltOffset[0];
     const viewWorldCenterY = state.camera.position[1] + state.camera.joltOffset[1];
-    const playerPixelY = Math.floor((state.player.pos[1] + 0.5 - viewWorldCenterY + viewWorldSizeY / 2) * worldToPixelScaleY) + pixelsPerCharY;
     const posPopupWorld = state.popups.currentPopupWorldPos();
     const popupPixelX = Math.floor((posPopupWorld[0] + 0.5 - viewWorldCenterX + viewWorldSizeX / 2) * worldToPixelScaleX);
     const popupPixelY = Math.floor((posPopupWorld[1] + 0.5 - viewWorldCenterY + viewWorldSizeY / 2) * worldToPixelScaleY) + pixelsPerCharY;
@@ -2976,7 +3284,7 @@ function renderTextBox(renderer, screenSize, state) {
     const xMin = Math.floor(Math.max(0, Math.min(screenSize[0] - rectSizeX, popupPixelX - rectSizeX / 2)));
     if (state.popups.currentPopupBelow) yMin = Math.floor(popupPixelY + -0.5 * worldToPixelScaleY - rectSizeY);
     else yMin = Math.floor(popupPixelY + 1.0 * worldToPixelScaleY);
-    yMin = Math.max(pixelsPerCharY, Math.min(screenSize[1] - (pixelsPerCharY + rectSizeY), yMin));
+    yMin = Math.max(pixelsPerCharY, Math.min(screenSize[1] - rectSizeY, yMin));
     renderer.start(matScreenFromWorld, 0);
     renderer.addGlyph(xMin, yMin, xMin + numCharsX * pixelsPerCharX + 2 * (marginX + border), yMin + numCharsY * pixelsPerCharY + 2 * (marginY + border), {
         textureIndex: 219,
@@ -3001,25 +3309,47 @@ function renderTextBox(renderer, screenSize, state) {
     }
     renderer.flush();
 }
-function renderTopStatusBar(renderer, screenSize, state) {
+function renderStatusOverlay(renderer, screenSize, state) {
+    const message = state.topStatusMessage;
+    if (message.length === 0) return;
+    const borderX = 1;
+    const borderY = 0.25;
     const tileZoom = statusBarZoom(screenSize);
+    const colorBackground = 0xb0000000;
     const screenSizeInTilesX = screenSize[0] / (tileZoom * statusBarCharPixelSizeX);
     const screenSizeInTilesY = screenSize[1] / (tileZoom * statusBarCharPixelSizeY);
-    const offsetTilesY = 1 - screenSizeInTilesY;
-    const matScreenFromWorld = (0, _myMatrix.mat4).create();
-    (0, _myMatrix.mat4).ortho(matScreenFromWorld, 0, screenSizeInTilesX, offsetTilesY, screenSizeInTilesY + offsetTilesY, 1, -1);
-    renderer.start(matScreenFromWorld, 0);
-    const colorBackground = colorLerp(0xff101010, 0xff404040, 1 - (1 - state.topStatusMessageAnim) ** 2);
-    renderer.addGlyph(0, 0, screenSizeInTilesX, 1, {
-        textureIndex: fontTileSet.background.textureIndex,
-        color: colorBackground,
-        unlitColor: colorBackground
-    });
-    if (state.dailyRun) putString(renderer, 0, "Daily run", _colorPreset.lightYellow);
-    const message = state.topStatusMessage;
-    const messageX = (screenSizeInTilesX - message.length) / 2;
-    putString(renderer, messageX, message, _colorPreset.lightGray);
-    renderer.flush();
+    const matScreenFromText = (0, _myMatrix.mat4).create();
+    const offsetTilesX = (screenSizeInTilesX - message.length) / -2;
+    {
+        const offsetTilesY = borderY + -(3 + borderY);
+        (0, _myMatrix.mat4).ortho(matScreenFromText, offsetTilesX, screenSizeInTilesX + offsetTilesX, offsetTilesY, screenSizeInTilesY + offsetTilesY, 1, -1);
+        const u = state.topStatusMessageSlide;
+        const colorBackgroundFade = colorLerp(0x00080808, 0xb0080808, u);
+        const colorForegroundFade = colorLerp(0x00ffffff, 0xffffffff, u);
+        renderer.start(matScreenFromText, 0);
+        renderer.addGlyph(-borderX, -borderY, message.length + borderX, 1 + borderY, {
+            textureIndex: fontTileSet.background.textureIndex,
+            color: colorBackgroundFade,
+            unlitColor: colorBackgroundFade
+        });
+        putString(renderer, 0, message, colorForegroundFade);
+        renderer.flush();
+    }
+    {
+        const offsetTilesY = 3 + borderY - (screenSizeInTilesY + borderY);
+        (0, _myMatrix.mat4).ortho(matScreenFromText, offsetTilesX, screenSizeInTilesX + offsetTilesX, offsetTilesY, screenSizeInTilesY + offsetTilesY, 1, -1);
+        const u = 1 - state.topStatusMessageSlide;
+        const colorBackgroundFade = colorLerp(0x00080808, 0xb0080808, u);
+        const colorForegroundFade = colorLerp(0x00ffffff, 0xffffffff, u);
+        renderer.start(matScreenFromText, 0);
+        renderer.addGlyph(-borderX, -borderY, message.length + borderX, 1 + borderY, {
+            textureIndex: fontTileSet.background.textureIndex,
+            color: colorBackgroundFade,
+            unlitColor: colorBackgroundFade
+        });
+        putString(renderer, 0, message, colorForegroundFade);
+        renderer.flush();
+    }
 }
 function colorLerp(color0, color1, u) {
     const r0 = color0 & 255;
@@ -3056,7 +3386,7 @@ function renderBottomStatusBar(renderer, screenSize, state) {
     renderer.start(matScreenFromWorld, 0);
     renderer.addGlyph(0, 0, screenSizeInTilesX, 1, fontTileSet.background);
     let leftSideX = 1;
-    const playerUnderwater = state.gameMap.cells.at(state.player.pos[0], state.player.pos[1]).type == (0, _gameMap.TerrainType).GroundWater && state.player.turnsRemainingUnderwater > 0;
+    const playerUnderwater = state.gameMap.cells.atVec(state.player.pos).type == (0, _gameMap.TerrainType).GroundWater && state.player.turnsRemainingUnderwater > 0;
     if (playerUnderwater) {
         // Underwater indicator
         const glyphBubble = fontTileSet.air.textureIndex;
@@ -3105,7 +3435,7 @@ function renderBottomStatusBar(renderer, screenSize, state) {
         putString(renderer, rightSideX, msgKey, _colorPreset.lightCyan);
     }
     // Level number, turn count, and speed bonus
-    const msgLevel = "Lvl " + (state.level + 1);
+    const msgLevel = (state.dailyRun ? "Daily Lvl " : "Lvl ") + (state.level + 1);
     let msgTimer = state.turns + "/" + numTurnsParForCurrentMap(state);
     const ghosted = state.levelStats.numSpottings === 0;
     if (!ghosted) msgTimer += "!";
@@ -3129,7 +3459,7 @@ function getCurrentDateFormatted(date = null, utcConvert = true) {
     return formattedDate;
 }
 
-},{"./my-matrix":"21x0k","./create-map":"gnPbX","./game-map":"3bH7G","./animation":"iKgaV","./guard":"bP2Su","./render":"9AS2t","./random":"gUC1v","./tilesets":"3SSZh","./audio":"1vRTt","./popups":"eiIYq","./controllers":"ldPU4","./ui":"iGTI0","./types":"38MWl","./color-preset":"37fo9","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"21x0k":[function(require,module,exports) {
+},{"./my-matrix":"21x0k","./create-map":"gnPbX","./game-map":"3bH7G","./animation":"iKgaV","./guard":"bP2Su","./render":"9AS2t","./random":"gUC1v","./tilesets":"3SSZh","./audio":"1vRTt","./popups":"eiIYq","./controllers":"ldPU4","./ui":"iGTI0","./types":"38MWl","./color-preset":"37fo9","./achievements":"b6how","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"21x0k":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "vec2", ()=>vec2);
@@ -3376,7 +3706,8 @@ var _myMatrix = require("./my-matrix");
 var _random = require("./random");
 const roomSizeX = 5;
 const roomSizeY = 5;
-const outerBorder = 3;
+const outerBorder = 2;
+const outerBorderBottom = 3;
 const levelShapeInfo = [
     //xmin,xmax,ymin,ymax,areamin,areamax -- params used to constrain the map size
     [
@@ -3460,11 +3791,6 @@ const levelShapeInfo = [
         49
     ]
 ];
-let LevelType;
-(function(LevelType) {
-    LevelType[LevelType["Mansion"] = 0] = "Mansion";
-    LevelType[LevelType["Fortress"] = 1] = "Fortress";
-})(LevelType || (LevelType = {}));
 let RoomType;
 (function(RoomType) {
     RoomType[RoomType["Exterior"] = 0] = "Exterior";
@@ -3478,6 +3804,8 @@ let RoomType;
     RoomType[RoomType["PublicLibrary"] = 8] = "PublicLibrary";
     RoomType[RoomType["PrivateLibrary"] = 9] = "PrivateLibrary";
     RoomType[RoomType["Kitchen"] = 10] = "Kitchen";
+    RoomType[RoomType["Treasure"] = 11] = "Treasure";
+    RoomType[RoomType["TreasureCourtyard"] = 12] = "TreasureCourtyard";
 })(RoomType || (RoomType = {}));
 let DoorType;
 (function(DoorType) {
@@ -3486,17 +3814,21 @@ let DoorType;
     DoorType[DoorType["GateBack"] = 2] = "GateBack";
     DoorType[DoorType["Locked"] = 3] = "Locked";
 })(DoorType || (DoorType = {}));
-function levelTypeFromLevel(level) {
-    return level === 9 ? LevelType.Fortress : LevelType.Mansion;
-}
 function createGameMapRoughPlans(numMaps, totalLoot, rng) {
     const gameMapRoughPlans = [];
-    // Establish the level sizes
+    // Establish the level types and sizes
+    // Only two Mansion levels, and not consecutive
+    const iLevelMansion0 = 4 + rng.randomInRange(3);
+    const iLevelMansion1 = iLevelMansion0 + 2 + rng.randomInRange(7 - iLevelMansion0);
     for(let level = 0; level < numMaps; ++level){
         const levelRNG = new (0, _random.RNG)("lvl" + level + rng.random());
-        const levelType = levelTypeFromLevel(level);
+        let levelType;
+        if (level >= 9) levelType = (0, _gameMap.LevelType).Fortress;
+        else if (level === iLevelMansion0 || level === iLevelMansion1) levelType = (0, _gameMap.LevelType).Mansion;
+        else levelType = (0, _gameMap.LevelType).Manor;
         const [numRoomsX, numRoomsY] = makeLevelSize(level, levelType, levelRNG);
         gameMapRoughPlans.push({
+            levelType: levelType,
             numRoomsX: numRoomsX,
             numRoomsY: numRoomsY,
             totalLoot: 0,
@@ -3530,15 +3862,29 @@ function createGameMapRoughPlans(numMaps, totalLoot, rng) {
 function makeLevelSize(level, levelType, rng) {
     let xmin, xmax, ymin, ymax, Amin, Amax;
     [xmin, xmax, ymin, ymax, Amin, Amax] = levelShapeInfo[level];
-    const x = xmin + 2 * rng.randomInRange(1 + (xmax - xmin) / 2);
+    let x = xmin + 2 * rng.randomInRange(1 + (xmax - xmin) / 2);
     let y = ymin + rng.randomInRange(1 + ymax - ymin);
     y = Math.min(Math.floor(Amax / x), y);
     y = Math.max(y, Math.ceil(Amin / x));
-    // Ensure LevelType.Fortress levels have odd number of rooms vertically
+    if (levelType === (0, _gameMap.LevelType).Fortress) // Ensure LevelType.Fortress levels have odd number of rooms vertically
     // (All levels have an odd number of rooms horizontally)
-    if (levelType === LevelType.Fortress && (y & 1) === 0) {
-        if (y > 5) --y;
-        else ++y;
+    {
+        if ((y & 1) === 0) {
+            if (y < 7) ++y;
+            else --y;
+        }
+    } else if (levelType === (0, _gameMap.LevelType).Mansion) {
+        // Try to quantize the level dimensions we chose above to ones that work for the mansion style
+        x = Math.floor((x + 1) / 3 + 0.5);
+        y = Math.floor((y + 1) / 3 + 0.5);
+        x = Math.max(2, x);
+        y = Math.max(2, y);
+        x = Math.min(4, x);
+        y = Math.min(4, y);
+        x *= 3;
+        y *= 3;
+        x -= 1;
+        y -= 1;
     }
     return [
         x,
@@ -3548,15 +3894,18 @@ function makeLevelSize(level, levelType, rng) {
 function createGameMap(level, plan) {
     const rng = plan.rng;
     rng.reset();
-    const levelType = levelTypeFromLevel(level);
+    const levelType = plan.levelType;
     // Designate rooms as interior or courtyard
     const inside = new (0, _gameMap.BooleanGrid)(plan.numRoomsX, plan.numRoomsY, true);
     switch(levelType){
-        case LevelType.Mansion:
-            makeSiheyuanRoomGrid(inside, rng);
+        case (0, _gameMap.LevelType).Manor:
+            makeManorRoomGrid(inside, rng);
             break;
-        case LevelType.Fortress:
-            const ringCourtyard = rng.random() < 0.5;
+        case (0, _gameMap.LevelType).Mansion:
+            makeMansionRoomGrid(inside, rng);
+            break;
+        case (0, _gameMap.LevelType).Fortress:
+            const ringCourtyard = rng.random() < 0.25;
             for(let x = 0; x < plan.numRoomsX; ++x)for(let y = 0; y < plan.numRoomsY; ++y){
                 const dx = Math.min(x, plan.numRoomsX - 1 - x);
                 const dy = Math.min(y, plan.numRoomsY - 1 - y);
@@ -3565,25 +3914,28 @@ function createGameMap(level, plan) {
             }
             break;
     }
-    // Randomly offset walls, and establish mirror relationships between them
-    const mirrorRoomsX = (plan.numRoomsX & 1) === 1;
-    const mirrorRoomsY = (plan.numRoomsY & 1) === 1 && levelType === LevelType.Fortress;
+    /*
+    console.log('Finished grid:');
+    for (let y = inside.sizeY - 1; y >= 0; --y) {
+        let s: string = y.toString() + ': ';
+        for (let x = 0; x < inside.sizeX; ++x) {
+            s += inside.get(x, y) ? 'X' : '.';
+        }
+        console.log(s);
+    }
+    */ // Randomly offset walls, and establish mirror relationships between them
     const [offsetX, offsetY] = offsetWalls(plan.numRoomsX, plan.numRoomsY, rng);
-    // Enforce symmetry by overwriting one area with another area
-    if (mirrorRoomsX) {
-        mirrorInteriorLeftToRight(inside);
-        mirrorOffsetsLeftToRight(offsetX, offsetY);
-    }
-    if (mirrorRoomsY) {
-        mirrorOffsetsBottomToTop(offsetX, offsetY);
-        if (levelType !== LevelType.Fortress) mirrorInteriorBottomToTop(inside);
-    }
-    // Translate the building so it abuts the X and Y axes with outerBorder padding
-    offsetBuilding(offsetX, offsetY, outerBorder);
+    // Enforce symmetry by mirroring wall offsets from one side to the other
+    const mirrorRoomsX = (plan.numRoomsX & 1) === 1 && insideIsHorizontallySymmetric(inside);
+    if (mirrorRoomsX) mirrorOffsetsLeftToRight(offsetX, offsetY);
+    const mirrorRoomsY = (plan.numRoomsY & 1) === 1 && levelType !== (0, _gameMap.LevelType).Manor && insideIsVerticallySymmetric(inside);
+    if (mirrorRoomsY) mirrorOffsetsBottomToTop(offsetX, offsetY);
+    // Translate the building so it abuts the X and Y axes with outerBorder/outerBorderBottom padding
+    offsetBuilding(offsetX, offsetY, outerBorder, outerBorderBottom);
     // Make a set of rooms.
-    const [rooms, roomIndex] = createRooms(inside, offsetX, offsetY);
+    const [rooms, roomIndex] = createRooms(inside, offsetX, offsetY, levelType);
     // Compute a list of room adjacencies.
-    const mirrorAdjacencies = levelType !== LevelType.Fortress && rng.randomInRange(24) >= level;
+    const mirrorAdjacencies = levelType !== (0, _gameMap.LevelType).Fortress && rng.randomInRange(24) >= level;
     const mirrorAdjacenciesX = mirrorRoomsX && mirrorAdjacencies;
     const mirrorAdjacenciesY = mirrorRoomsY && mirrorAdjacencies;
     const adjacencies = computeAdjacencies(mirrorAdjacenciesX, mirrorAdjacenciesY, offsetX, offsetY, rooms, roomIndex);
@@ -3596,7 +3948,7 @@ function createGameMap(level, plan) {
     computeRoomDepths(rooms);
     // In fortresses, connectRooms added only the bare minimum of doors necessary to connect the level.
     //  Add additional doors now, but lock them.
-    if (levelType === LevelType.Fortress) {
+    if (levelType === (0, _gameMap.LevelType).Fortress) {
         assignVaultRoom(rooms, levelType, rng);
         addAdditionalFortressDoors(adjacencies, rng);
         computeRoomDepths(rooms);
@@ -3611,6 +3963,9 @@ function createGameMap(level, plan) {
     renderWalls(levelType, adjacencies, map, rng);
     // Render floors.
     renderRooms(level, rooms, map, rng);
+    // Estimate how much backtracking is required to visit all rooms.
+    map.backtrackingCoefficient = estimateBacktracking(rooms);
+    //console.log('backtrack coefficient:', map.backtrackingCoefficient);
     // Set player start position
     map.playerStartPos = playerStartPosition(level, adjacencies, map);
     // Additional decorations
@@ -3637,17 +3992,31 @@ function createGameMap(level, plan) {
     const guardsAvailableForLoot = patrolRoutes.length - (needKey ? 1 : 0);
     const guardLoot = Math.min(Math.floor(level / 3), Math.min(guardsAvailableForLoot, plan.totalLoot));
     placeLoot(plan.totalLoot - guardLoot, rooms, map, levelType, rng);
+    giveBooksTitles(map.bookTitle, rooms, map.items.filter((item)=>item.type === (0, _gameMap.ItemType).Bookshelf), rng);
+    placeTreasure(map, rng);
     placeHealth(level, map, rooms, rng);
     // Put guards on the patrol routes
     placeGuards(level, map, patrolRoutes, guardLoot, needKey, rng);
     // Final setup
     markExteriorAsSeen(map);
-    map.computeLighting();
+    map.computeLighting(null);
     map.recomputeVisibility(map.playerStartPos);
     map.adjacencies = adjacencies;
     return map;
 }
-function makeSiheyuanRoomGrid(inside, rng) {
+function insideIsHorizontallySymmetric(inside) {
+    for(let y = 0; y < inside.sizeY; ++y)for(let x = 0; x < Math.floor(inside.sizeX / 2); ++x){
+        if (inside.get(x, y) !== inside.get(inside.sizeX - 1 - x, y)) return false;
+    }
+    return true;
+}
+function insideIsVerticallySymmetric(inside) {
+    for(let x = 0; x < inside.sizeX; ++x)for(let y = 0; y < Math.floor(inside.sizeY / 2); ++y){
+        if (inside.get(x, y) !== inside.get(x, inside.sizeY - 1 - y)) return false;
+    }
+    return true;
+}
+function makeManorRoomGrid(inside, rng) {
     const sizeX = inside.sizeX;
     const sizeY = inside.sizeY;
     const halfX = Math.floor((sizeX + 1) / 2);
@@ -3658,7 +4027,54 @@ function makeSiheyuanRoomGrid(inside, rng) {
         inside.set(x, y, false);
     }
     for(let y = 0; y < sizeY; ++y)for(let x = halfX; x < sizeX; ++x)inside.set(x, y, inside.get(sizeX - 1 - x, y));
+    if ((sizeX & 1) === 1) mirrorInteriorLeftToRight(inside);
+    if ((sizeY & 1) === 1) mirrorInteriorBottomToTop(inside);
     return inside;
+}
+function makeMansionRoomGrid(inside, rng) {
+    const numCellsX = Math.floor((inside.sizeX + 1) / 3);
+    const numCellsY = Math.floor((inside.sizeY + 1) / 3);
+    inside.fill(false);
+    for(let cellX = 0; cellX < numCellsX; ++cellX)for(let cellY = 0; cellY < numCellsY; ++cellY){
+        for(let x = 0; x < 2; ++x)for(let y = 0; y < 2; ++y)inside.set(3 * cellX + x, 3 * cellY + y, true);
+    }
+    const cellGroup = [];
+    for(let cellX = 0; cellX < numCellsX; ++cellX)for(let cellY = 0; cellY < numCellsY; ++cellY)cellGroup.push(cellX * numCellsY + cellY);
+    const cellAdjacencies = [];
+    for(let cellX = 1; cellX < numCellsX; ++cellX)for(let cellY = 0; cellY < numCellsY; ++cellY){
+        const cellIndex0 = (cellX - 1) * numCellsY + cellY;
+        const cellIndex1 = cellX * numCellsY + cellY;
+        cellAdjacencies.push([
+            cellIndex0,
+            cellIndex1
+        ]);
+    }
+    for(let cellX = 0; cellX < numCellsX; ++cellX)for(let cellY = 1; cellY < numCellsY; ++cellY){
+        const cellIndex0 = cellX * numCellsY + (cellY - 1);
+        const cellIndex1 = cellX * numCellsY + cellY;
+        cellAdjacencies.push([
+            cellIndex0,
+            cellIndex1
+        ]);
+    }
+    rng.shuffleArray(cellAdjacencies);
+    for (const cellAdjacency of cellAdjacencies){
+        const cellIndex0 = cellAdjacency[0];
+        const cellIndex1 = cellAdjacency[1];
+        const cellGroup0 = cellGroup[cellIndex0];
+        const cellGroup1 = cellGroup[cellIndex1];
+        const cell0Y = cellIndex0 % numCellsY;
+        const cell0X = Math.floor(cellIndex0 / numCellsY);
+        const cell1Y = cellIndex1 % numCellsY;
+        const cell1X = Math.floor(cellIndex1 / numCellsY);
+        if (cellGroup0 === cellGroup1) continue;
+        for(let i = 0; i < cellGroup.length; ++i)if (cellGroup[i] === cellGroup1) cellGroup[i] = cellGroup0;
+        const xMin = 3 * Math.min(cell0X, cell1X);
+        const xMax = 3 * Math.max(cell0X, cell1X) + 2;
+        const yMin = 3 * Math.min(cell0Y, cell1Y);
+        const yMax = 3 * Math.max(cell0Y, cell1Y) + 2;
+        for(let x = xMin; x < xMax; ++x)for(let y = yMin; y < yMax; ++y)inside.set(x, y, true);
+    }
 }
 function addStationaryPatrols(level, map, rooms, adjacencies, patrolRoutes, rng) {
     if (level < 8) return;
@@ -3785,16 +4201,16 @@ function mirrorOffsetsBottomToTop(offsetX, offsetY) {
     // Mirror Y wall offsets
     for(let x = 0; x < roomsX; ++x)for(let y = roomCenter + 1; y < roomsY + 1; ++y)offsetY.set(x, y, 2 * centerY - offsetY.get(x, roomsY - y));
 }
-function offsetBuilding(offsetX, offsetY, borderSize) {
+function offsetBuilding(offsetX, offsetY, borderSizeLeft, borderSizeBottom) {
     const roomsX = offsetY.sizeX;
     const roomsY = offsetX.sizeY;
     let roomOffsetX = Number.MIN_SAFE_INTEGER;
     for(let y = 0; y < roomsY; ++y)roomOffsetX = Math.max(roomOffsetX, -offsetX.get(0, y));
-    roomOffsetX += outerBorder;
+    roomOffsetX += borderSizeLeft;
     for(let x = 0; x < roomsX + 1; ++x)for(let y = 0; y < roomsY; ++y)offsetX.set(x, y, offsetX.get(x, y) + roomOffsetX);
     let roomOffsetY = Number.MIN_SAFE_INTEGER;
     for(let x = 0; x < roomsX; ++x)roomOffsetY = Math.max(roomOffsetY, -offsetY.get(x, 0));
-    roomOffsetY += outerBorder;
+    roomOffsetY += borderSizeBottom;
     for(let x = 0; x < roomsX; ++x)for(let y = 0; y < roomsY + 1; ++y)offsetY.set(x, y, offsetY.get(x, y) + roomOffsetY);
 }
 function createBlankGameMap(rooms) {
@@ -3809,7 +4225,7 @@ function createBlankGameMap(rooms) {
     const cells = new (0, _gameMap.CellGrid)(mapSizeX, mapSizeY);
     return new (0, _gameMap.GameMap)(cells);
 }
-function createRooms(inside, offsetX, offsetY) {
+function createRooms(inside, offsetX, offsetY, levelType) {
     const roomsX = inside.sizeX;
     const roomsY = inside.sizeY;
     const roomIndex = new (0, _gameMap.Int32Grid)(roomsX, roomsY, 0);
@@ -3827,11 +4243,12 @@ function createRooms(inside, offsetX, offsetY) {
         gridX: -1,
         gridY: -1
     });
+    const roomTypeCourtyard = levelType === (0, _gameMap.LevelType).Mansion ? RoomType.Exterior : RoomType.PublicCourtyard;
     for(let rx = 0; rx < roomsX; ++rx)for(let ry = 0; ry < roomsY; ++ry){
         let group_index = rooms.length;
         roomIndex.set(rx, ry, group_index);
         rooms.push({
-            roomType: inside.get(rx, ry) ? RoomType.PublicRoom : RoomType.PublicCourtyard,
+            roomType: inside.get(rx, ry) ? RoomType.PublicRoom : roomTypeCourtyard,
             group: group_index,
             depth: 0,
             betweenness: 0,
@@ -4113,6 +4530,18 @@ function storeAdjacenciesInRooms(adjacencies) {
 function connectRooms(rooms, adjacencies, level, levelType, rng) {
     // Collect sets of edges that are mirrors of each other
     const edgeSets = getEdgeSets(adjacencies, rng);
+    // Connect all adjacent exterior rooms together.
+    for (const adj of adjacencies){
+        const room0 = adj.roomLeft;
+        const room1 = adj.roomRight;
+        if (room0.roomType != RoomType.Exterior || room1.roomType != RoomType.Exterior) continue;
+        if (adj.length < 2) continue;
+        adj.door = true;
+        adj.doorType = DoorType.Standard;
+        const group0 = room0.group;
+        const group1 = room1.group;
+        joinGroups(rooms, group0, group1);
+    }
     // Connect all adjacent courtyard rooms together.
     for (const adj of adjacencies){
         const room0 = adj.roomLeft;
@@ -4135,7 +4564,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
             if (adj.roomLeft.roomType !== RoomType.PublicRoom) break;
             if (adj.roomRight.roomType !== RoomType.PublicRoom) break;
             if (adj.roomLeft.group !== adj.roomRight.group) addDoor = true;
-            else if (levelType !== LevelType.Fortress && rng.random() < 0.4) addDoor = true;
+            else if (levelType !== (0, _gameMap.LevelType).Fortress && rng.random() < 0.4) addDoor = true;
             break;
         }
         if (addDoor) for (const adj of edgeSet){
@@ -4156,7 +4585,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
             if (adj.roomLeft.roomType === RoomType.Exterior) break;
             if (adj.roomRight.roomType === RoomType.Exterior) break;
             if (adj.roomLeft.group !== adj.roomRight.group) addDoor = true;
-            else if (levelType !== LevelType.Fortress && rng.random() < 0.4) addDoor = true;
+            else if (levelType !== (0, _gameMap.LevelType).Fortress && rng.random() < 0.4) addDoor = true;
             break;
         }
         if (addDoor) for (const adj of edgeSet){
@@ -4170,7 +4599,7 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
         }
     }
     // Create a door to the surrounding exterior.
-    const adjDoor = frontDoorAdjacency(edgeSets);
+    const adjDoor = frontDoorAdjacency(edgeSets, rooms[0]);
     if (adjDoor !== undefined) {
         adjDoor.door = true;
         adjDoor.doorType = DoorType.GateFront;
@@ -4182,8 +4611,8 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
         }
     }
     // Occasionally create a back door to the exterior.
-    if (levelType !== LevelType.Fortress && rng.randomInRange(30) < rooms.length) {
-        const adjDoor = backDoorAdjacency(edgeSets);
+    if (levelType !== (0, _gameMap.LevelType).Fortress && rng.randomInRange(levelType === (0, _gameMap.LevelType).Mansion ? 20 : 30) < rooms.length) {
+        const adjDoor = backDoorAdjacency(edgeSets, rooms[0]);
         if (adjDoor !== undefined) {
             adjDoor.door = true;
             adjDoor.doorType = level < 3 || rng.random() < 0.75 ? DoorType.GateBack : DoorType.Locked;
@@ -4196,8 +4625,8 @@ function connectRooms(rooms, adjacencies, level, levelType, rng) {
         }
     }
     // Also create side doors sometimes.
-    if (levelType !== LevelType.Fortress && rng.randomInRange(30) < rooms.length) {
-        const adjDoor = sideDoorAdjacency(edgeSets);
+    if (levelType !== (0, _gameMap.LevelType).Fortress && rng.randomInRange(levelType === (0, _gameMap.LevelType).Mansion ? 20 : 30) < rooms.length) {
+        const adjDoor = sideDoorAdjacency(edgeSets, rooms[0]);
         if (adjDoor !== undefined) {
             const doorType = level < 3 ? DoorType.GateBack : DoorType.Locked;
             adjDoor.door = true;
@@ -4234,35 +4663,35 @@ function joinGroups(rooms, groupFrom, groupTo) {
         for (const room of rooms)if (room.group == groupFrom) room.group = groupTo;
     }
 }
-function frontDoorAdjacency(edgeSets) {
+function frontDoorAdjacency(edgeSets, roomExterior) {
     const adjs = [];
     for (const edgeSet of edgeSets)for (const adj of edgeSet){
         if (adj.dir[0] == 0) continue;
-        if (adj.roomLeft.roomType === RoomType.Exterior && adj.roomRight.roomType !== RoomType.Exterior && adj.dir[0] < 0) adjs.push(adj);
-        else if (adj.roomLeft.roomType !== RoomType.Exterior && adj.roomRight.roomType === RoomType.Exterior && adj.dir[0] > 0) adjs.push(adj);
+        if (adj.roomLeft === roomExterior && adj.roomRight.roomType !== RoomType.Exterior && adj.dir[0] < 0) adjs.push(adj);
+        else if (adj.roomLeft.roomType !== RoomType.Exterior && adj.roomRight === roomExterior && adj.dir[0] > 0) adjs.push(adj);
     }
     adjs.sort((adj0, adj1)=>adj0.origin[0] + adj0.dir[0] * adj0.length / 2 - (adj1.origin[0] + adj1.dir[0] * adj1.length / 2));
     if (adjs.length <= 0) return undefined;
     return adjs[Math.floor(adjs.length / 2)];
 }
-function backDoorAdjacency(edgeSets) {
+function backDoorAdjacency(edgeSets, roomExterior) {
     const adjs = [];
     for (const edgeSet of edgeSets)for (const adj of edgeSet){
         if (adj.dir[0] == 0) continue;
-        if (adj.roomLeft.roomType === RoomType.Exterior && adj.roomRight.roomType !== RoomType.Exterior && adj.dir[0] > 0) adjs.push(adj);
-        else if (adj.roomLeft.roomType !== RoomType.Exterior && adj.roomRight.roomType === RoomType.Exterior && adj.dir[0] < 0) adjs.push(adj);
+        if (adj.roomLeft === roomExterior && adj.roomRight.roomType !== RoomType.Exterior && adj.dir[0] > 0) adjs.push(adj);
+        else if (adj.roomLeft.roomType !== RoomType.Exterior && adj.roomRight === roomExterior && adj.dir[0] < 0) adjs.push(adj);
     }
     adjs.sort((adj0, adj1)=>adj0.origin[0] + adj0.dir[0] * adj0.length / 2 - (adj1.origin[0] + adj1.dir[0] * adj1.length / 2));
     if (adjs.length <= 0) return undefined;
     return adjs[Math.floor(adjs.length / 2)];
 }
-function sideDoorAdjacency(edgeSets) {
+function sideDoorAdjacency(edgeSets, roomExterior) {
     const adjs = [];
     for (const edgeSet of edgeSets)for (const adj of edgeSet){
         if (adj.dir[1] == 0) continue;
         if (adj.length < 3) continue;
         if ((adj.length & 1) !== 0) continue;
-        if (adj.roomLeft.roomType === RoomType.Exterior === (adj.roomRight.roomType === RoomType.Exterior)) continue;
+        if (adj.roomLeft === roomExterior === (adj.roomRight === roomExterior)) continue;
         const adjMirror = adj.nextMatching;
         if (adjMirror === null || adjMirror === adj) continue;
         adjs.push(adj);
@@ -4362,6 +4791,50 @@ function computeRoomBetweenness(rooms) {
         }
     }
 }
+function estimateBacktracking(rooms) {
+    // Compute shortest paths from every room to every other room
+    const dist = new Map();
+    for (const room0 of rooms){
+        dist.set(room0, new Map());
+        for (const room1 of rooms)dist.get(room0).set(room1, Infinity);
+    }
+    for (const room0 of rooms){
+        dist.get(room0).set(room0, 0);
+        for (const edge of room0.edges){
+            if (!edge.door) continue;
+            const room1 = edge.roomLeft === room0 ? edge.roomRight : edge.roomLeft;
+            dist.get(room0).set(room1, 1);
+        }
+    }
+    for (const room0 of rooms){
+        for (const room1 of rooms)for (const room2 of rooms){
+            const dist12 = dist.get(room1).get(room2);
+            const dist10 = dist.get(room1).get(room0);
+            const dist02 = dist.get(room0).get(room2);
+            if (dist12 > dist10 + dist02) dist.get(room1).set(room2, dist10 + dist02);
+        }
+    }
+    // Explore the graph using nearest-neighbor algorithm
+    const visited = new Set();
+    let roomCur = rooms[0];
+    let distTotal = 0;
+    while(visited.size < rooms.length){
+        visited.add(roomCur);
+        let roomNearest = roomCur;
+        let distNearest = Infinity;
+        for (const room of rooms)if (room !== roomCur && !visited.has(room)) {
+            const d = dist.get(roomCur).get(room);
+            if (d < distNearest) {
+                roomNearest = room;
+                distNearest = d;
+            }
+        }
+        if (distNearest === Infinity) break;
+        roomCur = roomNearest;
+        distTotal += distNearest;
+    }
+    return distTotal / (rooms.length - 1);
+}
 function hasExteriorDoor(room) {
     for (const adj of room.edges){
         if (!adj.door) continue;
@@ -4378,7 +4851,7 @@ function assignVaultRoom(rooms, levelType, rng) {
     const deadEndRooms = [];
     for (const room of rooms){
         if (room.roomType === RoomType.Exterior) continue;
-        if (levelType === LevelType.Fortress && isCourtyardRoomType(room.roomType)) continue;
+        if (levelType === (0, _gameMap.LevelType).Fortress && isCourtyardRoomType(room.roomType)) continue;
         let numDoors = 0;
         for (const adj of room.edges)if (adj.door) ++numDoors;
         if (numDoors <= 1) deadEndRooms.push(room);
@@ -4429,7 +4902,7 @@ function assignRoomTypes(rooms, level, levelType, rng) {
     }
     // Pick a dead-end room to be a Vault room
     // Note: On Fortress levels we did this in a previous step
-    if (level > 4 && levelType !== LevelType.Fortress) assignVaultRoom(rooms, levelType, rng);
+    if (level > 4 && levelType !== (0, _gameMap.LevelType).Fortress) assignVaultRoom(rooms, levelType, rng);
     // Assign private rooms with only one or two entrances to be bedrooms, if they are large enough
     // TODO: Ideally bedrooms need to be on a dead-end branch of the house (low betweenness)
     for (const room of rooms){
@@ -4459,6 +4932,8 @@ function assignRoomTypes(rooms, level, levelType, rng) {
     // Pick rooms to be libraries
     for (const room of chooseRooms(rooms, roomCanBePublicLibrary, Math.ceil(rooms.length / 42), rng))room.roomType = RoomType.PublicLibrary;
     for (const room of chooseRooms(rooms, roomCanBePrivateLibrary, Math.ceil(rooms.length / 42), rng))room.roomType = RoomType.PrivateLibrary;
+    // Pick a room to be the treasure room
+    if (rooms.some((room)=>room.roomType === RoomType.PublicLibrary || room.roomType === RoomType.PrivateLibrary)) for (const room of chooseRooms(rooms, roomCanBeTreasure, 1, rng))room.roomType = isCourtyardRoomType(room.roomType) ? RoomType.TreasureCourtyard : RoomType.Treasure;
 }
 function roomArea(room) {
     return (room.posMax[0] - room.posMin[0]) * (room.posMax[1] - room.posMin[1]);
@@ -4485,6 +4960,18 @@ function roomHasExteriorDoor(room) {
     }
     return false;
 }
+function roomCanBeTreasure(room) {
+    if (room.roomType !== RoomType.PublicRoom && room.roomType !== RoomType.PrivateRoom && room.roomType !== RoomType.PublicCourtyard && room.roomType !== RoomType.PrivateCourtyard) return false;
+    const sizeX = room.posMax[0] - room.posMin[0];
+    if ((sizeX & 1) === 0) return false;
+    if (sizeX < 3) return false;
+    if (sizeX > 7) return false;
+    const sizeY = room.posMax[1] - room.posMin[1];
+    if ((sizeY & 1) === 0) return false;
+    if (sizeY < 3) return false;
+    if (sizeY > 7) return false;
+    return true;
+}
 function roomCanBeDining(room) {
     if (room.roomType !== RoomType.PublicRoom) return false;
     const sizeX = room.posMax[0] - room.posMin[0];
@@ -4509,13 +4996,15 @@ function roomCanBePrivateLibrary(room) {
     if (Math.max(sizeX, sizeY) < 5) return false;
     return true;
 }
-function removableAdjacency(adjacencies, rng) {
+function removableAdjacency(adjacencies, roomExterior, rng) {
     const removableAdjs = [];
     for (const adj of adjacencies){
         const room0 = adj.roomLeft;
         const room1 = adj.roomRight;
         if (!adj.door) continue;
         if (room0.roomType !== room1.roomType) continue;
+        if (room0 === roomExterior) continue;
+        if (room1 === roomExterior) continue;
         if (adj.dir[1] === 0) {
             // Horizontal adjacency
             if (adj.length !== 1 + (room0.posMax[0] - room0.posMin[0])) continue;
@@ -4627,7 +5116,7 @@ function removeByValue(array, value) {
 function makeDoubleRooms(rooms, adjacencies, rng) {
     rng.shuffleArray(adjacencies);
     for(let numMergeAttempts = 2 * Math.floor(rooms.length / 12); numMergeAttempts > 0; --numMergeAttempts){
-        const adj = removableAdjacency(adjacencies, rng);
+        const adj = removableAdjacency(adjacencies, rooms[0], rng);
         if (adj === undefined) return;
         //        const adjMirror = adj.nextMatching;
         removeAdjacency(rooms, adjacencies, adj);
@@ -5274,6 +5763,23 @@ function generatePatrolPathsFromNodes(nodes, level, gameMap, outsidePatrolRoute,
                 if (positions.length > 0) (0, _myMatrix.vec2).copy(posMid, positions[rng.randomInRange(positions.length)]);
                 else posBesideDoor(posMid, room, roomPrev, gameMap);
                 for (const pos of pathBetweenPointsInRoom(gameMap, room, posStart, posMid))patrolPositions.push(pos);
+                // If the activity look direction is at right angles to the approaching move direction,
+                // insert an extra turn at the activity station, to account for the turn the guard will
+                // spend rotating to face the activity look direction.
+                // This is not quite right; sometimes someone will be approaching diagaonally and will
+                // need to turn but this won't recognize it. Need to look farther back to determine
+                // what orientation the approaching person will have.
+                if (patrolPositions.length > 0) {
+                    const includeDoors = false;
+                    const lookPos = gameMap.tryGetPosLookAt(posMid, includeDoors);
+                    if (lookPos !== undefined) {
+                        const moveDir = (0, _myMatrix.vec2).create();
+                        (0, _myMatrix.vec2).subtract(moveDir, posMid, patrolPositions[patrolPositions.length - 1]);
+                        const lookDir = (0, _myMatrix.vec2).create();
+                        (0, _myMatrix.vec2).subtract(lookDir, lookPos, posMid);
+                        if ((0, _myMatrix.vec2).dot(moveDir, lookDir) <= 0) patrolPositions.push((0, _myMatrix.vec2).clone(posMid));
+                    }
+                }
                 patrolPositions.push((0, _myMatrix.vec2).clone(posMid));
                 patrolPositions.push((0, _myMatrix.vec2).clone(posMid));
                 patrolPositions.push((0, _myMatrix.vec2).clone(posMid));
@@ -5480,7 +5986,22 @@ function posBesideDoor(pos, room, roomNext, gameMap) {
     (0, _myMatrix.vec2).zero(pos);
 }
 function playerStartPosition(level, adjacencies, gameMap) {
-    return playerStartPositionFrontDoor(adjacencies, gameMap);
+    /*
+    if (level === levelLeapTrainer) {
+        return playerStartPositionLeapTrainer(adjacencies, gameMap);
+    } else
+    */ {
+        const pos = playerStartPositionFrontDoor(adjacencies, gameMap);
+        // Setup for initial movement trainer
+        if (level === 0) {
+            if (pos[1] >= 4) pos[1] -= 4;
+            else {
+                pos[0] -= 4 - pos[1];
+                pos[1] = 0;
+            }
+        }
+        return pos;
+    }
 }
 function playerStartPositionLeapTrainer(adjacencies, gameMap) {
     // Find top-rightmost horizontal adjacency
@@ -5505,14 +6026,9 @@ function playerStartPositionFrontDoor(adjacencies, gameMap) {
     let yMin = 0;
     for (const adj of adjacencies){
         if (!adj.door) continue;
-        if (adj.roomLeft.roomType !== RoomType.Exterior && adj.roomRight.roomType !== RoomType.Exterior) continue;
+        if (adj.roomLeft.roomType === RoomType.Exterior === (adj.roomRight.roomType === RoomType.Exterior)) continue;
         const y = adj.origin[1] + Math.max(0, adj.dir[1]) * adj.length;
-        if (adjFrontDoor === undefined) {
-            adjFrontDoor = adj;
-            yMin = y;
-            continue;
-        }
-        if (y < yMin) {
+        if (adjFrontDoor === undefined || y < yMin) {
             adjFrontDoor = adj;
             yMin = y;
         }
@@ -5617,6 +6133,7 @@ function renderWalls(levelType, adjacencies, map, rng) {
         const type0 = adj.roomLeft.roomType;
         const type1 = adj.roomRight.roomType;
         if (isCourtyardRoomType(type0) && isCourtyardRoomType(type1)) continue;
+        if (type0 === RoomType.Exterior && type1 === RoomType.Exterior) continue;
         for(let i = 0; i < adj.length + 1; ++i){
             const pos = (0, _myMatrix.vec2).create();
             (0, _myMatrix.vec2).scaleAndAdd(pos, adj.origin, adj.dir, i);
@@ -5638,19 +6155,20 @@ function renderWalls(levelType, adjacencies, map, rng) {
             const roomTypeL = a.roomLeft.roomType;
             const roomTypeR = a.roomRight.roomType;
             if (roomTypeL === RoomType.Vault || roomTypeR === RoomType.Vault) continue;
+            if (roomTypeL === RoomType.Exterior && roomTypeR === RoomType.Exterior) continue;
             const dir = (0, _myMatrix.vec2).clone(a.dir);
             if (roomTypeL === RoomType.Exterior !== (roomTypeR === RoomType.Exterior)) {
                 if (roomTypeR == RoomType.Exterior) (0, _myMatrix.vec2).negate(dir, dir);
             } else if (isCourtyardRoomType(roomTypeL) !== isCourtyardRoomType(roomTypeR)) {
                 if (isCourtyardRoomType(roomTypeR)) {
-                    if (levelType === LevelType.Fortress && a.roomLeft.depth < a.roomRight.depth) continue;
+                    if (levelType === (0, _gameMap.LevelType).Fortress && a.roomLeft.depth < a.roomRight.depth) continue;
                     (0, _myMatrix.vec2).negate(dir, dir);
                 } else {
-                    if (levelType === LevelType.Fortress && a.roomRight.depth < a.roomLeft.depth) continue;
+                    if (levelType === (0, _gameMap.LevelType).Fortress && a.roomRight.depth < a.roomLeft.depth) continue;
                 }
             } else continue;
             const windowType = oneWayWindowTerrainTypeFromDir(dir);
-            if (levelType === LevelType.Fortress) {
+            if (levelType === (0, _gameMap.LevelType).Fortress) {
                 if (a.length > 2 && (a.length & 1) === 0) {
                     const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, a.length / 2);
                     map.cells.atVec(p).type = windowType;
@@ -5668,22 +6186,15 @@ function renderWalls(levelType, adjacencies, map, rng) {
                 }
             }
         }
-        let installMasterSuiteDoor = rng.random() < 0.3333;
-        let offset = Math.floor(adj0.length / 2);
-        /*
-        if (adjMirror === adj0) {
-            offset = Math.floor(adj0.length / 2);
-        } else if (adj0.length > 2) {
-            offset = 2 + rng.randomInRange(adj0.length - 3);
-        } else {
-            offset = 1 + rng.randomInRange(adj0.length - 1);
-        }
-        */ for (const a of walls){
+        const installMasterSuiteDoor = rng.random() < 0.3333;
+        for (const a of walls){
             if (!a.door) continue;
+            const offset = Math.floor(a.length / 2);
             const p = (0, _myMatrix.vec2).clone(a.origin).scaleAndAdd(a.dir, offset);
             let orientNS = a.dir[0] == 0;
             let roomTypeLeft = a.roomLeft.roomType;
             let roomTypeRight = a.roomRight.roomType;
+            if (roomTypeLeft === RoomType.Exterior && roomTypeRight === RoomType.Exterior) continue;
             if (a.doorType === DoorType.GateFront || a.doorType === DoorType.GateBack) {
                 map.cells.atVec(p).type = orientNS ? (0, _gameMap.TerrainType).PortcullisNS : (0, _gameMap.TerrainType).PortcullisEW;
                 placeItem(map, p, orientNS ? (0, _gameMap.ItemType).PortcullisNS : (0, _gameMap.ItemType).PortcullisEW);
@@ -5704,7 +6215,7 @@ function renderRooms(level, rooms, map, rng) {
         let cellType;
         switch(room.roomType){
             case RoomType.Exterior:
-                cellType = (0, _gameMap.TerrainType).GroundNormal;
+                cellType = (0, _gameMap.TerrainType).GroundGrass;
                 break;
             case RoomType.PublicCourtyard:
                 cellType = (0, _gameMap.TerrainType).GroundGrass;
@@ -5736,14 +6247,22 @@ function renderRooms(level, rooms, map, rng) {
             case RoomType.Kitchen:
                 cellType = (0, _gameMap.TerrainType).GroundWood;
                 break;
+            case RoomType.Treasure:
+                cellType = (0, _gameMap.TerrainType).GroundWood;
+                break;
+            case RoomType.TreasureCourtyard:
+                cellType = (0, _gameMap.TerrainType).GroundGrass;
+                break;
         }
         setRectTerrainType(map, room.posMin[0], room.posMin[1], room.posMax[0], room.posMax[1], cellType);
-        if (isCourtyardRoomType(room.roomType)) renderRoomCourtyard(map, room, level, rng);
+        if (room.roomType === RoomType.PublicCourtyard || room.roomType === RoomType.PrivateCourtyard) renderRoomCourtyard(map, room, level, rng);
         else if (room.roomType === RoomType.PublicRoom || room.roomType === RoomType.PrivateRoom) renderRoomGeneric(map, room, level, rng);
         else if (room.roomType === RoomType.Vault) renderRoomVault(map, room, rng);
         else if (room.roomType === RoomType.Bedroom) renderRoomBedroom(map, room, level, rng);
         else if (room.roomType === RoomType.Dining) renderRoomDining(map, room, level, rng);
         else if (room.roomType === RoomType.Kitchen) renderRoomKitchen(map, room, level, rng);
+        else if (room.roomType === RoomType.Treasure) renderRoomTreasure(map, room, level, rng);
+        else if (room.roomType === RoomType.TreasureCourtyard) renderRoomTreasureCourtyard(map, room, level, rng);
         else if (room.roomType === RoomType.PublicLibrary || room.roomType === RoomType.PrivateLibrary) renderRoomLibrary(map, room, level, rng);
         // Place creaky floor tiles
         if (cellType == (0, _gameMap.TerrainType).GroundWood && level > 3) placeCreakyFloorTiles(map, room, rng);
@@ -6186,6 +6705,35 @@ function renderRoomKitchen(map, room, level, rng) {
         for(let y = room.posMin[1] + 1; y < room.posMax[1] - 1; y += 2)for(let x = room.posMin[0] + 2; x < room.posMax[0] - 2; ++x)placeItem(map, (0, _myMatrix.vec2).fromValues(x, y), (0, _gameMap.ItemType).Table);
     }
 }
+function renderRoomTreasure(map, room, level, rng) {
+    const dx = room.posMax[0] - room.posMin[0];
+    const dy = room.posMax[1] - room.posMin[1];
+    const x = room.posMin[0] + Math.floor((dx - 1) / 2);
+    const y = room.posMin[1] + Math.floor((dy - 1) / 2);
+    setRectTerrainType(map, x, y, x + 1, y + 1, (0, _gameMap.TerrainType).GroundTreasure);
+    placeItem(map, (0, _myMatrix.vec2).fromValues(x, y), (0, _gameMap.ItemType).TreasureLockBox);
+    if (dx >= 5 || dy >= 5) {
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMin[0], room.posMin[1]), randomlyLitTorch(level, rng));
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMax[0] - 1, room.posMin[1]), randomlyLitTorch(level, rng));
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMin[0], room.posMax[1] - 1), randomlyLitTorch(level, rng));
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMax[0] - 1, room.posMax[1] - 1), randomlyLitTorch(level, rng));
+    }
+}
+function renderRoomTreasureCourtyard(map, room, level, rng) {
+    const dx = room.posMax[0] - room.posMin[0];
+    const dy = room.posMax[1] - room.posMin[1];
+    const x = room.posMin[0] + Math.floor((dx - 1) / 2);
+    const y = room.posMin[1] + Math.floor((dy - 1) / 2);
+    if (dx > 3 && dy > 3) setRectTerrainType(map, Math.max(room.posMin[0] + 1, x - 1), Math.max(room.posMin[1] + 1, y - 1), Math.min(room.posMax[0] - 1, x + 2), Math.min(room.posMax[1] - 1, y + 2), (0, _gameMap.TerrainType).GroundVault);
+    else setRectTerrainType(map, x, y, x + 1, y + 1, (0, _gameMap.TerrainType).GroundTreasure);
+    placeItem(map, (0, _myMatrix.vec2).fromValues(x, y), (0, _gameMap.ItemType).TreasureLockBox);
+    if (dx >= 5 || dy >= 5) {
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMin[0], room.posMin[1]), randomlyLitTorch(level, rng));
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMax[0] - 1, room.posMin[1]), randomlyLitTorch(level, rng));
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMin[0], room.posMax[1] - 1), randomlyLitTorch(level, rng));
+        tryPlaceItem(map, (0, _myMatrix.vec2).fromValues(room.posMax[0] - 1, room.posMax[1] - 1), randomlyLitTorch(level, rng));
+    }
+}
 function numberToIntegral(n, rng) {
     const fraction = n - Math.floor(n);
     n = Math.floor(n);
@@ -6363,7 +6911,7 @@ function placeLoot(totalLootToPlace, rooms, map, levelType, rng) {
     for (const room of rooms){
         if (room.roomType !== RoomType.Vault) continue;
         let i = rng.randomInRange(3) + rng.randomInRange(3);
-        if (levelType === LevelType.Fortress) i += 2;
+        if (levelType === (0, _gameMap.LevelType).Fortress) i += 2;
         while(i > 0){
             --i;
             if (totalLootPlaced >= totalLootToPlace) break;
@@ -6446,6 +6994,21 @@ function tryPlaceLoot(posMin, posMax, map, rng) {
     placeItem(map, positions[rng.randomInRange(positions.length)], (0, _gameMap.ItemType).Coin);
     return true;
 }
+function placeTreasure(map, rng) {
+    const treasureLockBox = map.items.find((item)=>item.type === (0, _gameMap.ItemType).TreasureLockBox);
+    if (treasureLockBox === undefined) return;
+    const books = map.items.filter((item)=>item.type === (0, _gameMap.ItemType).Bookshelf);
+    if (books.length === 0) return;
+    rng.shuffleArray(books);
+    books.length = Math.min(books.length, 3);
+    (0, _myMatrix.vec2).copy(map.treasureUnlock.posTreasure, treasureLockBox.pos);
+    map.treasureUnlock.clue = "";
+    for (const book of books){
+        map.treasureUnlock.clue += map.bookTitle.get(book) + "\n";
+        map.treasureUnlock.switches.push((0, _myMatrix.vec2).clone(book.pos));
+    }
+    console.log(map.treasureUnlock.clue);
+}
 function placeHealth(level, map, rooms, rng) {
     if (level < 1) return;
     let numHealthToPlace = 1 + Math.floor((9 - level) / 4);
@@ -6498,11 +7061,31 @@ function placeExteriorBushes(map, outerPerimeter, rng) {
     const sx = map.cells.sizeX;
     const sy = map.cells.sizeY;
     for (const pos of outerPerimeter)map.cells.atVec(pos).type = (0, _gameMap.TerrainType).GroundNormal;
-    setRectTerrainType(map, 0, 0, sx, outerBorder, (0, _gameMap.TerrainType).GroundNormal);
-    for(let x = 0; x < sx; ++x)if ((x & 1) == 0 && rng.random() < 0.8) placeItem(map, (0, _myMatrix.vec2).fromValues(x, sy - 1), (0, _gameMap.ItemType).Bush);
-    for(let y = outerBorder; y < sy - outerBorder + 1; ++y)if ((sy - y & 1) != 0) {
-        if (rng.random() < 0.8) placeItem(map, (0, _myMatrix.vec2).fromValues(0, y), (0, _gameMap.ItemType).Bush);
-        if (rng.random() < 0.8) placeItem(map, (0, _myMatrix.vec2).fromValues(sx - 1, y), (0, _gameMap.ItemType).Bush);
+    setRectTerrainType(map, 0, 0, sx, outerBorderBottom, (0, _gameMap.TerrainType).GroundNormal);
+    // Collect all grass terrain outside the mansion
+    const visited = new (0, _gameMap.BooleanGrid)(map.cells.sizeX, map.cells.sizeY, false);
+    const grass = [];
+    const toVisit = [
+        map.playerStartPos
+    ];
+    for(let iToVisit = 0; iToVisit < toVisit.length; ++iToVisit){
+        const p = toVisit[iToVisit];
+        if (visited.get(p[0], p[1])) continue;
+        visited.set(p[0], p[1], true);
+        if (map.cells.atVec(p).type >= (0, _gameMap.TerrainType).Wall0000) continue;
+        if (map.cells.atVec(p).type === (0, _gameMap.TerrainType).GroundGrass) grass.push(p);
+        for(let dx = -1; dx <= 1; ++dx)for(let dy = -1; dy <= 1; ++dy){
+            const p2 = (0, _myMatrix.vec2).fromValues(p[0] + dx, p[1] + dy);
+            if (p2[0] >= 0 && p2[1] >= 0 && p2[0] < map.cells.sizeX && p2[1] < map.cells.sizeY && !visited.get(p2[0], p2[1])) toVisit.push(p2);
+        }
+    }
+    rng.shuffleArray(grass);
+    grass.length = Math.floor(grass.length / 3);
+    visited.fill(false);
+    for (const pos of grass){
+        if (visited.get(pos[0], pos[1])) continue;
+        placeItem(map, pos, (0, _gameMap.ItemType).Bush);
+        for(let x = Math.max(0, pos[0] - 1); x < Math.min(sx, pos[0] + 2); ++x)for(let y = Math.max(0, pos[1] - 1); y < Math.min(sy, pos[1] + 2); ++y)visited.set(x, y, true);
     }
 }
 function isAdjacentToWall(map, pos) {
@@ -6518,7 +7101,7 @@ function outerBuildingPerimeter(adjacencies, map) {
     const posStart = playerStartPositionFrontDoor(adjacencies, map);
     const pos = (0, _myMatrix.vec2).clone(posStart);
     const dir = (0, _myMatrix.vec2).fromValues(1, 0);
-    while(true){
+    for(let i = map.cells.sizeX * map.cells.sizeY; i > 0; --i){
         // Add current position to path
         path.push((0, _myMatrix.vec2).clone(pos));
         // Change movement direction if we are either headed into a wall, or are not adjacent to a wall
@@ -6543,7 +7126,7 @@ function outerBuildingPerimeter(adjacencies, map) {
 }
 function placeFrontPillars(map) {
     let sx = map.cells.sizeX - 1;
-    let cx = Math.floor(map.cells.sizeX / 2);
+    let cx = Math.floor(sx / 2);
     for(let x = outerBorder; x < cx; x += 5){
         map.cells.at(x, 1).type = (0, _gameMap.TerrainType).Wall0000;
         map.cells.at(sx - x, 1).type = (0, _gameMap.TerrainType).Wall0000;
@@ -6562,6 +7145,7 @@ function isCourtyardRoomType(roomType) {
     switch(roomType){
         case RoomType.PublicCourtyard:
         case RoomType.PrivateCourtyard:
+        case RoomType.TreasureCourtyard:
             return true;
         case RoomType.Exterior:
         case RoomType.PublicRoom:
@@ -6572,6 +7156,7 @@ function isCourtyardRoomType(roomType) {
         case RoomType.PublicLibrary:
         case RoomType.PrivateLibrary:
         case RoomType.Kitchen:
+        case RoomType.Treasure:
             return false;
     }
 }
@@ -6593,7 +7178,356 @@ function placeGuards(level, map, patrolRoutes, guardLoot, placeKey, rng) {
         }
         map.guards.push(guard);
     }
+    if (level === 1) {
+        const gates = map.items.filter((item)=>item.type === (0, _gameMap.ItemType).PortcullisEW).sort((a, b)=>{
+            if (a.pos[1] < b.pos[1]) return -1;
+            else if (a.pos[1] === b.pos[1]) return 0;
+            return 1;
+        });
+        if (gates.length >= 1) map.guards[0].pos = (0, _myMatrix.vec2).fromValues(gates[0].pos[0], gates[0].pos[1] + 1);
+    }
     console.assert(guardLoot === 0);
+}
+const bookTitleFirstWord = [
+    "Alien",
+    "Aliens",
+    "Amulet",
+    "Amulets",
+    "Arm",
+    "Arms",
+    "Armor",
+    "Armor",
+    "Arrow",
+    "Arrows",
+    "Attack",
+    "Attacks",
+    "Aura",
+    "Aurae",
+    "Awakening",
+    "Awakenings",
+    "Axe",
+    "Axes",
+    "Bane",
+    "Banes",
+    "Battle-Axe",
+    "Battle-Axes",
+    "Blood",
+    "Bloods",
+    "Breath",
+    "Breaths",
+    "Captive",
+    "Captives",
+    "Castle",
+    "Castles",
+    "Catacomb",
+    "Catacombs",
+    "Cave",
+    "Caves",
+    "Chamber",
+    "Chambers",
+    "Champion",
+    "Champions",
+    "Child",
+    "Children",
+    "Citadel",
+    "Citadels",
+    "City",
+    "Cities",
+    "Claw",
+    "Claws",
+    "Cow",
+    "Cows",
+    "Crown",
+    "Crowns",
+    "Crusade",
+    "Crusades",
+    "Crystal",
+    "Crystals",
+    "Curse",
+    "Curses",
+    "Dagger",
+    "Daggers",
+    "Daughter",
+    "Daughters",
+    "Dawn",
+    "Dawn",
+    "Day",
+    "Days",
+    "Dungeon",
+    "Dungeons",
+    "Dragon",
+    "Dragons",
+    "Eye",
+    "Eyes",
+    "Field",
+    "Fields",
+    "Fire",
+    "Fires",
+    "Fist",
+    "Fists",
+    "Forest",
+    "Forests",
+    "Fortress",
+    "Fortresses",
+    "Fugitive",
+    "Fugitives",
+    "Game",
+    "Games",
+    "Gem",
+    "Gems",
+    "Guardian",
+    "Guardians",
+    "Hand",
+    "Hands",
+    "Helm",
+    "Helms",
+    "Horde",
+    "Hordes",
+    "Hour",
+    "Hours",
+    "Keep",
+    "Keeps",
+    "Key",
+    "Keys",
+    "Knight",
+    "Knights",
+    "Land",
+    "Lands",
+    "Legend",
+    "Legends",
+    "Lord",
+    "Lords",
+    "Master",
+    "Masters",
+    "Mercenary",
+    "Mercenaries",
+    "Mind",
+    "Minds",
+    "Mine",
+    "Mines",
+    "Minion",
+    "Minions",
+    "Mirror",
+    "Mirrors",
+    "Night",
+    "Nights",
+    "Moon",
+    "Moons",
+    "Omen",
+    "Omens",
+    "Orb",
+    "Orbs",
+    "Path",
+    "Paths",
+    "Pit",
+    "Pits",
+    "Plague",
+    "Plagues",
+    "Pool",
+    "Pools",
+    "Potion",
+    "Potions",
+    "Prince",
+    "Princes",
+    "Princess",
+    "Princesses",
+    "Prison",
+    "Prisons",
+    "Prisoner",
+    "Prisoners",
+    "Prophecy",
+    "Prophecies",
+    "Quest",
+    "Quests",
+    "Rampage",
+    "Rampages",
+    "Realm",
+    "Realms",
+    "Reaper",
+    "Reapers",
+    "Rebirth",
+    "Rebirths",
+    "Return",
+    "Returns",
+    "Revenge",
+    "Revenges",
+    "Ring",
+    "Rings",
+    "Rise",
+    "Rise",
+    "River",
+    "Rivers",
+    "Scroll",
+    "Scrolls",
+    "Serpent",
+    "Serpents",
+    "Servant",
+    "Servants",
+    "Shadow",
+    "Shadows",
+    "Shield",
+    "Shields",
+    "Sign",
+    "Signs",
+    "Siren",
+    "Sirens",
+    "Slave",
+    "Slaves",
+    "Son",
+    "Sons",
+    "Spawn",
+    "Spawn",
+    "Spear",
+    "Spears",
+    "Spell",
+    "Spells",
+    "Sphere",
+    "Spheres",
+    "Staff",
+    "Staves",
+    "Stronghold",
+    "Strongholds",
+    "Sword",
+    "Swords",
+    "Thief",
+    "Thieves",
+    "Threat",
+    "Threats",
+    "Throne",
+    "Thrones",
+    "Tower",
+    "Towers",
+    "Trail",
+    "Trails",
+    "Trial",
+    "Trials",
+    "Valley",
+    "Valleys",
+    "Wand",
+    "Wands",
+    "Warrior",
+    "Warriors",
+    "Weapon",
+    "Weapons",
+    "Wind",
+    "Winds",
+    "Witch",
+    "Witches",
+    "Wizard",
+    "Wizards"
+];
+const bookTitleSecondWord = [
+    "Adventure",
+    "Agony",
+    "the Ancients",
+    "Anger",
+    "Avenging",
+    "Battle",
+    "Beholding",
+    "Brilliance",
+    "Danger",
+    "Darkness",
+    "Death",
+    "Deception",
+    "Despair",
+    "Destiny",
+    "Destruction",
+    "Disease",
+    "Ecstacy",
+    "Enchantment",
+    "Enlightenment",
+    "Eternity",
+    "Evil",
+    "Falsehood",
+    "Famine",
+    "Fantasy",
+    "Fate",
+    "Fear",
+    "Flame",
+    "Foretelling",
+    "Forewarning",
+    "Fortune",
+    "Fury",
+    "Gallantry",
+    "Gingivitis",
+    "the Gods",
+    "Intrigue",
+    "Keeping",
+    "Legend",
+    "the Living Dead",
+    "Lore",
+    "Madness",
+    "Magic",
+    "Menace",
+    "Midnight",
+    "Might",
+    "Murder",
+    "Mystery",
+    "Power",
+    "Prophecy",
+    "Radiance",
+    "Rebellion",
+    "Reckoning",
+    "Remembrance",
+    "Shadow",
+    "Sickness",
+    "Strength",
+    "Suffering",
+    "Terror",
+    "Time",
+    "Truth",
+    "the Undead",
+    "the Universe",
+    "Unraveling",
+    "Valor",
+    "Vengeance",
+    "Venom",
+    "War"
+];
+function randomBookTitle(rng) {
+    const firstWord = bookTitleFirstWord[rng.randomInRange(bookTitleFirstWord.length)];
+    const secondWord = bookTitleSecondWord[rng.randomInRange(bookTitleSecondWord.length)];
+    const title = firstWord + " of " + secondWord;
+    return title;
+}
+function giveBooksTitles(bookTitle, rooms, bookItems, rng) {
+    // Divide books into sets by room
+    const booksInRoom = new Map();
+    for (const room of rooms){
+        const books = [];
+        for (const item of bookItems)if (item.pos[0] >= room.posMin[0] && item.pos[1] >= room.posMin[1] && item.pos[0] < room.posMax[0] && item.pos[1] < room.posMax[1]) books.push(item);
+        if (books.length > 0) booksInRoom.set(room, books);
+    }
+    for (const i of booksInRoom){
+        const room = i[0];
+        const books = i[1];
+        const sortAxisPrimary = (0, _myMatrix.vec2).create();
+        const sortAxisSecondary = (0, _myMatrix.vec2).create();
+        if (room.posMax[0] - room.posMin[0] >= room.posMax[1] - room.posMin[1]) {
+            (0, _myMatrix.vec2).set(sortAxisPrimary, rng.random() < 0.5 ? 1 : -1, 0);
+            (0, _myMatrix.vec2).set(sortAxisSecondary, 0, rng.random() < 0.5 ? 1 : -1);
+        } else {
+            (0, _myMatrix.vec2).set(sortAxisPrimary, 0, rng.random() < 0.5 ? 1 : -1);
+            (0, _myMatrix.vec2).set(sortAxisSecondary, rng.random() < 0.5 ? 1 : -1, 0);
+        }
+        books.sort((book0, book1)=>{
+            let n0 = (0, _myMatrix.vec2).dot(sortAxisPrimary, book0.pos);
+            let n1 = (0, _myMatrix.vec2).dot(sortAxisPrimary, book1.pos);
+            if (n0 < n1) return -1;
+            if (n0 > n1) return 1;
+            n0 = (0, _myMatrix.vec2).dot(sortAxisSecondary, book0.pos);
+            n1 = (0, _myMatrix.vec2).dot(sortAxisSecondary, book1.pos);
+            if (n0 < n1) return -1;
+            if (n0 > n1) return 1;
+            return 0;
+        });
+        const bookTitles = [];
+        for(let i = 0; i < books.length; ++i)bookTitles.push(randomBookTitle(rng));
+        bookTitles.sort((a, b)=>a.localeCompare(b, undefined, {
+                sensitivity: "base"
+            }));
+        for(let i = 0; i < books.length; ++i)bookTitle.set(books[i], bookTitles[i]);
+    }
 }
 function markExteriorAsSeen(map) {
     const visited = new (0, _gameMap.BooleanGrid)(map.cells.sizeX, map.cells.sizeY, false);
@@ -6674,6 +7608,7 @@ parcelHelpers.export(exports, "Float64Grid", ()=>Float64Grid);
 parcelHelpers.export(exports, "Int32Grid", ()=>Int32Grid);
 parcelHelpers.export(exports, "ItemType", ()=>ItemType);
 parcelHelpers.export(exports, "GameMap", ()=>GameMap);
+parcelHelpers.export(exports, "LevelType", ()=>LevelType);
 parcelHelpers.export(exports, "Player", ()=>Player);
 parcelHelpers.export(exports, "TerrainType", ()=>TerrainType);
 parcelHelpers.export(exports, "GuardStates", ()=>GuardStates);
@@ -6742,6 +7677,12 @@ class Float64Grid {
         this.values[this.sizeX * y + x] = value;
     }
 }
+let LevelType;
+(function(LevelType) {
+    LevelType[LevelType["Manor"] = 0] = "Manor";
+    LevelType[LevelType["Mansion"] = 1] = "Mansion";
+    LevelType[LevelType["Fortress"] = 2] = "Fortress";
+})(LevelType || (LevelType = {}));
 let TerrainType;
 (function(TerrainType) {
     TerrainType[TerrainType["GroundNormal"] = 0] = "GroundNormal";
@@ -6751,33 +7692,34 @@ let TerrainType;
     TerrainType[TerrainType["GroundWood"] = 4] = "GroundWood";
     TerrainType[TerrainType["GroundWoodCreaky"] = 5] = "GroundWoodCreaky";
     TerrainType[TerrainType["GroundVault"] = 6] = "GroundVault";
+    TerrainType[TerrainType["GroundTreasure"] = 7] = "GroundTreasure";
     TerrainType[TerrainType[//  NSEW
-    "Wall0000"] = 7] = "Wall0000";
-    TerrainType[TerrainType["Wall0001"] = 8] = "Wall0001";
-    TerrainType[TerrainType["Wall0010"] = 9] = "Wall0010";
-    TerrainType[TerrainType["Wall0011"] = 10] = "Wall0011";
-    TerrainType[TerrainType["Wall0100"] = 11] = "Wall0100";
-    TerrainType[TerrainType["Wall0101"] = 12] = "Wall0101";
-    TerrainType[TerrainType["Wall0110"] = 13] = "Wall0110";
-    TerrainType[TerrainType["Wall0111"] = 14] = "Wall0111";
-    TerrainType[TerrainType["Wall1000"] = 15] = "Wall1000";
-    TerrainType[TerrainType["Wall1001"] = 16] = "Wall1001";
-    TerrainType[TerrainType["Wall1010"] = 17] = "Wall1010";
-    TerrainType[TerrainType["Wall1011"] = 18] = "Wall1011";
-    TerrainType[TerrainType["Wall1100"] = 19] = "Wall1100";
-    TerrainType[TerrainType["Wall1101"] = 20] = "Wall1101";
-    TerrainType[TerrainType["Wall1110"] = 21] = "Wall1110";
-    TerrainType[TerrainType["Wall1111"] = 22] = "Wall1111";
-    TerrainType[TerrainType["OneWayWindowE"] = 23] = "OneWayWindowE";
-    TerrainType[TerrainType["OneWayWindowW"] = 24] = "OneWayWindowW";
-    TerrainType[TerrainType["OneWayWindowN"] = 25] = "OneWayWindowN";
-    TerrainType[TerrainType["OneWayWindowS"] = 26] = "OneWayWindowS";
-    TerrainType[TerrainType["PortcullisNS"] = 27] = "PortcullisNS";
-    TerrainType[TerrainType["PortcullisEW"] = 28] = "PortcullisEW";
-    TerrainType[TerrainType["DoorNS"] = 29] = "DoorNS";
-    TerrainType[TerrainType["DoorEW"] = 30] = "DoorEW";
-    TerrainType[TerrainType["GardenDoorNS"] = 31] = "GardenDoorNS";
-    TerrainType[TerrainType["GardenDoorEW"] = 32] = "GardenDoorEW";
+    "Wall0000"] = 8] = "Wall0000";
+    TerrainType[TerrainType["Wall0001"] = 9] = "Wall0001";
+    TerrainType[TerrainType["Wall0010"] = 10] = "Wall0010";
+    TerrainType[TerrainType["Wall0011"] = 11] = "Wall0011";
+    TerrainType[TerrainType["Wall0100"] = 12] = "Wall0100";
+    TerrainType[TerrainType["Wall0101"] = 13] = "Wall0101";
+    TerrainType[TerrainType["Wall0110"] = 14] = "Wall0110";
+    TerrainType[TerrainType["Wall0111"] = 15] = "Wall0111";
+    TerrainType[TerrainType["Wall1000"] = 16] = "Wall1000";
+    TerrainType[TerrainType["Wall1001"] = 17] = "Wall1001";
+    TerrainType[TerrainType["Wall1010"] = 18] = "Wall1010";
+    TerrainType[TerrainType["Wall1011"] = 19] = "Wall1011";
+    TerrainType[TerrainType["Wall1100"] = 20] = "Wall1100";
+    TerrainType[TerrainType["Wall1101"] = 21] = "Wall1101";
+    TerrainType[TerrainType["Wall1110"] = 22] = "Wall1110";
+    TerrainType[TerrainType["Wall1111"] = 23] = "Wall1111";
+    TerrainType[TerrainType["OneWayWindowE"] = 24] = "OneWayWindowE";
+    TerrainType[TerrainType["OneWayWindowW"] = 25] = "OneWayWindowW";
+    TerrainType[TerrainType["OneWayWindowN"] = 26] = "OneWayWindowN";
+    TerrainType[TerrainType["OneWayWindowS"] = 27] = "OneWayWindowS";
+    TerrainType[TerrainType["PortcullisNS"] = 28] = "PortcullisNS";
+    TerrainType[TerrainType["PortcullisEW"] = 29] = "PortcullisEW";
+    TerrainType[TerrainType["DoorNS"] = 30] = "DoorNS";
+    TerrainType[TerrainType["DoorEW"] = 31] = "DoorEW";
+    TerrainType[TerrainType["GardenDoorNS"] = 32] = "GardenDoorNS";
+    TerrainType[TerrainType["GardenDoorEW"] = 33] = "GardenDoorEW";
 })(TerrainType || (TerrainType = {}));
 class CellGrid {
     constructor(sizeX, sizeY){
@@ -6852,6 +7794,9 @@ let ItemType;
     ItemType[ItemType["PurseCarry"] = 21] = "PurseCarry";
     ItemType[ItemType["Key"] = 22] = "Key";
     ItemType[ItemType["KeyCarry"] = 23] = "KeyCarry";
+    ItemType[ItemType["Note"] = 24] = "Note";
+    ItemType[ItemType["TreasureLockBox"] = 25] = "TreasureLockBox";
+    ItemType[ItemType["Treasure"] = 26] = "Treasure";
 })(ItemType || (ItemType = {}));
 function guardMoveCostForItemType(itemType) {
     switch(itemType){
@@ -6903,13 +7848,22 @@ function guardMoveCostForItemType(itemType) {
             return 0;
         case ItemType.KeyCarry:
             return 0;
+        case ItemType.Note:
+            return 0;
+        case ItemType.TreasureLockBox:
+            return Infinity;
+        case ItemType.Treasure:
+            return Infinity;
     }
 }
 const maxPlayerHealth = 5;
 const maxPlayerTurnsUnderwater = 7;
 class Player {
+    itemUsed = null;
     animation = null;
+    torchAnimation = null;
     pickTarget = null;
+    lightActive = false;
     idle = false;
     idleCursorAnimation = null;
     idleCursorType = "orbs";
@@ -6919,7 +7873,9 @@ class Player {
         this.health = maxPlayerHealth;
         this.loot = 0;
         this.noisy = false;
+        this.preNoisy = false;
         this.noiseOffset = (0, _myMatrix.vec2).fromValues(0, 0);
+        this.noisyAnim = 0;
         this.hasVaultKey = false;
         this.damagedLastTurn = false;
         this.turnsRemainingUnderwater = maxPlayerTurnsUnderwater;
@@ -6929,6 +7885,7 @@ class Player {
         this.damagedLastTurn = true;
     }
     hidden(map) {
+        if (this.lightActive) return false;
         if (map.guards.find((guard)=>guard.mode == (0, _guard.GuardMode).ChaseVisibleTarget) !== undefined) return false;
         if (map.cells.atVec(this.pos).hidesPlayer) return true;
         let cellType = map.cells.atVec(this.pos).type;
@@ -7092,12 +8049,20 @@ class GameMap {
         this.lightCount = 0;
         this.numPreRevealedCells = 0;
         this.adjacencies = [];
+        this.backtrackingCoefficient = 1;
+        this.bookTitle = new Map();
+        this.treasureUnlock = {
+            clue: "",
+            switches: [],
+            numSwitchesUsed: 0,
+            posTreasure: (0, _myMatrix.vec2).create()
+        };
     }
     collectLootAt(pos) {
         let items = [];
         this.items = this.items.filter((item)=>{
             if (!item.pos.equals(pos)) return true;
-            else if (item.type === ItemType.Coin || item.type === ItemType.Health) {
+            else if (item.type === ItemType.Coin || item.type === ItemType.Treasure || item.type === ItemType.Health) {
                 items.push(item);
                 return false;
             } else return true;
@@ -7226,12 +8191,12 @@ class GameMap {
             if (aRightOfB(crdx, crdy, cldx, cldy)) this.computeVisibility(viewerX, viewerY, targetX + portal.nx, targetY + portal.ny, cldx, cldy, crdx, crdy);
         }
     }
-    computeLighting(playerCell = null) {
+    computeLighting(player) {
         //TODO: These light source calculation depend on the number of lights (either on or off) 
         //not changing and not changing their order during play to avoid ugly flickering when lights
         //switch on/off
         const occupied = new Set();
-        if (playerCell !== null && playerCell.type >= TerrainType.Wall0000) occupied.add(playerCell);
+        if (player !== null && this.cells.atVec(player.pos).type >= TerrainType.Wall0000) occupied.add(this.cells.atVec(player.pos));
         for (let g of this.guards){
             const gCell = this.cells.at(g.pos[0], g.pos[1]);
             if (gCell.type >= TerrainType.Wall0000) occupied.add(gCell);
@@ -7241,6 +8206,7 @@ class GameMap {
             cell.litSrc.clear();
         }
         let lightId = 0;
+        // Environment light sources
         for (const item of this.items){
             if (item.type === ItemType.TorchLit) {
                 this.castLight(item.pos, 45, lightId, occupied);
@@ -7252,10 +8218,14 @@ class GameMap {
             }
             if (item.type == ItemType.TorchUnlit) lightId++;
         }
+        // Guards' light sources
         for (const guard of this.guards)if (guard.hasTorch) {
             if (guard.mode !== (0, _guard.GuardMode).Unconscious) this.castLight(guard.pos, 15, lightId, occupied);
             lightId++;
         }
+        // Player's light source
+        if (player !== null && player.lightActive) this.castLight(player.pos, 0, lightId, occupied);
+        lightId++;
         this.lightCount = lightId;
     }
     castLight(posLight, radiusSquared, lightId, occupied) {
@@ -7525,6 +8495,38 @@ class GameMap {
         }
         return guards;
     }
+    tryGetPosLookAt(pos, includeDoors) {
+        const x = pos[0];
+        const y = pos[1];
+        if (includeDoors) {
+            // If there's a locked door adjacent to us, look the opposite way
+            const lockedDoorsAdj = this.items.filter((item)=>Math.abs(item.pos[0] - x) < 2 && Math.abs(item.pos[1] - y) < 2 && (item.type === ItemType.LockedDoorEW || item.type === ItemType.LockedDoorNS));
+            if (lockedDoorsAdj.find((item)=>item.pos[0] === x - 1 && item.pos[1] === y)) return (0, _myMatrix.vec2).fromValues(x + 1, y);
+            else if (lockedDoorsAdj.find((item)=>item.pos[0] === x + 1 && item.pos[1] === y)) return (0, _myMatrix.vec2).fromValues(x - 1, y);
+            else if (lockedDoorsAdj.find((item)=>item.pos[0] === x && item.pos[1] === y - 1)) return (0, _myMatrix.vec2).fromValues(x, y + 1);
+            else if (lockedDoorsAdj.find((item)=>item.pos[0] === x && item.pos[1] === y + 1)) return (0, _myMatrix.vec2).fromValues(x, y - 1);
+            // If there's a doorway adjacent to us, look the opposite way
+            if (x > 0 && this.cells.at(x - 1, y).type === TerrainType.DoorNS) return (0, _myMatrix.vec2).fromValues(x + 1, y);
+            else if (x < this.cells.sizeX - 1 && this.cells.at(x + 1, y).type === TerrainType.DoorNS) return (0, _myMatrix.vec2).fromValues(x - 1, y);
+            else if (y > 0 && this.cells.at(x, y - 1).type === TerrainType.DoorEW) return (0, _myMatrix.vec2).fromValues(x, y + 1);
+            else if (y < this.cells.sizeY - 1 && this.cells.at(x, y + 1).type == TerrainType.DoorEW) return (0, _myMatrix.vec2).fromValues(x, y - 1);
+        }
+        // If there's a window adjacent to us, look out it
+        if (x > 0 && this.cells.at(x - 1, y).type == TerrainType.OneWayWindowW) return (0, _myMatrix.vec2).fromValues(x - 1, y);
+        else if (x < this.cells.sizeX - 1 && this.cells.at(x + 1, y).type == TerrainType.OneWayWindowE) return (0, _myMatrix.vec2).fromValues(x + 1, y);
+        else if (y > 0 && this.cells.at(x, y - 1).type == TerrainType.OneWayWindowS) return (0, _myMatrix.vec2).fromValues(x, y - 1);
+        else if (y < this.cells.sizeY - 1 && this.cells.at(x, y + 1).type == TerrainType.OneWayWindowN) return (0, _myMatrix.vec2).fromValues(x, y + 1);
+        // If guard is on a chair, try to come up with a direction to look
+        if (this.items.find((item)=>item.pos.equals(pos) && item.type === ItemType.Chair)) {
+            // If there's a table or lamp adjacent, look at it
+            const tables = this.items.filter((item)=>Math.abs(item.pos[0] - x) < 2 && Math.abs(item.pos[1] - y) < 2 && (item.type === ItemType.Table || item.type === ItemType.TorchLit || item.type === ItemType.TorchUnlit));
+            if (tables.find((item)=>item.pos[0] === x - 1 && item.pos[1] === y)) return (0, _myMatrix.vec2).fromValues(x - 1, y);
+            if (tables.find((item)=>item.pos[0] === x + 1 && item.pos[1] === y)) return (0, _myMatrix.vec2).fromValues(x + 1, y);
+            if (tables.find((item)=>item.pos[0] === x && item.pos[1] === y - 1)) return (0, _myMatrix.vec2).fromValues(x, y - 1);
+            if (tables.find((item)=>item.pos[0] === x && item.pos[1] === y + 1)) return (0, _myMatrix.vec2).fromValues(x, y + 1);
+        }
+        return undefined;
+    }
 }
 function isWindowTerrainType(terrainType) {
     return terrainType >= TerrainType.OneWayWindowE && terrainType <= TerrainType.OneWayWindowS;
@@ -7582,20 +8584,22 @@ var _random = require("./random");
 var _popups = require("./popups");
 var _animation = require("./animation");
 var _game = require("./game");
+const distSquaredSeeTorchMax = 64;
 let GuardMode;
 (function(GuardMode) {
     GuardMode[GuardMode["Patrol"] = 0] = "Patrol";
     GuardMode[GuardMode["Look"] = 1] = "Look";
-    GuardMode[GuardMode["Listen"] = 2] = "Listen";
-    GuardMode[GuardMode["ChaseVisibleTarget"] = 3] = "ChaseVisibleTarget";
-    GuardMode[GuardMode["MoveToLastSighting"] = 4] = "MoveToLastSighting";
-    GuardMode[GuardMode["MoveToLastSound"] = 5] = "MoveToLastSound";
-    GuardMode[GuardMode["MoveToGuardShout"] = 6] = "MoveToGuardShout";
-    GuardMode[GuardMode["MoveToDownedGuard"] = 7] = "MoveToDownedGuard";
-    GuardMode[GuardMode["WakeGuard"] = 8] = "WakeGuard";
-    GuardMode[GuardMode["MoveToTorch"] = 9] = "MoveToTorch";
-    GuardMode[GuardMode["LightTorch"] = 10] = "LightTorch";
-    GuardMode[GuardMode["Unconscious"] = 11] = "Unconscious";
+    GuardMode[GuardMode["LookAtTorch"] = 2] = "LookAtTorch";
+    GuardMode[GuardMode["Listen"] = 3] = "Listen";
+    GuardMode[GuardMode["ChaseVisibleTarget"] = 4] = "ChaseVisibleTarget";
+    GuardMode[GuardMode["MoveToLastSighting"] = 5] = "MoveToLastSighting";
+    GuardMode[GuardMode["MoveToLastSound"] = 6] = "MoveToLastSound";
+    GuardMode[GuardMode["MoveToGuardShout"] = 7] = "MoveToGuardShout";
+    GuardMode[GuardMode["MoveToDownedGuard"] = 8] = "MoveToDownedGuard";
+    GuardMode[GuardMode["WakeGuard"] = 9] = "WakeGuard";
+    GuardMode[GuardMode["MoveToTorch"] = 10] = "MoveToTorch";
+    GuardMode[GuardMode["LightTorch"] = 11] = "LightTorch";
+    GuardMode[GuardMode["Unconscious"] = 12] = "Unconscious";
 })(GuardMode || (GuardMode = {}));
 class Guard {
     dir = (0, _myMatrix.vec2).fromValues(1, 0);
@@ -7619,7 +8623,7 @@ class Guard {
     constructor(patrolPath, pathIndexStart){
         const posStart = patrolPath[pathIndexStart];
         this.pos = (0, _myMatrix.vec2).clone(posStart);
-        this.heardGuardPos = (0, _myMatrix.vec2).clone(posStart);
+        this.heardGuardPos = (0, _myMatrix.vec2).create();
         this.goal = (0, _myMatrix.vec2).clone(posStart);
         this.patrolPath = patrolPath;
         this.patrolPathIndex = pathIndexStart;
@@ -7663,6 +8667,7 @@ class Guard {
                 this.goals = this.choosePatrolStep(state);
                 break;
             case GuardMode.Look:
+            case GuardMode.LookAtTorch:
             case GuardMode.Listen:
             case GuardMode.Unconscious:
                 this.goals = this.chooseMoveTowardPosition(this.pos, state.gameMap);
@@ -7701,11 +8706,10 @@ class Guard {
             bumpedPlayer
         ];
     }
-    act(state, shouts) {
+    act(state, speech, shouts) {
         const posPrev = (0, _myMatrix.vec2).clone(this.pos);
         const map = state.gameMap;
         const player = state.player;
-        const popups = state.popups;
         const levelStats = state.levelStats;
         // Immediately upgrade to chasing if we see the player while investigating;
         // this lets us start moving toward the player on this turn rather than
@@ -7721,8 +8725,13 @@ class Guard {
                 this.makeBestAvailableMove(map, player);
                 if (!this.pos.equals(this.patrolPath[this.patrolPathIndex])) this.enterPatrolMode(map);
                 else if (this.pos.equals(posPrev)) {
-                    const posLookAt = this.tryGetPosLookAt(map);
-                    if (posLookAt !== undefined) updateDir(this.dir, this.pos, posLookAt);
+                    // Stand still for a turn before rotating to face look-at direction
+                    const posPrev2 = this.patrolPath[Math.max(0, this.patrolPathIndex + this.patrolPath.length - 2) % this.patrolPath.length];
+                    if (posPrev.equals(posPrev2)) {
+                        const includeDoors = this.patrolPath.length === 1;
+                        const posLookAt = map.tryGetPosLookAt(this.pos, includeDoors);
+                        if (posLookAt !== undefined) updateDir(this.dir, this.pos, posLookAt);
+                    }
                 }
                 break;
             case GuardMode.Look:
@@ -7731,15 +8740,21 @@ class Guard {
                 this.modeTimeout -= 1;
                 if (this.modeTimeout <= 0) this.enterPatrolMode(map);
                 break;
+            case GuardMode.LookAtTorch:
+                this.makeBestAvailableMove(map, player);
+                updateDir(this.dir, this.pos, this.goal);
+                this.modeTimeout -= 1;
+                if (this.modeTimeout <= 0) this.enterPatrolMode(map);
+                break;
             case GuardMode.ChaseVisibleTarget:
                 (0, _myMatrix.vec2).copy(this.goal, player.pos);
                 if (this.adjacentTo(player.pos) && !this.pos.equals(player.pos)) {
                     updateDir(this.dir, this.pos, this.goal);
                     if (this.modePrev === GuardMode.ChaseVisibleTarget) {
-                        if (!player.damagedLastTurn) {
-                            popups.add((0, _popups.PopupType).Damage, ()=>this.posAnimated(), player.pos);
-                            this.speaking = true;
-                        }
+                        if (!player.damagedLastTurn) speech.push({
+                            speaker: this,
+                            speechType: (0, _popups.PopupType).Damage
+                        });
                         const startend = (0, _myMatrix.vec2).create();
                         const middle = (0, _myMatrix.vec2).create();
                         (0, _myMatrix.vec2).subtract(middle, player.pos, this.pos);
@@ -7826,32 +8841,44 @@ class Guard {
                 --this.modeTimeout;
                 updateDir(this.dir, this.pos, this.goal);
                 if (this.modeTimeout <= 0) {
-                    relightTorchAt(map, this.goal, player);
-                    this.enterPatrolMode(map);
+                    relightTorchAt(map, this.goal);
+                    const torch = torchNeedingRelighting(map, this.pos);
+                    if (torch === undefined) this.enterPatrolMode(map);
+                    else {
+                        (0, _myMatrix.vec2).copy(this.goal, torch.pos);
+                        if (this.cardinallyAdjacentTo(this.goal)) {
+                            this.mode = GuardMode.LightTorch;
+                            this.modeTimeout = 5;
+                        } else {
+                            this.mode = GuardMode.MoveToTorch;
+                            this.modeTimeout = 3;
+                        }
+                    }
                 }
                 break;
             case GuardMode.Unconscious:
                 // this.modeTimeout -= 1;
-                if (this.modeTimeout === 5) {
-                    const popup = (0, _popups.PopupType).GuardStirring;
-                    popups.add(popup, ()=>this.posAnimated(), player.pos);
-                    this.speaking = true;
-                } else if (this.modeTimeout <= 0) {
+                if (this.modeTimeout === 5) speech.push({
+                    speaker: this,
+                    speechType: (0, _popups.PopupType).GuardStirring
+                });
+                else if (this.modeTimeout <= 0) {
                     this.enterPatrolMode(map);
                     this.modeTimeout = 0;
                     this.angry = true;
                     shouts.push({
-                        pos_shouter: this.pos,
-                        pos_target: this.pos,
+                        posShouter: (0, _myMatrix.vec2).clone(this.pos),
                         target: this
                     });
-                    popups.add((0, _popups.PopupType).GuardAwakesWarning, ()=>this.posAnimated(), player.pos);
-                    this.speaking = true;
+                    speech.push({
+                        speaker: this,
+                        speechType: (0, _popups.PopupType).GuardAwakesWarning
+                    });
                 }
                 break;
         }
     }
-    postActSense(map, popups, player, levelStats, shouts) {
+    postActSense(map, player, levelStats, speech, shouts) {
         if (this.mode !== GuardMode.Unconscious) {
             // See the thief, or lose sight of the thief
             if (this.seesActor(map, player)) {
@@ -7891,14 +8918,13 @@ class Guard {
                 this.angry = true;
                 this.modeTimeout = 3;
                 shouts.push({
-                    pos_shouter: this.pos,
-                    pos_target: guard.pos,
+                    posShouter: (0, _myMatrix.vec2).clone(this.pos),
                     target: guard
                 });
                 break;
             }
             // If we see an extinguished torch, move to light it.
-            if (this.mode === GuardMode.Patrol && (this.angry || this.hasTorch)) {
+            if (this.hasTorch && this.mode === GuardMode.Patrol) {
                 const torch = torchNeedingRelighting(map, this.pos);
                 if (torch !== undefined) {
                     (0, _myMatrix.vec2).copy(this.goal, torch.pos);
@@ -7911,23 +8937,32 @@ class Guard {
                     }
                 }
             }
+            // If we see a torch lit or doused, turn to look at it (if lit), or remark on it (if unlit)
+            if (!this.hasTorch && isRelaxedGuardMode(this.mode) && player.itemUsed !== null && (0, _myMatrix.vec2).squaredDistance(this.pos, player.itemUsed.pos) <= distSquaredSeeTorchMax && lineOfSightToTorch(map, this.pos, player.itemUsed.pos)) {
+                if (player.itemUsed.type === (0, _gameMap.ItemType).TorchLit) {
+                    (0, _myMatrix.vec2).copy(this.goal, player.itemUsed.pos);
+                    this.mode = GuardMode.LookAtTorch;
+                    this.modeTimeout = 2 + (0, _random.randomInRange)(4);
+                } else if (player.itemUsed.type === (0, _gameMap.ItemType).TorchUnlit) speech.push({
+                    speaker: this,
+                    speechType: (0, _popups.PopupType).GuardSeeTorchDoused
+                });
+            }
         }
-        // Clear heard-thief flags
+        // Clear sense flags
         this.heardThief = false;
         this.heardThiefClosest = false;
         // Say something to indicate state changes
-        const popupType = popupTypeForStateChange(this.modePrev, this.mode);
-        if (popupType !== undefined) {
-            popups.add(popupType, ()=>this.posAnimated(), player.pos);
-            this.speaking = true;
-        }
+        const popupType = popupTypeForStateChange(this.modePrev, this.mode, (0, _myMatrix.vec2).squaredDistance(this.pos, player.pos));
+        if (popupType !== undefined) speech.push({
+            speaker: this,
+            speechType: popupType
+        });
         if (this.mode === GuardMode.ChaseVisibleTarget && this.modePrev !== GuardMode.ChaseVisibleTarget) {
             shouts.push({
-                pos_shouter: this.pos,
-                pos_target: player.pos,
+                posShouter: (0, _myMatrix.vec2).clone(this.pos),
                 target: player
             });
-            this.speaking = true;
             ++levelStats.numSpottings;
         }
     }
@@ -8010,31 +9045,6 @@ class Guard {
         const distanceField = map.computeDistancesToAdjacentToPosition(posGoal);
         return map.nextPositions(distanceField, this.pos);
     }
-    tryGetPosLookAt(map) {
-        const x = this.pos[0];
-        const y = this.pos[1];
-        // If there's a door adjacent to us, look the opposite way
-        if (this.patrolPath.length === 1) {
-            if (x > 0 && map.cells.at(x - 1, y).type === (0, _gameMap.TerrainType).DoorNS) return (0, _myMatrix.vec2).fromValues(x + 1, y);
-            else if (x < map.cells.sizeX - 1 && map.cells.at(x + 1, y).type === (0, _gameMap.TerrainType).DoorNS) return (0, _myMatrix.vec2).fromValues(x - 1, y);
-            else if (y > 0 && map.cells.at(x, y - 1).type === (0, _gameMap.TerrainType).DoorEW) return (0, _myMatrix.vec2).fromValues(x, y + 1);
-            else if (y < map.cells.sizeY - 1 && map.cells.at(x, y + 1).type == (0, _gameMap.TerrainType).DoorEW) return (0, _myMatrix.vec2).fromValues(x, y - 1);
-        }
-        // If there's a window adjacent to us, look out it
-        if (x > 0 && map.cells.at(x - 1, y).type == (0, _gameMap.TerrainType).OneWayWindowW) return (0, _myMatrix.vec2).fromValues(x - 1, y);
-        else if (x < map.cells.sizeX - 1 && map.cells.at(x + 1, y).type == (0, _gameMap.TerrainType).OneWayWindowE) return (0, _myMatrix.vec2).fromValues(x + 1, y);
-        else if (y > 0 && map.cells.at(x, y - 1).type == (0, _gameMap.TerrainType).OneWayWindowS) return (0, _myMatrix.vec2).fromValues(x, y - 1);
-        else if (y < map.cells.sizeY - 1 && map.cells.at(x, y + 1).type == (0, _gameMap.TerrainType).OneWayWindowN) return (0, _myMatrix.vec2).fromValues(x, y + 1);
-        // If guard is on a chair, and there is a table adjacent to us, look at it
-        if (map.items.find((item)=>item.pos.equals(this.pos) && item.type === (0, _gameMap.ItemType).Chair)) {
-            const tables = map.items.filter((item)=>Math.abs(item.pos[0] - x) < 2 && Math.abs(item.pos[1] - y) < 2 && item.type === (0, _gameMap.ItemType).Table);
-            if (tables.find((item)=>item.pos[0] === x - 1 && item.pos[1] === y)) return (0, _myMatrix.vec2).fromValues(x - 1, y);
-            if (tables.find((item)=>item.pos[0] === x + 1 && item.pos[1] === y)) return (0, _myMatrix.vec2).fromValues(x + 1, y);
-            if (tables.find((item)=>item.pos[0] === x && item.pos[1] === y - 1)) return (0, _myMatrix.vec2).fromValues(x, y - 1);
-            if (tables.find((item)=>item.pos[0] === x && item.pos[1] === y + 1)) return (0, _myMatrix.vec2).fromValues(x, y + 1);
-        }
-        return undefined;
-    }
 }
 function isRelaxedGuardMode(guardMode) {
     return guardMode === GuardMode.Patrol || guardMode === GuardMode.MoveToTorch || guardMode === GuardMode.LightTorch;
@@ -8049,7 +9059,9 @@ function guardOnGate(guard, map) {
 function chooseGuardMoves(state) {
     for (const guard of state.gameMap.guards)guard.chooseMoves(state);
 }
-function guardActAll(state, map, popups, player) {
+function guardActAll(state) {
+    const map = state.gameMap;
+    const player = state.player;
     // Mark if we heard a guard last turn, and clear the speaking flag.
     for (const guard of map.guards){
         guard.modePrev = guard.mode;
@@ -8069,33 +9081,98 @@ function guardActAll(state, map, popups, player) {
     };
     map.guards.sort(guardOrdering);
     // Update each guard for this turn.
+    const speech = [];
     const shouts = [];
     let ontoGate = false;
     for (const guard of map.guards){
         const oldPos = (0, _myMatrix.vec2).clone(guard.pos);
-        guard.act(state, shouts);
+        guard.act(state, speech, shouts);
         guard.hasMoved = true;
         ontoGate = ontoGate || guardOnGate(guard, map) && !oldPos.equals(guard.pos);
     }
     // Update lighting to account for guards moving with torches, or opening/closing doors
-    map.computeLighting(map.cells.atVec(player.pos));
+    map.computeLighting(player);
     // Update guard states based on their senses
-    for (const guard of map.guards)guard.postActSense(map, popups, player, state.levelStats, shouts);
+    for (const guard of map.guards)guard.postActSense(map, player, state.levelStats, speech, shouts);
+    // Of all the guards trying to talk, pick the one that seems most important and create a speech bubble for them
+    if (speech.length > 0) {
+        speech.sort((a, b)=>{
+            if (a.speechType < b.speechType) return -1;
+            if (a.speechType > b.speechType) return 1;
+            const posA = a.speaker.pos;
+            const posB = b.speaker.pos;
+            const aDist = (0, _myMatrix.vec2).squaredDistance(posA, player.pos);
+            const bDist = (0, _myMatrix.vec2).squaredDistance(posB, player.pos);
+            if (aDist < bDist) return -1;
+            if (aDist > bDist) return 1;
+            return 0;
+        });
+        const speechBest = speech[0];
+        const soundName = soundNameForPopupType(speechBest.speechType);
+        const subtitledSound = state.subtitledSounds[soundName].play(0.6);
+        const speaker = speech[0].speaker;
+        const below = speaker.pos[1] < player.pos[1];
+        state.popups.setCur(subtitledSound.subtitle, ()=>speaker.posAnimated(), below);
+        speaker.speaking = true;
+    }
     // Process shouts
     for (const shout of shouts)alertNearbyGuards(map, shout);
     // Clear pickTarget if the guard sees the player or is no longer adjacent to the player
     if (player.pickTarget !== null && (player.pickTarget.mode === GuardMode.ChaseVisibleTarget || !player.pickTarget.cardinallyAdjacentTo(player.pos))) player.pickTarget = null;
     if (ontoGate) state.sounds["gate"].play(0.2);
 }
-function popupTypeForStateChange(modePrev, modeNext) {
+function soundNameForPopupType(popupType) {
+    switch(popupType){
+        case (0, _popups.PopupType).Damage:
+            return "guardDamage";
+        case (0, _popups.PopupType).GuardChase:
+            return "guardChase";
+        case (0, _popups.PopupType).GuardSeeThief:
+            return "guardSeeThief";
+        case (0, _popups.PopupType).GuardHearThief:
+            return "guardHearThief";
+        case (0, _popups.PopupType).GuardHearGuard:
+            return "guardHearGuard";
+        case (0, _popups.PopupType).GuardSeeTorchLit:
+            return "guardSeeTorchLit";
+        case (0, _popups.PopupType).GuardSeeUnlitTorch:
+            return "guardSeeUnlitTorch";
+        case (0, _popups.PopupType).GuardDownWarning:
+            return "guardDownWarning";
+        case (0, _popups.PopupType).GuardAwakesWarning:
+            return "guardAwakesWarning";
+        case (0, _popups.PopupType).GuardWarningResponse:
+            return "guardWarningResponse";
+        case (0, _popups.PopupType).GuardInvestigate:
+            return "guardInvestigate";
+        case (0, _popups.PopupType).GuardEndChase:
+            return "guardEndChase";
+        case (0, _popups.PopupType).GuardFinishInvestigating:
+            return "guardFinishInvestigating";
+        case (0, _popups.PopupType).GuardFinishLooking:
+            return "guardFinishLooking";
+        case (0, _popups.PopupType).GuardFinishListening:
+            return "guardFinishListening";
+        case (0, _popups.PopupType).GuardFinishLightingTorch:
+            return "guardFinishLightingTorch";
+        case (0, _popups.PopupType).GuardFinishLookingAtLitTorch:
+            return "guardFinishLookingAtLitTorch";
+        case (0, _popups.PopupType).GuardStirring:
+            return "guardStirring";
+        case (0, _popups.PopupType).GuardSeeTorchDoused:
+            return "guardSeeTorchDoused";
+    }
+}
+function popupTypeForStateChange(modePrev, modeNext, squaredPlayerDist) {
     if (modeNext == modePrev) return undefined;
+    const inEarshot = squaredPlayerDist <= distSquaredSeeTorchMax;
     switch(modeNext){
         case GuardMode.Patrol:
-        case GuardMode.MoveToTorch:
-        case GuardMode.LightTorch:
             switch(modePrev){
                 case GuardMode.Look:
                     return (0, _popups.PopupType).GuardFinishLooking;
+                case GuardMode.LookAtTorch:
+                    return (0, _popups.PopupType).GuardFinishLookingAtLitTorch;
                 case GuardMode.Listen:
                     return (0, _popups.PopupType).GuardFinishListening;
                 case GuardMode.MoveToLastSound:
@@ -8104,6 +9181,8 @@ function popupTypeForStateChange(modePrev, modeNext) {
                     return (0, _popups.PopupType).GuardEndChase;
                 case GuardMode.MoveToLastSighting:
                     return (0, _popups.PopupType).GuardEndChase;
+                case GuardMode.LightTorch:
+                    return inEarshot ? (0, _popups.PopupType).GuardFinishLightingTorch : undefined;
                 case GuardMode.Unconscious:
                     return (0, _popups.PopupType).GuardAwakesWarning;
                 default:
@@ -8111,10 +9190,15 @@ function popupTypeForStateChange(modePrev, modeNext) {
             }
         case GuardMode.Look:
             return (0, _popups.PopupType).GuardSeeThief;
+        case GuardMode.LookAtTorch:
+            return (0, _popups.PopupType).GuardSeeTorchLit;
         case GuardMode.Listen:
             return (0, _popups.PopupType).GuardHearThief;
         case GuardMode.ChaseVisibleTarget:
             if (modePrev != GuardMode.MoveToLastSighting) return (0, _popups.PopupType).GuardChase;
+            else return undefined;
+        case GuardMode.LightTorch:
+            if (modePrev === GuardMode.Patrol && inEarshot) return (0, _popups.PopupType).GuardSeeUnlitTorch;
             else return undefined;
         case GuardMode.MoveToLastSighting:
             return undefined;
@@ -8122,18 +9206,21 @@ function popupTypeForStateChange(modePrev, modeNext) {
             return (0, _popups.PopupType).GuardInvestigate;
         case GuardMode.MoveToGuardShout:
             return (0, _popups.PopupType).GuardHearGuard;
+        case GuardMode.MoveToTorch:
+            if (modePrev !== GuardMode.LightTorch && inEarshot) return (0, _popups.PopupType).GuardSeeUnlitTorch;
+            else return undefined;
         case GuardMode.MoveToDownedGuard:
             return (0, _popups.PopupType).GuardDownWarning;
     }
     return undefined;
 }
 function alertNearbyGuards(map, shout) {
-    for (const guard of map.guardsInEarshot(shout.pos_shouter, 25)){
+    for (const guard of map.guardsInEarshot(shout.posShouter, 25)){
         if (guard.mode === GuardMode.Unconscious) continue;
-        if (guard.pos.equals(shout.pos_shouter)) continue;
+        if (guard.pos.equals(shout.posShouter)) continue;
         guard.hearingGuard = true;
         if (shout.target instanceof Guard) guard.angry = true;
-        (0, _myMatrix.vec2).copy(guard.heardGuardPos, shout.pos_shouter);
+        (0, _myMatrix.vec2).copy(guard.heardGuardPos, shout.posShouter);
     }
 }
 function updateDir(dir, pos, posTarget) {
@@ -8153,7 +9240,7 @@ function updateDir(dir, pos, posTarget) {
 }
 function torchNeedingRelighting(map, posViewer) {
     let bestItem = undefined;
-    let bestDistSquared = 65;
+    let bestDistSquared = distSquaredSeeTorchMax + 1;
     for (const item of map.items)if (item.type === (0, _gameMap.ItemType).TorchUnlit) {
         const distSquared = (0, _myMatrix.vec2).squaredDistance(item.pos, posViewer);
         if (distSquared >= bestDistSquared) continue;
@@ -8163,9 +9250,8 @@ function torchNeedingRelighting(map, posViewer) {
     }
     return bestItem;
 }
-function relightTorchAt(map, posTorch, player) {
+function relightTorchAt(map, posTorch) {
     for (const item of map.items)if (item.type === (0, _gameMap.ItemType).TorchUnlit && item.pos.equals(posTorch)) item.type = (0, _gameMap.ItemType).TorchLit;
-    map.computeLighting(map.cells.atVec(player.pos));
 }
 function lineOfSight(map, from, to) {
     let x = from[0];
@@ -9096,90 +10182,35 @@ let PopupType;
     PopupType[PopupType["GuardAwakesWarning"] = 6] = "GuardAwakesWarning";
     PopupType[PopupType["GuardWarningResponse"] = 7] = "GuardWarningResponse";
     PopupType[PopupType["GuardHearGuard"] = 8] = "GuardHearGuard";
-    PopupType[PopupType["GuardEndChase"] = 9] = "GuardEndChase";
-    PopupType[PopupType["GuardFinishInvestigating"] = 10] = "GuardFinishInvestigating";
-    PopupType[PopupType["GuardFinishLooking"] = 11] = "GuardFinishLooking";
-    PopupType[PopupType["GuardFinishListening"] = 12] = "GuardFinishListening";
-    PopupType[PopupType["GuardStirring"] = 13] = "GuardStirring";
+    PopupType[PopupType["GuardSeeTorchLit"] = 9] = "GuardSeeTorchLit";
+    PopupType[PopupType["GuardSeeUnlitTorch"] = 10] = "GuardSeeUnlitTorch";
+    PopupType[PopupType["GuardEndChase"] = 11] = "GuardEndChase";
+    PopupType[PopupType["GuardFinishInvestigating"] = 12] = "GuardFinishInvestigating";
+    PopupType[PopupType["GuardFinishLooking"] = 13] = "GuardFinishLooking";
+    PopupType[PopupType["GuardFinishListening"] = 14] = "GuardFinishListening";
+    PopupType[PopupType["GuardFinishLightingTorch"] = 15] = "GuardFinishLightingTorch";
+    PopupType[PopupType["GuardFinishLookingAtLitTorch"] = 16] = "GuardFinishLookingAtLitTorch";
+    PopupType[PopupType["GuardStirring"] = 17] = "GuardStirring";
+    PopupType[PopupType["GuardSeeTorchDoused"] = 18] = "GuardSeeTorchDoused";
 })(PopupType || (PopupType = {}));
 class Popups {
     constructor(){
-        this.popups = [];
         this.currentPopup = "";
         this.currentPopupWorldPos = ()=>(0, _myMatrix.vec2).create();
         this.currentPopupBelow = false;
         this.currentPopupTimeRemaining = 0;
     }
-    add(popupType, posWorld, playerPos) {
-        const below = posWorld()[1] < playerPos[1];
-        this.popups.push({
-            popupType: popupType,
-            posWorld: posWorld,
-            below: below
-        });
-    }
-    clear() {
-        this.popups.length = 0;
+    setCur(text, posWorld, below) {
+        this.currentPopup = text;
+        this.currentPopupWorldPos = posWorld;
+        this.currentPopupBelow = below;
+        this.currentPopupTimeRemaining = 2.0;
     }
     reset() {
-        this.popups.length = 0;
         this.currentPopup = "";
+        this.currentPopupWorldPos = ()=>(0, _myMatrix.vec2).create();
         this.currentPopupBelow = false;
         this.currentPopupTimeRemaining = 0;
-    }
-    endOfUpdate(posPlayer, subtitledSounds) {
-        if (this.popups.length === 0) return "";
-        this.popups.sort((a, b)=>{
-            if (a.popupType < b.popupType) return -1;
-            if (a.popupType > b.popupType) return 1;
-            const posA = a.posWorld();
-            const posB = b.posWorld();
-            const aDist = (0, _myMatrix.vec2).squaredDistance(posA, posPlayer);
-            const bDist = (0, _myMatrix.vec2).squaredDistance(posB, posPlayer);
-            if (aDist < bDist) return -1;
-            if (aDist > bDist) return 1;
-            return 0;
-        });
-        const popup = this.popups[0];
-        const soundName = soundNameForPopupType(popup.popupType);
-        const subtitledSound = subtitledSounds[soundName].play(0.6);
-        this.currentPopup = subtitledSound.subtitle;
-        this.currentPopupWorldPos = popup.posWorld;
-        this.currentPopupBelow = popup.below;
-        this.currentPopupTimeRemaining = 2.0;
-        return subtitledSound.subtitle;
-    }
-}
-function soundNameForPopupType(popupType) {
-    switch(popupType){
-        case PopupType.Damage:
-            return "guardDamage";
-        case PopupType.GuardChase:
-            return "guardChase";
-        case PopupType.GuardSeeThief:
-            return "guardSeeThief";
-        case PopupType.GuardHearThief:
-            return "guardHearThief";
-        case PopupType.GuardHearGuard:
-            return "guardHearGuard";
-        case PopupType.GuardDownWarning:
-            return "guardDownWarning";
-        case PopupType.GuardAwakesWarning:
-            return "guardAwakesWarning";
-        case PopupType.GuardWarningResponse:
-            return "guardWarningResponse";
-        case PopupType.GuardInvestigate:
-            return "guardInvestigate";
-        case PopupType.GuardEndChase:
-            return "guardEndChase";
-        case PopupType.GuardFinishInvestigating:
-            return "guardFinishInvestigating";
-        case PopupType.GuardFinishLooking:
-            return "guardFinishLooking";
-        case PopupType.GuardFinishListening:
-            return "guardFinishListening";
-        case PopupType.GuardStirring:
-            return "guardStirring";
     }
 }
 
@@ -9206,22 +10237,27 @@ class Animator {
     }
 }
 class FrameAnimator extends Animator {
-    constructor(tileInfo, frameDuration, time = 0, frame = 0){
+    constructor(tileInfo, frameDuration, startingFrame = 0, loops = -1){
         super();
-        this.time = time;
+        this.time = 0;
         this.tileInfo = tileInfo;
-        this.activeFrame = frame;
+        this.activeFrame = startingFrame;
         this.frameDuration = frameDuration;
+        this.removeOnFinish = false;
+        this.loops = loops;
     }
     update(dt) {
         this.time += dt;
         const fDuration = this.frameDuration instanceof Array ? this.frameDuration[this.activeFrame] : this.frameDuration;
         if (this.time > fDuration) {
             this.activeFrame++;
-            if (this.activeFrame >= this.tileInfo.length) this.activeFrame = 0;
+            if (this.activeFrame >= this.tileInfo.length) {
+                this.activeFrame = 0;
+                if (this.loops > 0) this.loops--;
+            }
             this.time = 0;
         }
-        return false;
+        return this.loops === 0;
     }
     currentTile() {
         return this.tileInfo[this.activeFrame];
@@ -9346,7 +10382,7 @@ class RadialAnimation extends Animator {
         this.posRadians += this.speed * dt;
         this.offset[0] = this.centerPos[0] + Math.cos(this.posRadians) * this.radius;
         this.offset[1] = this.centerPos[1] + Math.sin(this.posRadians) * this.radius;
-        console.log(this.posRadians, this.radius, this.speed, Math.cos(this.posRadians) * this.radius);
+        //console.log(this.posRadians, this.radius, this.speed, Math.cos(this.posRadians)*this.radius);
         return this.time === this.duration;
     }
     currentTile() {
@@ -9953,10 +10989,6 @@ const tileSet31Color = {
         ])
     },
     namedTiles: {
-        litPlayer: {
-            textureIndex: 0xbc,
-            color: 0xffffffff
-        },
         pickTarget: {
             textureIndex: 0xbc,
             color: 0xffffffff
@@ -9987,6 +11019,10 @@ const tileSet31Color = {
         },
         idleIndicatorAlt: {
             textureIndex: 0xfd,
+            color: 0xffffffff
+        },
+        playerHint: {
+            textureIndex: 0xb9,
             color: 0xffffffff
         }
     },
@@ -10115,8 +11151,8 @@ const tileSet31Color = {
     terrainTiles: [
         {
             textureIndex: r([
-                5,
-                4
+                4,
+                5
             ]),
             color: colorGroundLit,
             unlitColor: colorGroundUnlit
@@ -10139,15 +11175,15 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                0,
-                4
+                2,
+                5
             ]),
             color: colorGroundLit,
             unlitColor: colorGroundUnlit
         },
         {
             textureIndex: r([
-                7,
+                10,
                 4
             ]),
             color: colorWoodFloorLit,
@@ -10155,7 +11191,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                7,
+                10,
                 5
             ]),
             color: colorWoodFloorLit,
@@ -10163,7 +11199,15 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                5,
+                4,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                4,
                 4
             ]),
             color: colorGroundLit,
@@ -10171,7 +11215,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                0,
+                4,
                 2
             ]),
             color: colorWallLit,
@@ -10179,7 +11223,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                2,
+                4,
                 2
             ]),
             color: colorWallLit,
@@ -10203,7 +11247,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                1,
+                4,
                 2
             ]),
             color: colorWallLit,
@@ -10235,7 +11279,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                3,
+                4,
                 2
             ]),
             color: colorWallLit,
@@ -10331,7 +11375,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                11,
+                14,
                 3
             ]),
             color: colorWallLit,
@@ -10339,7 +11383,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                11,
+                12,
                 3
             ]),
             color: colorWallLit,
@@ -10373,6 +11417,280 @@ const tileSet31Color = {
             textureIndex: r([
                 8,
                 4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        }
+    ],
+    manseTerrainTiles: [
+        {
+            textureIndex: r([
+                5,
+                4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                10,
+                4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                4
+            ]),
+            color: colorWoodFloorLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                5
+            ]),
+            color: colorWoodFloorLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                3,
+                4
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                6,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                12,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                10,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                14,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                13,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                15,
+                9
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                3,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                1,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                14,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                12,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                5
             ]),
             color: colorGroundLit,
             unlitColor: colorGroundUnlit
@@ -10437,6 +11755,14 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
+                3,
+                5
+            ]),
+            color: colorGroundLit,
+            unlitColor: colorGroundUnlit
+        },
+        {
+            textureIndex: r([
                 4,
                 6
             ]),
@@ -10445,7 +11771,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                2,
+                4,
                 2
             ]),
             color: colorWallLit,
@@ -10469,7 +11795,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                1,
+                4,
                 6
             ]),
             color: colorWallLit,
@@ -10501,7 +11827,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                3,
+                4,
                 6
             ]),
             color: colorWallLit,
@@ -10597,7 +11923,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                11,
+                13,
                 7
             ]),
             color: colorWallLit,
@@ -10719,8 +12045,8 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                2,
-                13
+                6,
+                15
             ]),
             color: _colorPreset.white,
             unlitColor: colorItemUnlit
@@ -10775,7 +12101,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                11,
+                13,
                 3
             ]),
             color: colorWallLit,
@@ -10807,7 +12133,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                12,
+                15,
                 13
             ]),
             color: _colorPreset.yellowTint,
@@ -10833,6 +12159,248 @@ const tileSet31Color = {
             textureIndex: r([
                 1,
                 15
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                15,
+                7
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                12
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        }
+    ],
+    manseItemTiles: [
+        {
+            textureIndex: r([
+                3,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                8,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                10,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                12
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                12
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                14,
+                14
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                7,
+                15
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                5,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                15,
+                11
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                7,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                4,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                9,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                6,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                13,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                11,
+                10
+            ]),
+            color: colorWallLit,
+            unlitColor: colorWallUnlit
+        },
+        {
+            textureIndex: r([
+                0,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                1,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                15,
+                13
+            ]),
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.yellowTint
+        },
+        {
+            textureIndex: r([
+                0,
+                15
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                6,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                1,
+                15
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                15,
+                7
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                12
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.white
@@ -10913,8 +12481,8 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                2,
-                13
+                8,
+                15
             ]),
             color: _colorPreset.white,
             unlitColor: colorItemUnlit
@@ -10969,7 +12537,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                11,
+                13,
                 7
             ]),
             color: colorWallLit,
@@ -11030,12 +12598,36 @@ const tileSet31Color = {
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.white
+        },
+        {
+            textureIndex: r([
+                15,
+                7
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                2,
+                13
+            ]),
+            color: _colorPreset.white,
+            unlitColor: colorItemUnlit
+        },
+        {
+            textureIndex: r([
+                3,
+                12
+            ]),
+            color: _colorPreset.white,
+            unlitColor: _colorPreset.white
         }
     ],
     npcTiles: [
         {
             textureIndex: r([
-                3,
+                9,
                 8
             ]),
             color: _colorPreset.white,
@@ -11043,7 +12635,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                2,
+                8,
                 8
             ]),
             color: _colorPreset.white,
@@ -11051,7 +12643,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                4,
+                10,
                 8
             ]),
             color: _colorPreset.white,
@@ -11059,7 +12651,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                1,
+                7,
                 8
             ]),
             color: _colorPreset.white,
@@ -11067,35 +12659,35 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                3,
+                9,
                 8
             ]),
             color: _colorPreset.darkGray
         },
         {
             textureIndex: r([
-                2,
+                8,
                 8
             ]),
             color: _colorPreset.darkGray
         },
         {
             textureIndex: r([
-                4,
+                10,
                 8
             ]),
             color: _colorPreset.darkGray
         },
         {
             textureIndex: r([
-                1,
+                7,
                 8
             ]),
             color: _colorPreset.darkGray
         },
         {
             textureIndex: r([
-                3,
+                9,
                 8
             ]),
             color: _colorPreset.white,
@@ -11103,7 +12695,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                2,
+                8,
                 8
             ]),
             color: _colorPreset.white,
@@ -11111,7 +12703,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                4,
+                10,
                 8
             ]),
             color: _colorPreset.white,
@@ -11119,7 +12711,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                1,
+                7,
                 8
             ]),
             color: _colorPreset.white,
@@ -11128,7 +12720,7 @@ const tileSet31Color = {
         //KO'd
         {
             textureIndex: r([
-                0,
+                6,
                 8
             ]),
             color: _colorPreset.white,
@@ -11136,7 +12728,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                0,
+                6,
                 8
             ]),
             color: _colorPreset.white,
@@ -11144,7 +12736,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                0,
+                6,
                 8
             ]),
             color: _colorPreset.white,
@@ -11152,7 +12744,7 @@ const tileSet31Color = {
         },
         {
             textureIndex: r([
-                0,
+                6,
                 8
             ]),
             color: _colorPreset.white,
@@ -11163,7 +12755,7 @@ const tileSet31Color = {
         normal: {
             textureIndex: r([
                 1,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
@@ -11171,7 +12763,7 @@ const tileSet31Color = {
         hidden: {
             textureIndex: r([
                 0,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
@@ -11179,7 +12771,7 @@ const tileSet31Color = {
         right: {
             textureIndex: r([
                 2,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
@@ -11187,7 +12779,7 @@ const tileSet31Color = {
         left: {
             textureIndex: r([
                 3,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
@@ -11195,7 +12787,7 @@ const tileSet31Color = {
         down: {
             textureIndex: r([
                 1,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
@@ -11203,7 +12795,7 @@ const tileSet31Color = {
         up: {
             textureIndex: r([
                 4,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
@@ -11211,10 +12803,14 @@ const tileSet31Color = {
         dead: {
             textureIndex: r([
                 5,
-                9
+                8
             ]),
             color: _colorPreset.white,
             unlitColor: _colorPreset.lightGray
+        },
+        litFace: {
+            textureIndex: 0xb0,
+            color: 0xffffffff
         }
     },
     guardStateTiles: [
@@ -11285,24 +12881,68 @@ const tileSet31Color = {
     ],
     waterAnimation: [
         {
-            textureIndex: 0x60,
+            textureIndex: 0x20,
             color: _colorPreset.yellowTint,
             unlitColor: _colorPreset.midGray
+        },
+        {
+            textureIndex: 0x21,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        },
+        {
+            textureIndex: 0x22,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        },
+        {
+            textureIndex: 0x23,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        }
+    ],
+    manseWaterAnimation: [
+        {
+            textureIndex: 0x90,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        },
+        {
+            textureIndex: 0x91,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        },
+        {
+            textureIndex: 0x92,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        },
+        {
+            textureIndex: 0x93,
+            color: _colorPreset.yellowTint,
+            unlitColor: _colorPreset.midGray
+        }
+    ],
+    fortressWaterAnimation: [
+        {
+            textureIndex: 0x60,
+            color: _colorPreset.midGray,
+            unlitColor: _colorPreset.darkerGray
         },
         {
             textureIndex: 0x61,
-            color: _colorPreset.yellowTint,
-            unlitColor: _colorPreset.midGray
+            color: _colorPreset.midGray,
+            unlitColor: _colorPreset.darkerGray
         },
         {
             textureIndex: 0x62,
-            color: _colorPreset.yellowTint,
-            unlitColor: _colorPreset.midGray
+            color: _colorPreset.midGray,
+            unlitColor: _colorPreset.darkerGray
         },
         {
             textureIndex: 0x63,
-            color: _colorPreset.yellowTint,
-            unlitColor: _colorPreset.midGray
+            color: _colorPreset.midGray,
+            unlitColor: _colorPreset.darkerGray
         }
     ],
     stoveAnimation: [
@@ -11360,7 +13000,56 @@ const tileSet31Color = {
         {
             textureIndex: 0xdf
         }
-    ]
+    ],
+    playerTorchAnimation: [
+        {
+            textureIndex: 0xd9
+        },
+        {
+            textureIndex: 0xda
+        },
+        {
+            textureIndex: 0xdb
+        },
+        {
+            textureIndex: 0xdb
+        }
+    ],
+    achievementIcons: {
+        achievementVictory: {
+            textureIndex: 0x4b
+        },
+        achievementGhosty: {
+            textureIndex: 0x4c
+        },
+        achievementZippy: {
+            textureIndex: 0x4d
+        },
+        achievementHungry: {
+            textureIndex: 0x4e
+        },
+        achievementThumpy: {
+            textureIndex: 0x4f
+        },
+        achievementSofty: {
+            textureIndex: 0x5b
+        },
+        achievementNoisy: {
+            textureIndex: 0x5c
+        },
+        achievementLeapy: {
+            textureIndex: 0x5d
+        },
+        achievementSteppy: {
+            textureIndex: 0x5e
+        },
+        achievementHurty: {
+            textureIndex: 0x5f
+        }
+    },
+    achievementIncompleteIcon: {
+        textureIndex: 0x3f
+    }
 };
 
 },{"./color-preset":"37fo9","76edfa0a4f08390c":"1YCFZ","e7be3d8d2aa97acf":"bEQAo","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"37fo9":[function(require,module,exports) {
@@ -11472,16 +13161,12 @@ const footstepWater = require("9bfaf4c4f4128feb");
 const footstepGravel = require("306aae0e4d4a043b");
 const footstepGrass = require("3558e8405095caac");
 const footstepCreakSet = [
-    require("87b50c685d8423a0"),
-    require("c01f582973819430"),
-    require("7c2f92882c19e0cc"),
-    require("cc049c7c517bba2c"),
-    require("41416a4f73637d98"),
-    require("12be1db3c1725433"),
-    require("e0765626201a3b82"),
-    require("f328e12481fdd79"),
-    require("ce97ba434fd185c3"),
-    require("efd1dac51efba792")
+    require("e388714d835c0b20"),
+    require("4d6feed57a213d31"),
+    require("c2bec24b9de16a24"),
+    require("a010d22b50a220f9"),
+    require("e7f9d37603fe71fb"),
+    require("5a3ac8f47bc51973")
 ];
 const hitPlayerSet = [
     require("266db93e07a61201"),
@@ -11553,6 +13238,15 @@ const waterExitSet = [
 const jumpSet = [
     require("74431cc7db6e18c"),
     require("f5bdd46198a870f2")
+];
+const switchProgressSet = [
+    require("88185df34035f99b")
+];
+const switchResetSet = [
+    require("bb9d8ecd85249534")
+];
+const switchSuccessSet = [
+    require("3c9dbb8a4ed4919f")
 ];
 const tooHighSet = [
     require("a23fc5e626d3bd70"),
@@ -11723,6 +13417,68 @@ const guardFinishLookingSet = [
     [
         require("17d495b82c9a6548"),
         "Well, I thought\nI saw something."
+    ],
+    [
+        require("67f2d90328b3956d"),
+        "Nothing..."
+    ],
+    [
+        require("54115fb2810e4778"),
+        "Hopefully\nnothing."
+    ],
+    [
+        require("354312d52bb443e"),
+        "Seein' things,\nI guess."
+    ],
+    [
+        require("354312d52bb443e"),
+        "Seein' things,\nI guess."
+    ]
+];
+const guardFinishLookingAtLitTorchSet = [
+    [
+        require("6de92d5fb4e57e1d"),
+        "Hmm..."
+    ],
+    [
+        require("d25948602b9f0ec4"),
+        "What?"
+    ],
+    [
+        require("79c08e91e327e3b6"),
+        "What was that?"
+    ],
+    [
+        require("4edb014b66a8648e"),
+        "Jumpy tonight..."
+    ],
+    [
+        require("6de92d5fb4e57e1d"),
+        "Hmm..."
+    ],
+    [
+        require("511c3be8d5db6a3b"),
+        "Oh well..."
+    ],
+    [
+        require("777ec5f8c5a13e72"),
+        "I've got myself\na case of the\njitters..."
+    ],
+    [
+        require("3d39a0baa84ae221"),
+        "I must be\nseein' things..."
+    ],
+    [
+        require("487dd58d8afaed00"),
+        "What'd they put\nin my coffee?"
+    ],
+    [
+        require("ea583a9536558ce4"),
+        "Coffee must be\ntoo strong!"
+    ],
+    [
+        require("5127cbf04c818c89"),
+        "Hmm!\nNothing..."
     ],
     [
         require("67f2d90328b3956d"),
@@ -12030,6 +13786,34 @@ const guardHearGuardSet = [
         "To arms!"
     ]
 ];
+const guardSeeUnlitTorchSet = [
+    [
+        require("d25948602b9f0ec4"),
+        "That torch is out!"
+    ],
+    [
+        require("d25948602b9f0ec4"),
+        "It's too dark\nin here."
+    ],
+    [
+        require("d25948602b9f0ec4"),
+        "Let's have more light."
+    ]
+];
+const guardFinishLightingTorchSet = [
+    [
+        require("6de92d5fb4e57e1d"),
+        "That's better."
+    ],
+    [
+        require("6de92d5fb4e57e1d"),
+        "There we go."
+    ],
+    [
+        require("6de92d5fb4e57e1d"),
+        "Now where was I?"
+    ]
+];
 const guardChaseSet = [
     [
         require("ab778be72001d61"),
@@ -12187,7 +13971,7 @@ const guardEndChaseSet = [
     ],
     [
         require("fb20d33233fe0332"),
-        "His Holiness is a\nlord of mercy!"
+        "For His Holiness!"
     ],
     [
         require("b65eb609bdb5cde8"),
@@ -12286,6 +14070,106 @@ const guardDamageSet = [
     [
         require("4af601d250e1994b"),
         "Hi-yah!"
+    ]
+];
+const guardSeeTorchLitSet = [
+    [
+        require("6de92d5fb4e57e1d"),
+        "Hmm..."
+    ],
+    [
+        require("d25948602b9f0ec4"),
+        "What?"
+    ],
+    [
+        require("8edeba5e41e9fe07"),
+        "Hey!"
+    ],
+    [
+        require("e5d78107540b029c"),
+        "Hey!"
+    ],
+    [
+        require("1f3be94fb6cf8421"),
+        "Hey!"
+    ],
+    [
+        require("79c08e91e327e3b6"),
+        "What was that?"
+    ],
+    [
+        require("943813e688572223"),
+        "What was that?"
+    ],
+    [
+        require("47dd61530dd9f68d"),
+        "What was that?"
+    ],
+    [
+        require("74be602c333f9f10"),
+        "What was that?"
+    ],
+    [
+        require("b9007e2781c8ee20"),
+        "What was that?"
+    ],
+    [
+        require("568cc259fedf00bd"),
+        "Who goes there?"
+    ],
+    [
+        require("142501f6fd66cfe5"),
+        "Huh?"
+    ],
+    [
+        require("d25948602b9f0ec4"),
+        "What?"
+    ],
+    [
+        require("b39f735b9213825f"),
+        "Wha..."
+    ],
+    [
+        require("a46d950f1c8847f6"),
+        "Wait!"
+    ],
+    [
+        require("d9a30d4970e974d5"),
+        "Who's there?"
+    ],
+    [
+        require("ca8652950eea7433"),
+        "Hello?"
+    ],
+    [
+        require("90cf32e28e1410d9"),
+        "Uhh..."
+    ]
+];
+const guardSeeTorchDousedSet = [
+    [
+        require("fd884530210b7540"),
+        "They don't\nstay lit!"
+    ],
+    [
+        require("fd884530210b7540"),
+        "Somebody should\nrelight that."
+    ],
+    [
+        require("fd884530210b7540"),
+        "That torch\nburned out."
+    ],
+    [
+        require("fd884530210b7540"),
+        "It got dark!"
+    ],
+    [
+        require("fd884530210b7540"),
+        "Wish I had\na torch..."
+    ],
+    [
+        require("fd884530210b7540"),
+        "Why did that\nhappen?"
     ]
 ];
 class ActiveHowlPool {
@@ -12438,24 +14322,32 @@ function setupSounds(sounds, subtitledSounds, howlPool) {
     sounds.waterExit = new HowlGroup(waterExitSet);
     sounds.jump = new HowlGroup(jumpSet);
     sounds.tooHigh = new HowlGroup(tooHighSet);
+    sounds.switchProgress = new HowlGroup(switchProgressSet);
+    sounds.switchReset = new HowlGroup(switchResetSet);
+    sounds.switchSuccess = new HowlGroup(switchSuccessSet);
     subtitledSounds.guardInvestigate = new SubtitledHowlGroup(guardInvestigateSet, howlPool);
     subtitledSounds.guardFinishInvestigating = new SubtitledHowlGroup(guardFinishInvestigatingSet, howlPool);
     subtitledSounds.guardSeeThief = new SubtitledHowlGroup(guardSeeThiefSet), howlPool;
     subtitledSounds.guardFinishLooking = new SubtitledHowlGroup(guardFinishLookingSet, howlPool);
+    subtitledSounds.guardFinishLookingAtLitTorch = new SubtitledHowlGroup(guardFinishLookingAtLitTorchSet, howlPool);
     subtitledSounds.guardChase = new SubtitledHowlGroup(guardChaseSet, howlPool);
     subtitledSounds.guardEndChase = new SubtitledHowlGroup(guardEndChaseSet, howlPool);
     subtitledSounds.guardHearGuard = new SubtitledHowlGroup(guardHearGuardSet, howlPool);
+    subtitledSounds.guardSeeUnlitTorch = new SubtitledHowlGroup(guardSeeUnlitTorchSet, howlPool);
     subtitledSounds.guardHearThief = new SubtitledHowlGroup(guardHearThiefSet, howlPool);
     subtitledSounds.guardAwakesWarning = new SubtitledHowlGroup(guardAwakesWarningSet, howlPool);
     subtitledSounds.guardDownWarning = new SubtitledHowlGroup(guardDownWarningSet, howlPool);
     subtitledSounds.guardWarningResponse = new SubtitledHowlGroup(guardWarningResponseSet, howlPool);
     subtitledSounds.guardFinishListening = new SubtitledHowlGroup(guardFinishListeningSet, howlPool);
+    subtitledSounds.guardFinishLightingTorch = new SubtitledHowlGroup(guardFinishLightingTorchSet, howlPool);
     subtitledSounds.guardDamage = new SubtitledHowlGroup(guardDamageSet, howlPool);
     subtitledSounds.guardStirring = new SubtitledHowlGroup(guardStirringSet, howlPool);
     subtitledSounds.guardRest = new SubtitledHowlGroup(guardRestSet, howlPool);
+    subtitledSounds.guardSeeTorchLit = new SubtitledHowlGroup(guardSeeTorchLitSet, howlPool);
+    subtitledSounds.guardSeeTorchDoused = new SubtitledHowlGroup(guardSeeTorchDousedSet, howlPool);
 }
 
-},{"howler":"5Vjgk","./random":"gUC1v","f0665be29a76364f":"9zKUC","8ee4b45ed4305ffe":"cHoSB","744d49c14cf3bd64":"iNzdT","bcd7cf6a0b64acb2":"04Z21","352a1308c22a1e56":"1SIsy","d74976564eabf9e4":"9JVPU","4cc04d2b3f9932d":"fGTkM","9bfaf4c4f4128feb":"k14gH","306aae0e4d4a043b":"5GAcE","3558e8405095caac":"f1aB8","87b50c685d8423a0":"kGQAb","c01f582973819430":"2XGfn","7c2f92882c19e0cc":"2r6eZ","cc049c7c517bba2c":"7ei1H","41416a4f73637d98":"jg9uN","12be1db3c1725433":"gj9kS","e0765626201a3b82":"26zV0","f328e12481fdd79":"5s0T0","ce97ba434fd185c3":"36S8f","efd1dac51efba792":"6ptWC","266db93e07a61201":"dvdqa","c0d78fffcf346c82":"aBtts","f5bb8cbdd21f5342":"8mLsA","43a9e46d8ea7cd81":"ajJoe","1172555423365d87":"wy2ST","b1a21bee33b6e90f":"jPeF6","ab56bd8b2de1ccfc":"2ZtkO","5fdcb53fa5673aef":"jZaET","91c6e5f5d386663b":"4dkLh","6d93f942c434b176":"kvn87","e49f1f5764e00901":"JMLiq","becc902d0316f6cc":"8Lw3Q","e9696568bef5d9b8":"2nUq5","265960cf8a3c9220":"lHBqN","580710a44af1d25c":"4X6eo","ba891949d514fa31":"ltpKK","42fa7fdeb51b9be6":"iPB70","ee01e021b25eefa9":"9tbU5","2396c11a4aa1da8f":"a46JQ","1ff4195689ab20cd":"epH9n","61cd0b5d8fc06e59":"dwcOP","22ab6fd9e4daca1c":"4Rqw7","8c07257dee09846b":"hEMO1","e21bc160ecafd4cd":"6uN4N","f6c90b38141e2ace":"denBs","38c34066f7055b70":"ai87a","a025b5eb5484ff46":"e4yW2","ac6f442f76de79b":"e0rLU","b3335efda7b6af04":"5mFUd","c5ed7272e7cb3587":"e5ksw","d1dcc0a946567529":"bFfhf","ab293f84a67c8d99":"ewAQQ","1891a9aba3708a53":"gELii","5865dbd8bae7c96b":"5nU87","bcd7c16ba7d7d61":"7uWJZ","e78deec06d901d3a":"bYumL","f394a2a4f193774b":"6gY1x","42399af19f218c5b":"8OUj9","da67478315c5f9c":"fTvDo","ac1cce7696e2e28f":"3E807","91d3d82a23a7f2a6":"8n85h","fa0de2a4aaced4aa":"3Nd3F","74431cc7db6e18c":"2vWH3","f5bdd46198a870f2":"8rRS9","a23fc5e626d3bd70":"iQKP6","bcc23937980b90cf":"5Wuxs","6de92d5fb4e57e1d":"s2Q2L","d25948602b9f0ec4":"224to","8edeba5e41e9fe07":"fzuGN","e5d78107540b029c":"6RqV3","1f3be94fb6cf8421":"h3YyP","79c08e91e327e3b6":"3zmDf","943813e688572223":"bVmQ3","47dd61530dd9f68d":"9Ktkp","74be602c333f9f10":"9x3D3","b9007e2781c8ee20":"fd0c0","568cc259fedf00bd":"hqU6N","142501f6fd66cfe5":"bx4BT","b39f735b9213825f":"ffzGR","a46d950f1c8847f6":"cghPs","d9a30d4970e974d5":"8T7H4","dace3e3b8595d572":"7z9d9","86eb3dabc7348e5f":"agX7A","21b0fca0793efdb4":"8aQyK","224b720952fd21ac":"dJQsj","ca8652950eea7433":"gKhEi","90cf32e28e1410d9":"lITH8","fd884530210b7540":"2E6Ey","99dbdd06a964d404":"g90E0","395b6e78f128e720":"inZis","ae72d688a53c23ff":"eBH2o","4edb014b66a8648e":"cFuxm","7e4780586df1d42":"gCVVo","511c3be8d5db6a3b":"7tUMg","777ec5f8c5a13e72":"LWHfM","3d39a0baa84ae221":"3taIr","487dd58d8afaed00":"6HKZl","ea583a9536558ce4":"9s0IZ","5127cbf04c818c89":"bmUje","17d495b82c9a6548":"r8pEn","67f2d90328b3956d":"gmBDQ","54115fb2810e4778":"cZw51","354312d52bb443e":"cnzN4","350f5fda52fe072d":"jefVX","87d9a412cc379454":"aPaoT","dbac7c2d662b6cae":"g0dhG","7f6c92e0cf0ed649":"kDwJ2","86118448d5815fb6":"2x9nC","604c5e0c7b422b4c":"9fVaC","b84d87dd9b0ef6bd":"k1uRF","6ce1930c6823684":"fLNJF","9b5d0dcf56fcdc89":"chTre","f5fb3e952820b04b":"2QvYX","4c0e7002d45fcb92":"5V3sW","74f5de3cc2585e47":"8PECt","e70917b8c836c082":"abuDI","cf4fdad406947277":"39DEl","6a71d42b37875a29":"3kmal","4d50e92e752dd3c4":"85RTq","482dc5e14b7be46b":"6JYFN","8f5442e9228bec91":"8o6R6","4ef580c005f4327c":"g7juJ","dc13b9229da0b357":"2IFEg","533eaa8e0e0b8f94":"bCvEE","621d805e99e5af5":"iI2P6","ddef5abb720f71fc":"fTTTf","6302957cdde9b758":"in1Yk","768d22e87bfa9812":"4sFml","5a415b70efd49466":"8DCSZ","4d5149e8114ba50a":"8HYPW","a0175914b3fe88fd":"gCSP7","ab778be72001d61":"94LvL","270489758d0f9c16":"aD2F4","1428c9f21452d721":"1ZglP","443597fce9dba5e7":"k7f64","bbf6a0263d0a948e":"cZ0PT","f4cb02350d7af827":"4FfLU","1f6838e48e98dcb1":"4WptE","aecae72693944788":"eODND","d3fce0947127664c":"hZ2B8","7d031e9458050173":"AMRHc","b883ae2827b679eb":"6UCsk","ef2c85c3dc835679":"g7XAg","704c5d63255692d7":"cFlu7","84fee459c99cfae4":"7FJ37","4bbf9dd9aa23f007":"3Hs3x","9e7041e68b24c7bf":"coNMD","ee9f186cac76a511":"4s9gT","1ae79f75082baf33":"ikayr","af843efae160d9c9":"bUSG1","2f9dc2ad0435f181":"gs4UN","1e53c1f4d7f380e2":"j5cRJ","bbfb2ff46a8d9255":"hF47h","546e5b3efc94c094":"kYZUc","3aba4d3856fa8e51":"lqrS2","6fcc3058c27618ec":"kbO4H","b20f033b705a9076":"ckkdt","80928ef071a4c62f":"3WyJt","3c487dfeb4c006d4":"hlHmX","23acf8e1c462b589":"hIFxo","e15bc68d0ea7ce88":"7eQ6w","be08925e1437b3a4":"2Pk6f","a64116f7dce39ac4":"jovj4","113aff5d788496dd":"c3U1l","af88d9f43b998c5b":"b2ME2","577ecaebe0b8be5d":"lMgKq","d7f9f45e68e6a652":"8hWQ7","ec5991ba0f70294e":"f4Hq0","fb20d33233fe0332":"2Bc7G","b65eb609bdb5cde8":"4bzJ9","de7d039eeeba0e99":"lvXdP","d6761317e96464b0":"gPuPz","46632fd56311f5ed":"iZ55y","812793c8407b7767":"cvhbf","8e3c4a5899f9d44f":"bgYzw","869814f5994bfd60":"fmwYX","536bee59109a4784":"1sAT4","3abfb09928f0a785":"iT3UI","27062fd0189b252e":"HN7wh","8d400b0ed672a639":"6mKlg","6ab2cc733fe4eb61":"b3mdd","4af601d250e1994b":"iyQcS","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"5Vjgk":[function(require,module,exports) {
+},{"howler":"5Vjgk","./random":"gUC1v","f0665be29a76364f":"9zKUC","8ee4b45ed4305ffe":"cHoSB","744d49c14cf3bd64":"iNzdT","bcd7cf6a0b64acb2":"04Z21","352a1308c22a1e56":"1SIsy","d74976564eabf9e4":"9JVPU","4cc04d2b3f9932d":"fGTkM","9bfaf4c4f4128feb":"k14gH","306aae0e4d4a043b":"5GAcE","3558e8405095caac":"f1aB8","e388714d835c0b20":"5SEJY","4d6feed57a213d31":"kM2eZ","c2bec24b9de16a24":"82BWI","a010d22b50a220f9":"fFMKO","e7f9d37603fe71fb":"lztz9","5a3ac8f47bc51973":"lLCLn","266db93e07a61201":"dvdqa","c0d78fffcf346c82":"aBtts","f5bb8cbdd21f5342":"8mLsA","43a9e46d8ea7cd81":"ajJoe","1172555423365d87":"wy2ST","b1a21bee33b6e90f":"jPeF6","ab56bd8b2de1ccfc":"2ZtkO","5fdcb53fa5673aef":"jZaET","91c6e5f5d386663b":"4dkLh","6d93f942c434b176":"kvn87","e49f1f5764e00901":"JMLiq","becc902d0316f6cc":"8Lw3Q","e9696568bef5d9b8":"2nUq5","265960cf8a3c9220":"lHBqN","580710a44af1d25c":"4X6eo","ba891949d514fa31":"ltpKK","42fa7fdeb51b9be6":"iPB70","ee01e021b25eefa9":"9tbU5","2396c11a4aa1da8f":"a46JQ","1ff4195689ab20cd":"epH9n","61cd0b5d8fc06e59":"dwcOP","22ab6fd9e4daca1c":"4Rqw7","8c07257dee09846b":"hEMO1","e21bc160ecafd4cd":"6uN4N","f6c90b38141e2ace":"denBs","38c34066f7055b70":"ai87a","a025b5eb5484ff46":"e4yW2","ac6f442f76de79b":"e0rLU","b3335efda7b6af04":"5mFUd","c5ed7272e7cb3587":"e5ksw","d1dcc0a946567529":"bFfhf","ab293f84a67c8d99":"ewAQQ","1891a9aba3708a53":"gELii","5865dbd8bae7c96b":"5nU87","bcd7c16ba7d7d61":"7uWJZ","e78deec06d901d3a":"bYumL","f394a2a4f193774b":"6gY1x","42399af19f218c5b":"8OUj9","da67478315c5f9c":"fTvDo","ac1cce7696e2e28f":"3E807","91d3d82a23a7f2a6":"8n85h","fa0de2a4aaced4aa":"3Nd3F","74431cc7db6e18c":"2vWH3","f5bdd46198a870f2":"8rRS9","88185df34035f99b":"glMJN","bb9d8ecd85249534":"2xBdD","3c9dbb8a4ed4919f":"jtoFA","a23fc5e626d3bd70":"iQKP6","bcc23937980b90cf":"5Wuxs","6de92d5fb4e57e1d":"s2Q2L","d25948602b9f0ec4":"224to","8edeba5e41e9fe07":"fzuGN","e5d78107540b029c":"6RqV3","1f3be94fb6cf8421":"h3YyP","79c08e91e327e3b6":"3zmDf","943813e688572223":"bVmQ3","47dd61530dd9f68d":"9Ktkp","74be602c333f9f10":"9x3D3","b9007e2781c8ee20":"fd0c0","568cc259fedf00bd":"hqU6N","142501f6fd66cfe5":"bx4BT","b39f735b9213825f":"ffzGR","a46d950f1c8847f6":"cghPs","d9a30d4970e974d5":"8T7H4","dace3e3b8595d572":"7z9d9","86eb3dabc7348e5f":"agX7A","21b0fca0793efdb4":"8aQyK","224b720952fd21ac":"dJQsj","ca8652950eea7433":"gKhEi","90cf32e28e1410d9":"lITH8","fd884530210b7540":"2E6Ey","99dbdd06a964d404":"g90E0","395b6e78f128e720":"inZis","ae72d688a53c23ff":"eBH2o","4edb014b66a8648e":"cFuxm","7e4780586df1d42":"gCVVo","511c3be8d5db6a3b":"7tUMg","777ec5f8c5a13e72":"LWHfM","3d39a0baa84ae221":"3taIr","487dd58d8afaed00":"6HKZl","ea583a9536558ce4":"9s0IZ","5127cbf04c818c89":"bmUje","17d495b82c9a6548":"r8pEn","67f2d90328b3956d":"gmBDQ","54115fb2810e4778":"cZw51","354312d52bb443e":"cnzN4","350f5fda52fe072d":"jefVX","87d9a412cc379454":"aPaoT","dbac7c2d662b6cae":"g0dhG","7f6c92e0cf0ed649":"kDwJ2","86118448d5815fb6":"2x9nC","604c5e0c7b422b4c":"9fVaC","b84d87dd9b0ef6bd":"k1uRF","6ce1930c6823684":"fLNJF","9b5d0dcf56fcdc89":"chTre","f5fb3e952820b04b":"2QvYX","4c0e7002d45fcb92":"5V3sW","74f5de3cc2585e47":"8PECt","e70917b8c836c082":"abuDI","cf4fdad406947277":"39DEl","6a71d42b37875a29":"3kmal","4d50e92e752dd3c4":"85RTq","482dc5e14b7be46b":"6JYFN","8f5442e9228bec91":"8o6R6","4ef580c005f4327c":"g7juJ","dc13b9229da0b357":"2IFEg","533eaa8e0e0b8f94":"bCvEE","621d805e99e5af5":"iI2P6","ddef5abb720f71fc":"fTTTf","6302957cdde9b758":"in1Yk","768d22e87bfa9812":"4sFml","5a415b70efd49466":"8DCSZ","4d5149e8114ba50a":"8HYPW","a0175914b3fe88fd":"gCSP7","ab778be72001d61":"94LvL","270489758d0f9c16":"aD2F4","1428c9f21452d721":"1ZglP","443597fce9dba5e7":"k7f64","bbf6a0263d0a948e":"cZ0PT","f4cb02350d7af827":"4FfLU","1f6838e48e98dcb1":"4WptE","aecae72693944788":"eODND","d3fce0947127664c":"hZ2B8","7d031e9458050173":"AMRHc","b883ae2827b679eb":"6UCsk","ef2c85c3dc835679":"g7XAg","704c5d63255692d7":"cFlu7","84fee459c99cfae4":"7FJ37","4bbf9dd9aa23f007":"3Hs3x","9e7041e68b24c7bf":"coNMD","ee9f186cac76a511":"4s9gT","1ae79f75082baf33":"ikayr","af843efae160d9c9":"bUSG1","2f9dc2ad0435f181":"gs4UN","1e53c1f4d7f380e2":"j5cRJ","bbfb2ff46a8d9255":"hF47h","546e5b3efc94c094":"kYZUc","3aba4d3856fa8e51":"lqrS2","6fcc3058c27618ec":"kbO4H","b20f033b705a9076":"ckkdt","80928ef071a4c62f":"3WyJt","3c487dfeb4c006d4":"hlHmX","23acf8e1c462b589":"hIFxo","e15bc68d0ea7ce88":"7eQ6w","be08925e1437b3a4":"2Pk6f","a64116f7dce39ac4":"jovj4","113aff5d788496dd":"c3U1l","af88d9f43b998c5b":"b2ME2","577ecaebe0b8be5d":"lMgKq","d7f9f45e68e6a652":"8hWQ7","ec5991ba0f70294e":"f4Hq0","fb20d33233fe0332":"2Bc7G","b65eb609bdb5cde8":"4bzJ9","de7d039eeeba0e99":"lvXdP","d6761317e96464b0":"gPuPz","46632fd56311f5ed":"iZ55y","812793c8407b7767":"cvhbf","8e3c4a5899f9d44f":"bgYzw","869814f5994bfd60":"fmwYX","536bee59109a4784":"1sAT4","3abfb09928f0a785":"iT3UI","27062fd0189b252e":"HN7wh","8d400b0ed672a639":"6mKlg","6ab2cc733fe4eb61":"b3mdd","4af601d250e1994b":"iyQcS","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"5Vjgk":[function(require,module,exports) {
 var global = arguments[3];
 /*!
  *  howler.js v2.2.3
@@ -14940,37 +16832,25 @@ module.exports = require("e70b6aae7e4500e7").getBundleURL("lf1OY") + "footstep-g
 },{"e70b6aae7e4500e7":"lgJ39"}],"f1aB8":[function(require,module,exports) {
 module.exports = require("8d27bd7821a1b082").getBundleURL("lf1OY") + "footstep-grass.e4966900.mp3" + "?" + Date.now();
 
-},{"8d27bd7821a1b082":"lgJ39"}],"kGQAb":[function(require,module,exports) {
-module.exports = require("21350c3b6eaf4079").getBundleURL("lf1OY") + "creak.1d93b972.mp3" + "?" + Date.now();
+},{"8d27bd7821a1b082":"lgJ39"}],"5SEJY":[function(require,module,exports) {
+module.exports = require("4fe4ac643186b632").getBundleURL("lf1OY") + "creak-7.993bbc75.mp3" + "?" + Date.now();
 
-},{"21350c3b6eaf4079":"lgJ39"}],"2XGfn":[function(require,module,exports) {
-module.exports = require("a5c236711e322452").getBundleURL("lf1OY") + "creak-2.a1adac63.mp3" + "?" + Date.now();
+},{"4fe4ac643186b632":"lgJ39"}],"kM2eZ":[function(require,module,exports) {
+module.exports = require("103dee61cd1f2523").getBundleURL("lf1OY") + "creak-8.d52d8670.mp3" + "?" + Date.now();
 
-},{"a5c236711e322452":"lgJ39"}],"2r6eZ":[function(require,module,exports) {
-module.exports = require("727907710f3ebcd7").getBundleURL("lf1OY") + "creak-3.bdf1752d.mp3" + "?" + Date.now();
+},{"103dee61cd1f2523":"lgJ39"}],"82BWI":[function(require,module,exports) {
+module.exports = require("213d651d95352ab").getBundleURL("lf1OY") + "creak-9.46e5b1d2.mp3" + "?" + Date.now();
 
-},{"727907710f3ebcd7":"lgJ39"}],"7ei1H":[function(require,module,exports) {
-module.exports = require("6f8af5f5b028ff3c").getBundleURL("lf1OY") + "creak-4.851b4602.mp3" + "?" + Date.now();
+},{"213d651d95352ab":"lgJ39"}],"fFMKO":[function(require,module,exports) {
+module.exports = require("46f486f5c2256ff2").getBundleURL("lf1OY") + "creak-10.65f48549.mp3" + "?" + Date.now();
 
-},{"6f8af5f5b028ff3c":"lgJ39"}],"jg9uN":[function(require,module,exports) {
-module.exports = require("e8661f656bb1fc88").getBundleURL("lf1OY") + "creak-5.7a5a448b.mp3" + "?" + Date.now();
+},{"46f486f5c2256ff2":"lgJ39"}],"lztz9":[function(require,module,exports) {
+module.exports = require("8726cf82a909981c").getBundleURL("lf1OY") + "creak-11.5e92e918.mp3" + "?" + Date.now();
 
-},{"e8661f656bb1fc88":"lgJ39"}],"gj9kS":[function(require,module,exports) {
-module.exports = require("ae04a5ac28d96fe1").getBundleURL("lf1OY") + "creak-6.40a39a61.mp3" + "?" + Date.now();
+},{"8726cf82a909981c":"lgJ39"}],"lLCLn":[function(require,module,exports) {
+module.exports = require("269b497a9ac66c57").getBundleURL("lf1OY") + "creak-12.2da91197.mp3" + "?" + Date.now();
 
-},{"ae04a5ac28d96fe1":"lgJ39"}],"26zV0":[function(require,module,exports) {
-module.exports = require("dd51421a806ee378").getBundleURL("lf1OY") + "squeak1.a56771a8.wav" + "?" + Date.now();
-
-},{"dd51421a806ee378":"lgJ39"}],"5s0T0":[function(require,module,exports) {
-module.exports = require("bc0ff94ac3919024").getBundleURL("lf1OY") + "squeak2.22cf1d83.wav" + "?" + Date.now();
-
-},{"bc0ff94ac3919024":"lgJ39"}],"36S8f":[function(require,module,exports) {
-module.exports = require("ae082481182368ff").getBundleURL("lf1OY") + "squeak3.29042a05.wav" + "?" + Date.now();
-
-},{"ae082481182368ff":"lgJ39"}],"6ptWC":[function(require,module,exports) {
-module.exports = require("c414818aaaf87634").getBundleURL("lf1OY") + "squeak4.3a2d4289.wav" + "?" + Date.now();
-
-},{"c414818aaaf87634":"lgJ39"}],"dvdqa":[function(require,module,exports) {
+},{"269b497a9ac66c57":"lgJ39"}],"dvdqa":[function(require,module,exports) {
 module.exports = require("1ee51f1950617754").getBundleURL("lf1OY") + "hit16.mp3.455b231f.flac" + "?" + Date.now();
 
 },{"1ee51f1950617754":"lgJ39"}],"aBtts":[function(require,module,exports) {
@@ -15102,7 +16982,16 @@ module.exports = require("20fea83a70698e51").getBundleURL("lf1OY") + "jump.bca32
 },{"20fea83a70698e51":"lgJ39"}],"8rRS9":[function(require,module,exports) {
 module.exports = require("cbd509002c8070df").getBundleURL("lf1OY") + "jump-2.e646c371.mp3" + "?" + Date.now();
 
-},{"cbd509002c8070df":"lgJ39"}],"iQKP6":[function(require,module,exports) {
+},{"cbd509002c8070df":"lgJ39"}],"glMJN":[function(require,module,exports) {
+module.exports = require("154f57ea29b56a8f").getBundleURL("lf1OY") + "switch-progress.380e3043.mp3" + "?" + Date.now();
+
+},{"154f57ea29b56a8f":"lgJ39"}],"2xBdD":[function(require,module,exports) {
+module.exports = require("21ff8e2b0945e16c").getBundleURL("lf1OY") + "switch-reset.126b67e7.mp3" + "?" + Date.now();
+
+},{"21ff8e2b0945e16c":"lgJ39"}],"jtoFA":[function(require,module,exports) {
+module.exports = require("ba1fe6f7d42ae44b").getBundleURL("lf1OY") + "switch-success.2e69cbc1.mp3" + "?" + Date.now();
+
+},{"ba1fe6f7d42ae44b":"lgJ39"}],"iQKP6":[function(require,module,exports) {
 module.exports = require("ab49a5e3aa5a4436").getBundleURL("lf1OY") + "too high.36fb70fa.mp3" + "?" + Date.now();
 
 },{"ab49a5e3aa5a4436":"lgJ39"}],"5Wuxs":[function(require,module,exports) {
@@ -15484,6 +17373,7 @@ const controlStates0 = {
     "homePlay": false,
     "homeDaily": false,
     "homeStats": false,
+    "homeAchievements": false,
     "homeOptions": false,
     "jumpToggle": false,
     "startLevel": false,
@@ -15565,7 +17455,8 @@ const defaultKeyMap = {
         "menu"
     ],
     "KeyA": [
-        "left"
+        "left",
+        "homeAchievements"
     ],
     "KeyC": [
         "copyScore",
@@ -16203,6 +18094,7 @@ parcelHelpers.export(exports, "OptionsScreen", ()=>OptionsScreen);
 parcelHelpers.export(exports, "WinScreen", ()=>WinScreen);
 parcelHelpers.export(exports, "DeadScreen", ()=>DeadScreen);
 parcelHelpers.export(exports, "StatsScreen", ()=>StatsScreen);
+parcelHelpers.export(exports, "AchievementsScreen", ()=>AchievementsScreen);
 parcelHelpers.export(exports, "MansionCompleteScreen", ()=>MansionCompleteScreen);
 parcelHelpers.export(exports, "HelpControls", ()=>HelpControls);
 parcelHelpers.export(exports, "HelpKey", ()=>HelpKey);
@@ -16471,6 +18363,7 @@ $playRestartOrResume$
 [D|homeDaily]: Daily challenge
 [O|homeOptions]: Options
 [S|homeStats]: Statistics
+[A|homeAchievements]: Achievements
 [C|credits]: Credits`
     ];
     constructor(){
@@ -16484,6 +18377,12 @@ $playRestartOrResume$
         const actionSelected = this.navigateUI(activated);
         if (activated("homePlay") || actionSelected == "homePlay" || activated("menu") || actionSelected == "menu") {
             state.gameMode = (0, _types.GameMode).Mansion;
+            if (state.hasOpenedMenu) {
+                if (!state.hasClosedMenu) {
+                    state.hasClosedMenu = true;
+                    _game.setStatusMessage(state, "");
+                }
+            }
             state.hasStartedGame = true;
         } else if (activated("homeRestart") || actionSelected == "homeRestart") {
             state.rng = new (0, _random.RNG)();
@@ -16491,6 +18390,7 @@ $playRestartOrResume$
             _game.restartGame(state);
         } else if (activated("homeDaily") || actionSelected == "homeDaily") state.gameMode = (0, _types.GameMode).DailyHub;
         else if (activated("homeStats") || actionSelected == "homeStats") state.gameMode = (0, _types.GameMode).StatsScreen;
+        else if (activated("homeAchievements") || actionSelected == "homeAchievements") state.gameMode = (0, _types.GameMode).AchievementsScreen;
         else if (activated("homeOptions") || actionSelected == "homeOptions") state.gameMode = (0, _types.GameMode).OptionsScreen;
         else if (activated("helpControls") || actionSelected == "helpControls") state.gameMode = (0, _types.GameMode).HelpControls;
         else if (activated("helpKey") || actionSelected == "helpKey") state.gameMode = (0, _types.GameMode).HelpKey;
@@ -16566,7 +18466,7 @@ class HelpControls extends TextWindow {
   Show last speech: Tab
 
 Disable NumLock if using numpad
-Mouse, touch and gamepad also supported
+Touch devices and gamepad also supported
 
 [Esc|menu] Back to menu`
     ];
@@ -16759,11 +18659,50 @@ Total wins first try:    $allDailyWinsFirstTry$
         if (activated("menu") || action == "menu") state.gameMode = (0, _types.GameMode).HomeScreen;
     }
 }
+class AchievementsScreen extends TextWindow {
+    pages = [
+        `Achievements
+
+Earn achievements by meeting certain requirements
+when you complete a game.
+
+ $victoryAchieved$ Victory: winning is enough...
+ $ghostyAchieved$ Ghosty: ghost every level
+ $zippyAchieved$ Zippy: under par time on every level
+ $hungryAchieved$ Hungry: got all the food
+ $thumpyAchieved$ Thumpy: KO'd all guards
+ $softyAchieved$ Softy: did not KO anyone
+ $noisyAchieved$ Noisy: alerted guards with noise on levels 2-10
+ $leapyAchieved$ Leapy: leapt more than 80% of your turns
+ $steppyAchieved$ Steppy: leap no more than 20 turns
+ $hurtyAchieved$ Hurty: took a wound on levels 2-10
+
+[Esc|menu] Back to menu`
+    ];
+    update(state) {
+        const ts = (0, _tilesets.getTileSet)().achievementIcons;
+        const inc = (0, _tilesets.getTileSet)().achievementIncompleteIcon.textureIndex;
+        this.state.set("victoryAchieved", state.persistedStats.achievementVictory > 0 ? `#${ts.achievementVictory.textureIndex}#` : `#${inc}#`);
+        this.state.set("ghostyAchieved", state.persistedStats.achievementGhosty > 0 ? `#${ts.achievementGhosty.textureIndex}#` : `#${inc}#`);
+        this.state.set("zippyAchieved", state.persistedStats.achievementZippy > 0 ? `#${ts.achievementZippy.textureIndex}#` : `#${inc}#`);
+        this.state.set("hungryAchieved", state.persistedStats.achievementHungry > 0 ? `#${ts.achievementHungry.textureIndex}#` : `#${inc}#`);
+        this.state.set("thumpyAchieved", state.persistedStats.achievementThumpy > 0 ? `#${ts.achievementThumpy.textureIndex}#` : `#${inc}#`);
+        this.state.set("softyAchieved", state.persistedStats.achievementSofty > 0 ? `#${ts.achievementSofty.textureIndex}#` : `#${inc}#`);
+        this.state.set("noisyAchieved", state.persistedStats.achievementNoisy > 0 ? `#${ts.achievementNoisy.textureIndex}#` : `#${inc}#`);
+        this.state.set("leapyAchieved", state.persistedStats.achievementLeapy > 0 ? `#${ts.achievementLeapy.textureIndex}#` : `#${inc}#`);
+        this.state.set("steppyAchieved", state.persistedStats.achievementSteppy > 0 ? `#${ts.achievementSteppy.textureIndex}#` : `#${inc}#`);
+        this.state.set("hurtyAchieved", state.persistedStats.achievementHurty > 0 ? `#${ts.achievementHurty.textureIndex}#` : `#${inc}#`);
+    }
+    onControls(state, activated) {
+        const action = this.navigateUI(activated);
+        if (activated("menu") || action == "menu") state.gameMode = (0, _types.GameMode).HomeScreen;
+    }
+}
 class MansionCompleteScreen extends TextWindow {
     pages = [
         `Mansion $level$ Complete!
 
-$levelStats$Loot:        $lootScore$
+$levelStats$Loot:        $lootScore$$treasureScore$$foodScore$
 Ghost:       $ghostBonus$
 Speed:       $timeBonus$
 Total:       $levelScore$
@@ -16776,9 +18715,11 @@ Cumulative:  $totalScore$
         const numTurnsPar = _game.numTurnsParForCurrentMap(state);
         const timeBonus = Math.max(0, numTurnsPar - state.turns);
         const lootScore = state.lootStolen * 10;
+        const treasureScore = state.treasureStolen * 40;
+        const foodScore = state.levelStats.extraFoodCollected * 5;
         const ghosted = state.levelStats.numSpottings === 0;
         const ghostBonus = ghosted ? lootScore : 0;
-        const score = lootScore + timeBonus + ghostBonus;
+        const score = lootScore + treasureScore + foodScore + timeBonus + ghostBonus;
         let levelStats = "Turns:       " + state.turns + "\n";
         if (state.levelStats.numSpottings > 0) levelStats += "Spottings:   " + state.levelStats.numSpottings + "\n";
         if (state.levelStats.damageTaken > 0) levelStats += "Injuries:    " + state.levelStats.damageTaken + "\n";
@@ -16787,6 +18728,8 @@ Cumulative:  $totalScore$
         this.state.set("level", (state.level + 1).toString());
         this.state.set("levelStats", levelStats);
         this.state.set("lootScore", (state.lootStolen * 10).toString());
+        this.state.set("treasureScore", state.gameMap.treasureUnlock.switches.length > 0 ? "\nSecret Loot: " + treasureScore : "");
+        this.state.set("foodScore", foodScore > 0 ? "\nFood:        " + foodScore : "");
         this.state.set("timeBonus", timeBonus.toString());
         this.state.set("ghostBonus", ghostBonus.toString());
         this.state.set("levelScore", score.toString());
@@ -16891,17 +18834,169 @@ let GameMode;
 (function(GameMode) {
     GameMode[GameMode["HomeScreen"] = 0] = "HomeScreen";
     GameMode[GameMode["StatsScreen"] = 1] = "StatsScreen";
-    GameMode[GameMode["OptionsScreen"] = 2] = "OptionsScreen";
-    GameMode[GameMode["HelpControls"] = 3] = "HelpControls";
-    GameMode[GameMode["HelpKey"] = 4] = "HelpKey";
-    GameMode[GameMode["Mansion"] = 5] = "Mansion";
-    GameMode[GameMode["MansionComplete"] = 6] = "MansionComplete";
-    GameMode[GameMode["Dead"] = 7] = "Dead";
-    GameMode[GameMode["Win"] = 8] = "Win";
-    GameMode[GameMode["DailyHub"] = 9] = "DailyHub";
-    GameMode[GameMode["CreditsScreen"] = 10] = "CreditsScreen";
+    GameMode[GameMode["AchievementsScreen"] = 2] = "AchievementsScreen";
+    GameMode[GameMode["OptionsScreen"] = 3] = "OptionsScreen";
+    GameMode[GameMode["HelpControls"] = 4] = "HelpControls";
+    GameMode[GameMode["HelpKey"] = 5] = "HelpKey";
+    GameMode[GameMode["Mansion"] = 6] = "Mansion";
+    GameMode[GameMode["MansionComplete"] = 7] = "MansionComplete";
+    GameMode[GameMode["Dead"] = 8] = "Dead";
+    GameMode[GameMode["Win"] = 9] = "Win";
+    GameMode[GameMode["DailyHub"] = 10] = "DailyHub";
+    GameMode[GameMode["CreditsScreen"] = 11] = "CreditsScreen";
 })(GameMode || (GameMode = {}));
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["kH4kW","edeGs"], "edeGs", "parcelRequire550f")
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"b6how":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "getAchievements", ()=>getAchievements);
+parcelHelpers.export(exports, "Achievement", ()=>Achievement);
+parcelHelpers.export(exports, "HurtyAchievement", ()=>HurtyAchievement);
+var _game = require("./game");
+var _gameMap = require("./game-map");
+var _guard = require("./guard");
+function getAchievements() {
+    return {
+        achievementVictory: new VictoryAchievement(),
+        achievementGhosty: new GhostyAchievement(),
+        achievementZippy: new ZippyAchievement(),
+        achievementLeapy: new LeapyAchievement(),
+        achievementSteppy: new SteppyAchievement(),
+        achievementNoisy: new NoisyAchievement(),
+        achievementThumpy: new ThumpyAchievement(),
+        achievementSofty: new SoftyAchievement(),
+        achievementHungry: new HungryAchievement(),
+        achievementHurty: new HurtyAchievement()
+    };
+}
+class Achievement {
+    complete = false;
+    update(state, type) {}
+}
+class VictoryAchievement extends Achievement {
+    update(state, type) {
+        if (type === "gameStart") this.complete = false;
+        else if (type === "gameEnd") this.complete = true;
+    }
+}
+class GhostyAchievement extends Achievement {
+    update(state, type) {
+        if (type === "gameStart") this.complete = false;
+        else if (type === "gameEnd") this.complete = state.gameStats.numGhostedLevels === state.gameMapRoughPlans.length;
+    }
+}
+class ZippyAchievement extends Achievement {
+    parRuns = 0;
+    update(state, type) {
+        if (type === "levelEnd") {
+            if (state.turns <= (0, _game.numTurnsParForCurrentMap)(state)) this.parRuns++;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.parRuns = 0;
+        } else if (type === "gameEnd") this.complete = this.parRuns === state.gameMapRoughPlans.length;
+    }
+}
+class LeapyAchievement extends Achievement {
+    leapMoves = 0;
+    leapLevels = 0;
+    update(state, type) {
+        if (type === "turnEnd") {
+            if (state.player.pos.distance(state.oldPlayerPos) >= 2) this.leapMoves++;
+        } else if (type === "levelEnd") {
+            if (this.leapMoves >= 0.8 * state.turns) this.leapLevels++;
+            this.leapMoves = 0;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.leapMoves = 0;
+            this.leapLevels = 0;
+        } else if (type === "gameEnd") this.complete = this.leapLevels === state.gameMapRoughPlans.length;
+    }
+}
+class SteppyAchievement extends Achievement {
+    leapMoves = 0;
+    leapLevels = 0;
+    update(state, type) {
+        if (type === "turnEnd") {
+            if (state.player.pos.distance(state.oldPlayerPos) >= 2) this.leapMoves++;
+        } else if (type === "levelEnd") {
+            if (this.leapMoves <= 20) this.leapLevels++;
+            this.leapMoves = 0;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.leapMoves = 0;
+            this.leapLevels = 0;
+        } else if (type === "gameEnd") this.complete = this.leapLevels === state.gameMapRoughPlans.length;
+    }
+}
+class NoisyAchievement extends Achievement {
+    noisesHeard = 0;
+    levelsWithNoisesHeard = 0;
+    update(state, type) {
+        if (type === "turnEnd") {
+            if (state.gameMap.guards.some((g)=>g.mode === (0, _guard.GuardMode).Listen || g.mode === (0, _guard.GuardMode).MoveToLastSound)) this.noisesHeard++;
+        } else if (type === "levelEnd") {
+            if (this.noisesHeard > 0) this.levelsWithNoisesHeard++;
+            this.noisesHeard = 0;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.noisesHeard = 0;
+            this.levelsWithNoisesHeard = 0;
+        } else if (type === "gameEnd") this.complete = this.levelsWithNoisesHeard === state.gameMapRoughPlans.length - 1;
+    }
+}
+class ThumpyAchievement extends Achievement {
+    failed = false;
+    update(state, type) {
+        if (type === "levelEnd") {
+            if (state.gameMap.guards.some((g)=>g.mode !== (0, _guard.GuardMode).Unconscious)) this.failed = true;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.failed = false;
+        } else if (type === "gameEnd") this.complete = !this.failed;
+    }
+}
+class SoftyAchievement extends Achievement {
+    failed = false;
+    update(state, type) {
+        if (type === "levelEnd") {
+            if (state.levelStats.numKnockouts > 0) this.failed = true;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.failed = false;
+        } else if (type === "gameEnd") this.complete = !this.failed;
+    }
+}
+class HungryAchievement extends Achievement {
+    failed = false;
+    update(state, type) {
+        if (type === "levelEnd") {
+            if (state.gameMap.items.some((item)=>item.type === (0, _gameMap.ItemType).Health)) this.failed = true;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.failed = false;
+        } else if (type === "gameEnd") this.complete = !this.failed;
+    }
+}
+class HurtyAchievement extends Achievement {
+    damageTaken = 0;
+    damageLevels = 0;
+    priorTurnHealth = 0;
+    update(state, type) {
+        if (type === "turnEnd") {
+            if (state.player.health < this.priorTurnHealth) this.damageTaken++;
+            this.priorTurnHealth = state.player.health;
+        } else if (type === "levelEnd") {
+            if (this.damageTaken > 0) this.damageLevels++;
+            this.damageTaken = 0;
+        } else if (type === "gameStart") {
+            this.complete = false;
+            this.damageTaken = 0;
+            this.damageLevels = 0;
+            this.priorTurnHealth = state.player.health;
+        } else if (type === "gameEnd") this.complete = this.damageLevels === state.gameMapRoughPlans.length;
+    }
+}
+
+},{"./game":"edeGs","./game-map":"3bH7G","./guard":"bP2Su","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["kH4kW","edeGs"], "edeGs", "parcelRequire550f")
 
 //# sourceMappingURL=index.a998808b.js.map
