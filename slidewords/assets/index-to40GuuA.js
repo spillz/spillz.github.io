@@ -6548,7 +6548,7 @@ class Board extends Widget {
   /**@type {eskv.Widget['layoutChildren']} */
   layoutChildren() {
     const boardSize = boardDim;
-    this.tileSpaceSize = 0.8 * Math.min(this.size[0], this.size[1]) / boardSize;
+    this.tileSpaceSize = Math.min(this.size[0], 0.8 * this.size[1]) / boardSize;
     this.tileSize = this.tileSpaceSize * 0.99;
     this.boardSize = boardSize * this.tileSpaceSize;
     this.offX = (this.size[0] - this.boardSize) / 2;
