@@ -6177,6 +6177,9 @@ class Tile extends Widget {
     if (this.board.blockGposUpdates) {
       return false;
     }
+    if (this.gpos.equals([-1, -1])) {
+      return false;
+    }
     if (this.collide(touch.rect)) {
       if (this.selected) {
         this.board.resetSelected();
@@ -6269,9 +6272,9 @@ class Board extends Widget {
     this.menu.bind("selection", (e, o, v) => this.menuChoice(o, v));
     this.menuButton = new Button({
       text: "MENU",
-      bgColor: App.resources["menu_button_background"],
-      selectColor: App.resources["menu_button_touched"],
-      align: "left"
+      bgColor: App.resources["colors"]["menu_button_background"],
+      selectColor: App.resources["colors"]["menu_button_touched"],
+      align: "center"
     });
     this.menuButton.bind("press", (e, o, v) => this.showMenu());
     this.multiplayerMenu = new MultiplayerMenu();
@@ -6492,7 +6495,7 @@ class Board extends Widget {
    */
   gpos2pos(gpos) {
     if (gpos[0] === -1 && gpos[1] === -1) {
-      return new Vec2([this.size[0] / 2, this.size[1]]);
+      return new Vec2([this.size[0] / 2, this.size[1] * 1.2]);
     } else {
       return new Vec2([this.offX + this.tileSpaceSize * gpos[0], this.offY + this.tileSpaceSize * gpos[1]]);
     }
@@ -6550,10 +6553,10 @@ class Board extends Widget {
     this.boardSize = boardSize * this.tileSpaceSize;
     this.offX = (this.size[0] - this.boardSize) / 2;
     this.offY = (this.size[1] - this.boardSize) / 2;
-    this.menuButton.size = new Vec2([0.1 * this.w, 0.05 * this.h]);
+    this.menuButton.size = new Vec2([0.07 * this.w, 0.05 * this.h]);
     this.menuButton.pos = new Vec2([0, 0]);
     this.wordbar.size = new Vec2([this.size[0] * 3 / 4, 0.06 * this.size[1]]);
-    this.wordbar.pos = new Vec2([this.size[0] / 8, this.size[1] - this.offY / 2 - this.wordbar.size[1]]);
+    this.wordbar.pos = new Vec2([this.size[0] / 8, this.size[1] - this.offY / 10 - this.wordbar.size[1]]);
     this.messagebar.size = new Vec2([this.size[0], 0.05 * this.size[1]]);
     this.messagebar.pos = new Vec2([0, 0]);
     this.scorebar.size = new Vec2([this.size[0], 0.1 * this.size[1]]);
