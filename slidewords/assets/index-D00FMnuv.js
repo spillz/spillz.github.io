@@ -6310,7 +6310,7 @@ class Board extends Widget {
       }
     }
     this.initial_tile_positions = [];
-    this.original_gps = this.initial_tile_positions.slice();
+    this.originalGps = this.initial_tile_positions.slice();
     const mid = Math.floor(boardDim / 2);
     for (let x = 0; x < boardDim; x++) {
       for (let y = 0; y < boardDim; y++) {
@@ -6403,9 +6403,9 @@ class Board extends Widget {
   }
   newGame() {
     this.activePlayer.abort();
-    this.original_gps = this.initial_tile_positions.slice();
+    this.originalGps = this.initial_tile_positions.slice();
     setSeed(Date.now());
-    shuffle(this.original_gps);
+    shuffle(this.originalGps);
     this.players = {
       1: new Player(this, 1)
     };
@@ -6417,8 +6417,8 @@ class Board extends Widget {
     this.activePlayer.abort();
     const date = new Date(Date.now());
     setSeed(date.getUTCFullYear() * 1e3 + date.getUTCMonth() * 100 + date.getUTCDate());
-    this.original_gps = this.initial_tile_positions.slice();
-    shuffle(this.original_gps);
+    this.originalGps = this.initial_tile_positions.slice();
+    shuffle(this.originalGps);
     const gameId = `d${date.getUTCFullYear()}${date.getUTCMonth()}${date.getUTCDate()}`;
     this.players = {
       1: new Player(this, 1)
@@ -6429,9 +6429,9 @@ class Board extends Widget {
   }
   newMultiplayerGame() {
     this.activePlayer.abort();
-    this.original_gps = this.initial_tile_positions.slice();
+    this.originalGps = this.initial_tile_positions.slice();
     setSeed(Date.now());
-    shuffle(this.original_gps);
+    shuffle(this.originalGps);
     this.players = {
       1: new playerTypes[this.multiplayerMenu.player1](this, 1),
       2: new playerTypes[this.multiplayerMenu.player2](this, 2)
@@ -6464,6 +6464,7 @@ class Board extends Widget {
     }, 1);
   }
   resetTick(i) {
+    App.get().requestFrameUpdate();
     if (i === 0) {
       this.block_gpos_updates = true;
       this.tiles.clear();
@@ -6473,7 +6474,7 @@ class Board extends Widget {
     let j = i;
     while (j < anim_ind) {
       const t = this.tileWidgets[j];
-      const gp = this.original_gps[j];
+      const gp = new Vec2(this.originalGps[j]);
       t.opos = gp;
       t.cpos = gp;
       t.gpos = gp;
@@ -6876,6 +6877,7 @@ class Board extends Widget {
       this.scoreDetail2p.setScoreData(game["scoreData1"], game["scoreData2"]);
     }
     this.blockGposUpdates = true;
+    this.originalGps = game["originalGps"];
     this.tiles.clear();
     this.children = this.children.filter((widget) => !(widget instanceof Tile));
     this.tileWidgets = [];
@@ -6919,7 +6921,7 @@ class Board extends Widget {
       version,
       // Assuming __version__ is defined somewhere globally or in this context
       gridData,
-      // originalGps: this.originalGps,
+      originalGps: this.originalGps,
       selection: this.selection,
       word: this.wordbar.word,
       wordScore: this.wordbar.wordScore,
