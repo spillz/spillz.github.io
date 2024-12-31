@@ -6897,7 +6897,7 @@ class Board extends Widget {
       localStorage.removeItem("SlideWordsApp/GameState");
       return;
     }
-    const gridData = [...this.tiles.values()].map((t) => {
+    const gridData = this.tileWidgets.map((t) => {
       return {
         letter: t.letter,
         value: t.value,
