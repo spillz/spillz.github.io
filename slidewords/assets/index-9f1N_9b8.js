@@ -6632,7 +6632,7 @@ class Board extends Widget {
     this.wordbar.wordScore = res.value;
   }
   updatePassBar() {
-    this.wordbar.canPass = this.selection == [] && this.activePlayer.localTouch() && this.scorebar.players == 2;
+    this.wordbar.canPass = this.selection.length === 0 && this.activePlayer.localTouch() && this.scorebar.players === 2;
   }
   resetSelected() {
     this.block_gpos_updates = true;
@@ -6839,9 +6839,14 @@ class Board extends Widget {
     if (!gameDataString) {
       return false;
     }
-    console.info("Loading game data");
     const game = JSON.parse(gameDataString);
     const gridData = game.gridData;
+    if (gridData.length !== this.tileWidgets.length) {
+      console.info("Bad game data");
+      localStorage.removeItem("SlideWordsApp/GameState");
+      return false;
+    }
+    console.info("Loading game data");
     try {
       this.scorebar.players = game.players;
     } catch (error) {
@@ -6881,8 +6886,10 @@ class Board extends Widget {
       tile.opos = new Vec2(t.opos);
       tile.cpos = new Vec2(t.cpos);
       tile.selected = t.selected;
-      this.setAtGpos(t.gpos, tile);
       this.tileWidgets.push(tile);
+      if (tile.gpos[0] !== -1 && tile.gpos[1] !== -1) {
+        this.setAtGpos(t.gpos, tile);
+      }
     }
     this.blockGposUpdates = false;
     this._needsLayout = true;
