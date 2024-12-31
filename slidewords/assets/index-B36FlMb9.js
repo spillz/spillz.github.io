@@ -7187,7 +7187,9 @@ class MessageBar extends BoxLayout {
         this.message = "GAME OVER";
       }
     } else {
-      this.message = "";
+      if (this.message === "GAME OVER") {
+        this.message = "";
+      }
     }
   }
   gameChanged(scoreBar, gameId) {
