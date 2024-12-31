@@ -6885,8 +6885,9 @@ class Board extends Widget {
       this.scorebar.setGameId(game["highScoreId"]);
       this.scorebar.score = game["score"];
       this.scorebar.activePlayer = 1;
+      this.consecutivePasses = game["consecutivePasses"];
       this.players = { 1: new Player(this, 1) };
-      this.scoreDetail1p.setScoreData(game["scoreData"]);
+      this.scoreDetail1p.setScoreData(this.players, game["scoreData"]);
     } else {
       this.selection = [];
       this.wordbar.wordScore = 0;
@@ -6894,12 +6895,13 @@ class Board extends Widget {
       this.scorebar.score = game["score"];
       this.scorebar.score_2 = game["score_2"];
       this.scorebar.activePlayer = game["activePlayer"];
+      this.consecutivePasses = game["consecutivePasses"];
       const [p1type, p2type] = game["ptypes"];
       this.players = {
         1: new playerTypes[p1type](this, 1),
         2: new playerTypes[p2type](this, 2)
       };
-      this.scoreDetail2p.setScoreData(game["scoreData1"], game["scoreData2"]);
+      this.scoreDetail2p.setScoreData(this.players, game["scoreData1"], game["scoreData2"]);
     }
     this.blockGposUpdates = true;
     this.originalGps = game["originalGps"];
@@ -6961,6 +6963,7 @@ class Board extends Widget {
       data.score_2 = this.scorebar.score_2;
       data.scoreData1 = this.scoreDetail2p.scoreData1;
       data.scoreData2 = this.scoreDetail2p.scoreData2;
+      data.consecutivePasses = this.consecutivePasses;
       data.ptypes = [this.players[1].type, this.players[2].type];
     }
     localStorage.setItem("SlideWordsApp/GameState", JSON.stringify(data));
