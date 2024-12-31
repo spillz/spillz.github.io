@@ -6194,6 +6194,7 @@ class Tile extends Widget {
     if (this.collide(touch.rect)) {
       if (this.selected) {
         this.board.resetSelected();
+        touch.ungrab();
       } else {
         this.board.candidates = this.board.getMoveCandidates(this);
         if (this.board.candidates.length > 0) {
@@ -6217,6 +6218,7 @@ class Tile extends Widget {
     }
     return false;
   }
+  /**@type {eskv.Widget['on_touch_up']} */
   on_touch_up(e, o, touch) {
     if (!this.board.activePlayer.localTouch()) {
       return false;
@@ -6230,7 +6232,7 @@ class Tile extends Widget {
       }
       this.pos = this.board.gpos2pos(this.gpos);
       this.board.candidates = [];
-      touch.ungrab(this);
+      touch.ungrab();
       return true;
     }
     return false;
@@ -6777,12 +6779,16 @@ class Board extends Widget {
   }
   confirmWord(widget, touch) {
     if (!this.activePlayer.localTouch()) {
-      return;
+      return false;
     }
     if (!widget.collide(touch.rect)) {
-      return;
+      return false;
+    }
+    if (this.wordbar.wordScore === 0 && !this.wordbar.canPass) {
+      return false;
     }
     this.endTurn();
+    return true;
   }
   endTurn() {
     const passTurn = this.selection.length === 0;
@@ -6984,13 +6990,15 @@ class ScoreDetail1p extends ModalView {
     this.updateText(players);
   }
   updateText(players) {
-    this.title = `Turn ${this.scoreData.length + 1}`;
-    const total = this.scoreData.reduce((acc, item) => acc + item[1], 0);
-    let detail = `SCORE: ${total}
+    if (this.scoreData) {
+      this.title = `Turn ${this.scoreData.length + 1}`;
+      const total = this.scoreData.reduce((acc, item) => acc + item[1], 0);
+      let detail = `SCORE: ${total}
 
 `;
-    detail += this.scoreData.map((item, index) => `${item[1]} ${item[0]}`).join("\n");
-    this.detail = detail;
+      detail += this.scoreData.map((item, index) => `${item[1]} ${item[0]}`).join("\n");
+      this.detail = detail;
+    }
   }
 }
 App.registerClass("ScoreDetail1p", ScoreDetail1p, "ModalView");
@@ -7026,7 +7034,8 @@ class ScoreDetail2p extends ModalView {
     this.updateText(players);
   }
   updateText(players) {
-    this.title = `Turn ${this.scoreData1.length + 1}`;
+    if (!this.scoreData2) return;
+    this.title = `Turn ${this.scoreData2.length + 1}`;
     const total1 = this.scoreData1.reduce((acc, item) => acc + item[1], 0);
     const pname1 = players[1] ? players[1].name !== "HUMAN" ? players[1].name : "PLAYER 1" : "UNKNOWN";
     let detail1 = `${pname1}: ${total1}
@@ -7244,7 +7253,6 @@ class SlideWordsApp extends App {
     config.setDefaults("theme", { "theme": "beach" });
   }
   on_key_down(event, object, keyInfo) {
-    console.log(keyInfo);
     if ("Escape" in keyInfo.states && keyInfo.states["Escape"]) {
       if (!this.gb) return;
       if (this.gb.scoreDetail1p.visible) {
