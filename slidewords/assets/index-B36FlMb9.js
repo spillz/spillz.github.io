@@ -7234,7 +7234,6 @@ class SlideWordsApp extends App {
     super();
     __publicField(this, "prefDimH", 14);
     __publicField(this, "prefDimW", 10);
-    App.rules.add("Label", { fontName: "Arial, Helvetica, sans-serif" });
     parse(markup);
     this.updateProperties(props);
     this.config = /* @__PURE__ */ new Map();
@@ -7250,10 +7249,8 @@ class SlideWordsApp extends App {
     this.baseWidget.addChild(this.gb);
   }
   static get() {
-    return (
-      /**@type {SlideWordsApp} */
-      App.get()
-    );
+    if (!App.appInstance) App.appInstance = new SlideWordsApp();
+    return App.appInstance;
   }
   setNextTheme() {
     var _a;
