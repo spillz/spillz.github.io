@@ -6654,7 +6654,7 @@ class Board extends Widget {
     this.wordbar.wordScore = res.value;
   }
   updatePassBar() {
-    this.wordbar.canPass = !this.gameOver && this.scorebar.players !== 1;
+    this.wordbar.canPass = !this.gameOver && this.scorebar.players !== 1 && this.selection.length === 0;
   }
   resetSelected() {
     this.block_gpos_updates = true;
@@ -6792,7 +6792,7 @@ class Board extends Widget {
     if (!widget.collide(touch.rect)) {
       return false;
     }
-    if (this.wordbar.wordScore === 0 && !this.wordbar.canPass) {
+    if (this.wordbar.word === "" && this.selection.length > 0) {
       return false;
     }
     this.endTurn();
@@ -7249,8 +7249,10 @@ class SlideWordsApp extends App {
     this.baseWidget.addChild(this.gb);
   }
   static get() {
-    if (!App.appInstance) App.appInstance = new SlideWordsApp();
-    return App.appInstance;
+    return (
+      /**@type {SlideWordsApp} */
+      App.get()
+    );
   }
   setNextTheme() {
     var _a;
@@ -7298,5 +7300,5 @@ class SlideWordsApp extends App {
 var words;
 loadWords(urlWords).then((result) => {
   words = result;
-  SlideWordsApp.get().start();
+  new SlideWordsApp().start();
 });
