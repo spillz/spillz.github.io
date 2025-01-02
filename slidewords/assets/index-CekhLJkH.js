@@ -6806,6 +6806,7 @@ class Board extends Widget {
     return { word: "", value: 0 };
   }
   confirmWord(widget, touch) {
+    if (!this.activePlayer.localTouch()) return;
     if (this.wordbar.word === "" && this.selection.length > 0) {
       return false;
     }
@@ -6842,7 +6843,7 @@ class Board extends Widget {
     } else {
       this.scoreDetail1p.add(this.players, word, score);
     }
-    if (this.consecutivePasses === this.scorebar.players) {
+    if (this.consecutivePasses === this.scorebar.players || this.tiles.size === 0) {
       this.gameOver = true;
       this.updatePassBar();
       this.scoreDetail1p.title = "Game Over";
@@ -6936,6 +6937,7 @@ class Board extends Widget {
     }
     this.blockGposUpdates = false;
     this._needsLayout = true;
+    this.gameOver = game["gameOver"];
     this.activePlayer = this.players[this.scorebar.activePlayer];
     if (this.scorebar.players === 2) {
       this.activePlayer.startTurn();
@@ -6967,7 +6969,8 @@ class Board extends Widget {
       word: this.wordbar.word,
       wordScore: this.wordbar.wordScore,
       players: this.scorebar.players,
-      score: this.scorebar.score
+      score: this.scorebar.score,
+      gameOver: this.gameOver
     };
     if (this.scorebar.players === 1) {
       data.highScoreId = this.scorebar.gameId;
