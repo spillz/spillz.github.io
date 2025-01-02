@@ -5447,12 +5447,12 @@ function loadTheme(themeName) {
   theme["id"] = themeName;
   return theme;
 }
-const urlSoundCancelSelection = "/assets/cancel_selection-DZ1gYDyu.mp3";
-const urlSoundLevelCompleted = "/assets/level_completed-BwaWAI54.mp3";
-const urlSoundLevelFailed = "/assets/level_failed-DG77Ixvh.mp3";
-const urlSoundMenu = "/assets/menu-Wio-ugm1.mp3";
-const urlSoundSelect = "/assets/select-CMgqBDdo.mp3";
-const urlSoundWordCompleted = "/assets/word_completed-Bu2Q1kXb.mp3";
+const urlSoundCancelSelection = "/7words/assets/cancel_selection-DZ1gYDyu.mp3";
+const urlSoundLevelCompleted = "/7words/assets/level_completed-BwaWAI54.mp3";
+const urlSoundLevelFailed = "/7words/assets/level_failed-DG77Ixvh.mp3";
+const urlSoundMenu = "/7words/assets/menu-Wio-ugm1.mp3";
+const urlSoundSelect = "/7words/assets/select-CMgqBDdo.mp3";
+const urlSoundWordCompleted = "/7words/assets/word_completed-Bu2Q1kXb.mp3";
 const sounds = {
   CANCEL_SELECTION: new Audio(urlSoundCancelSelection),
   LEVEL_COMPLETED: new Audio(urlSoundLevelCompleted),
