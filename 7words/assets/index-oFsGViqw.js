@@ -6386,12 +6386,12 @@ class SevenWordsApp extends App {
     var _a;
     super();
     this.id = "app";
+    const themeName = (_a = localStorage.getItem("7Words/theme")) != null ? _a : "beach";
+    this.colors = loadTheme(themeName);
     this.words = words;
     this.instructions = new Instructions();
     this.menu = new Menu();
     this.menu.bind("selection", (e, o, v) => this.menuChoice(this.menu, v));
-    const themeName = (_a = localStorage.getItem("7Words/theme")) != null ? _a : "beach";
-    this.colors = loadTheme(themeName);
     this.board = new Board();
     this.board.scorebar.bind("gameId", (e, o, v) => {
       this.menu.uiUpdate(this.board.scorebar);
