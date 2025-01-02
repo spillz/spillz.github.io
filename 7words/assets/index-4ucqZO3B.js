@@ -6385,6 +6385,7 @@ class SevenWordsApp extends App {
   constructor(words) {
     var _a;
     super();
+    this.id = "app";
     this.words = words;
     this.instructions = new Instructions();
     this.menu = new Menu();
