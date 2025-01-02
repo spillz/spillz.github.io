@@ -4023,7 +4023,6 @@ class BoxLayout extends Widget {
   on_orientation(event, object, data) {
     this._needsLayout = true;
   }
-  /**@type {Widget['layoutChildren']} */
   layoutChildren() {
     if (this._layoutNotify) this.emit("layout", null);
     this._needsLayout = false;
@@ -4059,7 +4058,11 @@ class BoxLayout extends Widget {
         y += spacingY + c.h;
       }
       if (num === 0 && "h" in this.hints && this.hints["h"] === null) {
-        this[3] = y + paddingY - this.y;
+        const oldH = this[3];
+        this[3] = y + 2 * paddingY - this.y;
+        if (Math.abs(oldH - this[3]) > 1e-6) {
+          App.get()._needsLayout = true;
+        }
       }
       return;
     }
@@ -4091,7 +4094,11 @@ class BoxLayout extends Widget {
         x += spacingX + c.w;
       }
       if (num == 0 && "w" in this.hints && this.hints["w"] == null) {
-        this[2] = x + paddingX - this.x;
+        const oldW = this[2];
+        this[2] = x + 2 * paddingX - this.x;
+        if (Math.abs(oldW - this[2]) > 1e-6) {
+          App.get()._needsLayout = true;
+        }
       }
     }
   }
@@ -5596,6 +5603,19 @@ const tiles = [
   ["Y", 3, 2],
   ["Z", 4, 1]
 ];
+var words = /* @__PURE__ */ new Set();
+async function loadWords(url) {
+  try {
+    const response = await fetch(url);
+    const text = await response.text();
+    words = new Set(text.split("\n"));
+    return true;
+  } catch (err) {
+    console.error(`Error loading file: ${url}`, err);
+    throw false;
+  }
+  return false;
+}
 function unweightedChoice(count, choices, seed) {
   const originalSeed = getSeed();
   setSeed(seed);
@@ -6106,19 +6126,7 @@ const playerNames = {
   9: "AI HARLIE"
 };
 const urlWords = "/slidewords/assets/TWL06-lMEBC9W-.txt";
-const markup = "<TextButton@Button>:\n    color: 'rgb(1, 1, 1)'\n    bgColor: 'rgb(0xbb, 0xad, 0xa0)'\n    fontSize: 0.5\n    bold: true\n\n<HeadingLabel@Label>:\n    bgColor: resources['colors']['checker']\n    fontSize: 0.6\n\n<BodyLabel@Label>:\n    fontSize: 0.5\n\n\n<ScoreBar>:\n    id: 'scorebar'\n    bgColor: resources['colors']['background']\n    hints: {w: null, h: null}\n    score: 0\n    hiScore: 0\n    score_2: 0\n    players: 1\n    activePlayer: 1\n    gameId: ''\n    orientation: 'horizontal'\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w: 1, h: 0.33}\n            text: scorebar.players === 1 ? 'SCORE' : 'PLAYER 1'\n            color: scorebar.activePlayer == 2 || scorebar.players == 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'bottom'\n            fontSize:0.25\n        Label:\n            hints: {w: 1, h: 0.67}\n            text: scorebar.score.toString()\n            color: scorebar.activePlayer === 2 || scorebar.players == 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'top'\n            fontSize:0.5\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            text: scorebar.players === 2 ? 'MULTIPLAYER': scorebar.gameId!=='default' ? 'DAILY CHALLENGE' : 'RANDOM GAME'\n            color: resources['colors']['score_text']\n            valign: 'top'\n            fontSize: 0.6\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w: 1, h: 0.33}\n            text: scorebar.players === 1 ? 'BEST' : 'PLAYER 2'\n            color: scorebar.activePlayer == 1 || scorebar.players == 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'bottom'\n            fontSize:0.25\n        Label:\n            hints: {w: 1, h: 0.67}\n            text: scorebar.players === 1 ? scorebar.hiScore.toString() : scorebar.score_2.toString()\n            color: scorebar.activePlayer == 1 || scorebar.players == 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'top'\n            fontSize:0.5\n\n<WordBar>:\n    id: 'wordbar'\n    hints: {w: null, h: null}\n    orientation: 'vertical'\n    word: ''\n    wordScore: 0\n    canPass: true\n    bgColor: wordbar.word!=='' || wordbar.canPass ? resources['colors']['word_score_background'] : resources['colors']['background']\n    Label:\n        id: 'wordLabel'\n        text: wordbar.word!=='' ? wordbar.word+' for '+wordbar.wordScore.toString() : wordbar.canPass ? 'PASS' : ''\n        color: resources['colors']['word_score_text']\n\n<MessageBar@BoxLayout>:\n    id: 'messagebar'\n    orientation: 'vertical'\n    message: ''\n    Label:\n        text: messagebar.message\n        color: resources.colors['score_text']\n\n\n<MenuItem@Button>:\n    bgColor: resources['colors']['menu_button_background']\n    selectColor: resources['colors']['menu_button_touched']\n    hints: {h:'1'}\n\n\n<InstructionsBox@BoxLayout>:\n    bgColor: resources['colors']['checker']\n\n\n\n<Instructions>:\n    id: 'instructions'\n    hints: {x:0.1, y:0.1, h:0.8, w:0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: 0.1}\n        text: 'How to Play'\n    ScrollView:\n        id: 'scroller'\n        hints: {w: 1, h: 0.8}\n        scrollW: false\n        BodyLabel:\n            color: 'white'\n            hints: {x:0, y:0, w:1, h:null}\n            text: 'Objective: Clear the board by arranging letters to form words, scoring points based on word length and letter rarity.\\n\\nTo form words, select letter tiles in place or drag them in a straight line into neighboring free tile spaces. A word is valid if it is composed of connected letter tiles in a straight line (either vertically, horizontally or diagonally in either direction), is in the dictionary, and at least one tile was moved to form it. Score a valid word by pressing the word cue at bottom of the screen. Each word scores points equal to the sum of the tile values multiplied by the number of letters in the word. Cancel a selection by tapping any of the selected tiles.'\n            align: 'left'\n            valign: 'top'\n            wrap: true\n\n\n<ScoreDetail1p@BoxLayout>:\n    id: 'scoredetails1p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetails1p.title\n        valign: 'middle'\n        align: 'center'\n    ScrollView:\n        padding: 0.1\n        scrollW: false\n        BodyLabel:\n            text: scoredetails1p.detail\n            align: 'left'\n            valign: 'top'\n            wrap: true\n            hints: {x:0, y:0, h:null,  w:1}\n            fontSize: 0.5\n\n\n<ScoreDetail2p@BoxLayout>:\n    id: 'scoredetail2p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail1: ''\n    detail2: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetail2p.title\n        valign: 'middle'\n        align: 'center'\n    BoxLayout:\n        orientation: 'horizontal'\n        paddingX: 0.05;\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail1\n                fontSize: 0.5\n                align: 'left'\n                valign: 'top'\n                wrap: true\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail2\n                align: 'right'\n                valign: 'top'\n                wrap: true\n                fontSize: 0.5\n\n\n<Menu>:\n    id: 'mainMenu'\n    orientation: 'vertical'\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    selection: '';\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'Restart Game'\n        on_press: \n            this.parent.selection = 'restartGame'\n    MenuItem:\n        text: 'Random Game'\n        on_press: \n            this.parent.selection = 'randomGame'\n    MenuItem:\n        text: 'Daily Challenge'\n        on_press: \n            this.parent.selection = 'dailyGame'\n    MenuItem:\n        text: 'Multiplayer'\n        on_press: \n            this.parent.selection = 'multiplayerMenu'\n    MenuItem:\n        text: 'Instructions'\n        on_press: \n            this.parent.selection = 'instructions'\n#    MenuItem:\n#        text: 'Leaderboards'\n#        on_press: \n#            this.parent.selection = 'leaderboardMenu'\n#    MenuItem:\n#        text: 'Achievements'\n#        on_press: \n#            this.parent.selection = 'achievements'\n#    MenuItem:\n#        text: 'Theme'\n#        on_press: \n#            this.parent.selection = 'theme'\n#    MenuItem:\n#        text: 'Quit'\n#        on_press: \n#            this.parent.selection = 'quit'\n\n\n<MultiplayerMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    id: 'multiplayerMenu'\n    orientation: 'vertical'\n    player1: 1\n    player2: 1\n    players: ['','Human', 'AI']\n    selection: ''\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    MenuItem:\n        text: 'Start Game'\n        on_press:\n            this.parent.selection = 'multiplayerGame'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player1]\n        on_press:\n            this.parent.selection = 'player1'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player2]\n        on_press:\n            this.parent.selection = 'player2'\n\n\n<LeaderboardMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    orientation: 'vertical'\n    selection: ''\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'High Score'\n        on_press:\n            this.parent.selection = 'highScore'\n    MenuItem:\n        text: 'Daily Game High Score'\n        on_press:\n            this.parent.selection = 'dailyHighScore'\n    MenuItem:\n        text: 'Number of 1,000+ Games'\n        on_press:\n            this.parent.selection = 'number1000'\n";
-async function loadWords(url) {
-  try {
-    const response = await fetch(url);
-    const text = await response.text();
-    const words2 = new Set(text.split("\n"));
-    return words2;
-  } catch (err) {
-    console.error(`Error loading file: ${url}`, err);
-    throw err;
-  }
-  return new Set("");
-}
+const markup = "<TextButton@Button>:\n    color: 'rgb(1, 1, 1)'\n    bgColor: 'rgb(0xbb, 0xad, 0xa0)'\n    fontSize: 0.5\n    bold: true\n\n<HeadingLabel@Label>:\n    bgColor: resources['colors']['checker']\n    fontSize: 0.6\n\n<BodyLabel@Label>:\n    fontSize: 0.5\n\n\n<ScoreBar>:\n    id: 'scorebar'\n    bgColor: resources['colors']['background']\n    hints: {w: null, h: null}\n    score: 0\n    hiScore: 0\n    score_2: 0\n    players: 1\n    activePlayer: 1\n    gameId: ''\n    orientation: 'horizontal'\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.players === 1 ? 'SCORE' : 'PLAYER 1'\n            color: scorebar.activePlayer == 2 || scorebar.players == 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'bottom'\n            fontSize: 0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.score.toString()\n            color: scorebar.activePlayer === 2 || scorebar.players == 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'top'\n            fontSize: 0.5\n    BoxLayout:\n        orientation: 'vertical'\n        hints: {w:1, h:'2'}\n        Label:\n            text: scorebar.players === 2 ? '2-PLAYER\\nGAME': scorebar.gameId!=='default' ? 'DAILY\\nCHALLENGE' : 'RANDOM\\nGAME'\n            color: resources['colors']['score_text']\n            valign: 'middle'\n            fontSize: 0.6\n            wrap: True\n            shrinkToFit: true\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.players === 1 ? 'BEST' : 'PLAYER 2'\n            color: scorebar.activePlayer == 1 || scorebar.players == 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'bottom'\n            fontSize:0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.players === 1 ? scorebar.hiScore.toString() : scorebar.score_2.toString()\n            color: scorebar.activePlayer == 1 || scorebar.players == 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'top'\n            fontSize:0.5\n\n<WordBar>:\n    id: 'wordbar'\n    word: ''\n    wordScore: 0\n    canPass: true\n    text: this.word!=='' ? this.word+' for '+this.wordScore.toString() : this.canPass ? 'PASS' : ''\n    fontSize: 0.5\n    disable: this.word==='' && !this.canPass;\n    bgColor: resources['colors']['word_score_background']\n    selectColor: resources['colors']['menu_button_touched']\n    disableColor1: null;\n    disableColor2: null;\n\n<MessageBar@BoxLayout>:\n    id: 'messagebar'\n    orientation: 'vertical'\n    message: ''\n    Label:\n        text: messagebar.message\n        color: resources.colors['score_text']\n        fontSize: '0.4'\n\n\n<MenuItem@Button>:\n    bgColor: resources['colors']['menu_button_background']\n    selectColor: resources['colors']['menu_button_touched']\n    hints: {h:'1'}\n\n\n<InstructionsBox@BoxLayout>:\n    bgColor: resources['colors']['checker']\n\n\n\n<Instructions>:\n    id: 'instructions'\n    hints: {x:0.1, y:0.1, h:0.8, w:0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: 0.1}\n        text: 'How to Play'\n    ScrollView:\n        id: 'scroller'\n        hints: {w: 1, h: 0.8}\n        scrollW: false\n        BodyLabel:\n            color: 'white'\n            hints: {x:0, y:0, w:1, h:null}\n            text: 'Objective: Clear the board by arranging letters to form words, scoring points based on word length and letter rarity.\\n\\nTo form words, select letter tiles in place or drag them in a straight line into neighboring free tile spaces. A word is valid if it is composed of connected letter tiles in a straight line (either vertically, horizontally or diagonally in either direction), is in the dictionary, and at least one tile was moved to form it. Score a valid word by pressing the word cue at bottom of the screen. Each word scores points equal to the sum of the tile values multiplied by the number of letters in the word. Cancel a selection by tapping any of the selected tiles.'\n            align: 'left'\n            valign: 'top'\n            wrap: true\n\n\n<ScoreDetail1p@BoxLayout>:\n    id: 'scoredetails1p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetails1p.title\n        valign: 'middle'\n        align: 'center'\n    ScrollView:\n        padding: 0.1\n        scrollW: false\n        BodyLabel:\n            text: scoredetails1p.detail\n            align: 'left'\n            valign: 'top'\n            wrap: true\n            hints: {x:0, y:0, h:null,  w:1}\n            fontSize: 0.5\n\n\n<ScoreDetail2p@BoxLayout>:\n    id: 'scoredetail2p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail1: ''\n    detail2: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetail2p.title\n        valign: 'middle'\n        align: 'center'\n    BoxLayout:\n        orientation: 'horizontal'\n        paddingX: 0.05;\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail1\n                fontSize: 0.5\n                align: 'left'\n                valign: 'top'\n                wrap: true\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail2\n                align: 'right'\n                valign: 'top'\n                wrap: true\n                fontSize: 0.5\n\n\n<Menu>:\n    id: 'mainMenu'\n    orientation: 'vertical'\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    selection: '';\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'Restart Game'\n        on_press: \n            this.parent.selection = 'restartGame'\n    MenuItem:\n        text: 'Random Game'\n        on_press: \n            this.parent.selection = 'randomGame'\n    MenuItem:\n        text: 'Daily Challenge'\n        on_press: \n            this.parent.selection = 'dailyGame'\n    MenuItem:\n        text: 'Two-Player Game'\n        on_press: \n            this.parent.selection = 'multiplayerMenu'\n    MenuItem:\n        text: 'Instructions'\n        on_press: \n            this.parent.selection = 'instructions'\n#    MenuItem:\n#        text: 'Leaderboards'\n#        on_press: \n#            this.parent.selection = 'leaderboardMenu'\n#    MenuItem:\n#        text: 'Achievements'\n#        on_press: \n#            this.parent.selection = 'achievements'\n#    MenuItem:\n#        text: 'Theme'\n#        on_press: \n#            this.parent.selection = 'theme'\n#    MenuItem:\n#        text: 'Quit'\n#        on_press: \n#            this.parent.selection = 'quit'\n\n\n<MultiplayerMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    id: 'multiplayerMenu'\n    orientation: 'vertical'\n    player1: 1\n    player2: 1\n    players: ['','Human', 'AI']\n    selection: ''\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    MenuItem:\n        text: 'Start Game'\n        on_press:\n            this.parent.selection = 'multiplayerGame'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player1]\n        on_press:\n            this.parent.selection = 'player1'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player2]\n        on_press:\n            this.parent.selection = 'player2'\n\n\n<LeaderboardMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    orientation: 'vertical'\n    selection: ''\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'High Score'\n        on_press:\n            this.parent.selection = 'highScore'\n    MenuItem:\n        text: 'Daily Game High Score'\n        on_press:\n            this.parent.selection = 'dailyHighScore'\n    MenuItem:\n        text: 'Number of 1,000+ Games'\n        on_press:\n            this.parent.selection = 'number1000'\n";
 class Tile extends Widget {
   /**
    * 
@@ -6266,18 +6274,30 @@ class Tile extends Widget {
     [this.cposX, this.cposY] = value;
   }
 }
+class MenuButton extends Button {
+  /**@type {eskv.Button['draw']}*/
+  draw(app, ctx) {
+    let r = this.rect;
+    ctx.beginPath();
+    ctx.rect(r[0], r[1], r[2], r[3] / 5);
+    ctx.rect(r[0], r[1] + r[3] * 0.4, r[2], r[3] / 5);
+    ctx.rect(r[0], r[1] + r[3] * 0.8, r[2], r[3] / 5);
+    ctx.fillStyle = this._touching ? App.resources["colors"]["menu_button_touched"] : App.resources["colors"]["score_text"];
+    ctx.fill();
+  }
+}
 class Board extends Widget {
   /**
    * 
    * @param {Set<string>} words 
    */
-  constructor(words2) {
+  constructor(words$1) {
     super();
     __publicField(this, "gameOver", false);
     this.firstStart = true;
     this.updateProperties({});
     this.hints = { x: 0, y: 0, w: 1, h: 1 };
-    this.words = words2;
+    this.words = words;
     this.scorebar = new ScoreBar();
     this.wordbar = new WordBar();
     this.messagebar = new MessageBar();
@@ -6287,11 +6307,11 @@ class Board extends Widget {
     this.scorebar.bind("score_2", (e, o, v) => this.updatePassBar());
     this.scorebar.bind("activePlayer", (e, o, v) => this.messagebar.activePlayerChanged(o, v));
     this.scorebar.bind("touch_down", (e, o, v) => this.onTouchScore(o, v));
-    this.wordbar.bind("touch_down", (e, o, v) => this.confirmWord(o, v));
+    this.wordbar.bind("press", (e, o, v) => this.confirmWord(o, v));
     this.bind("gameOver", (e, o, v) => this.messagebar.gameOver(o, v));
     this.menu = new Menu();
     this.menu.bind("selection", (e, o, v) => this.menuChoice(o, v));
-    this.menuButton = new Button({
+    this.menuButton = new MenuButton({
       text: "MENU",
       bgColor: App.resources["colors"]["menu_button_background"],
       selectColor: App.resources["colors"]["menu_button_touched"],
@@ -6575,14 +6595,14 @@ class Board extends Widget {
     this.boardSize = boardDim$1 * this.tileSpaceSize;
     this.offX = (this.size[0] - this.boardSize) / 2;
     this.offY = 2;
-    this.menuButton.size = new Vec2([2, 1]);
-    this.menuButton.pos = new Vec2([0, this.size[1] - 1]);
+    this.menuButton.size = new Vec2([0.5, 0.5]);
+    this.menuButton.pos = new Vec2([0.25, 0.75]);
     this.messagebar.size = new Vec2([this.size[0], 1]);
     this.messagebar.pos = new Vec2([0, this.size[1] - 1]);
-    this.wordbar.size = new Vec2([this.size[0] * 3 / 4, 0.8]);
-    this.wordbar.pos = new Vec2([this.size[0] / 8, this.size[1] - 1.9 - (this.size[1] - this.boardSize - 4) / 2]);
-    this.scorebar.size = new Vec2([this.size[0], 2]);
-    this.scorebar.pos = new Vec2([0, 0]);
+    this.wordbar.size = new Vec2([this.boardSize, 0.8]);
+    this.wordbar.pos = new Vec2([this.offX, this.size[1] - 1.9 - (this.size[1] - this.boardSize - 4) / 2]);
+    this.scorebar.size = new Vec2([this.size[0] - 2, 2]);
+    this.scorebar.pos = new Vec2([1, 0]);
     this.tileWidgets.forEach((tile) => {
       tile.pos = this.gpos2pos(tile.gpos);
       tile.size = new Vec2([this.tileSize, this.tileSize]);
@@ -6786,12 +6806,6 @@ class Board extends Widget {
     return { word: "", value: 0 };
   }
   confirmWord(widget, touch) {
-    if (!this.activePlayer.localTouch()) {
-      return false;
-    }
-    if (!widget.collide(touch.rect)) {
-      return false;
-    }
     if (this.wordbar.word === "" && this.selection.length > 0) {
       return false;
     }
@@ -7148,17 +7162,16 @@ class ScoreBar extends BoxLayout {
   }
 }
 App.registerClass("ScoreBar", ScoreBar, "BoxLayout");
-class WordBar extends BoxLayout {
+class WordBar extends Button {
   constructor(props = {}) {
     super();
     __publicField(this, "word", "");
     __publicField(this, "wordScore", 0);
     __publicField(this, "canPass", false);
-    if (props) this.updateProperties(props);
-    this.wWordLabel = this.findById("wordLabel");
+    this.updateProperties(props);
   }
 }
-App.registerClass("WordBar", WordBar, "BoxLayout");
+App.registerClass("WordBar", WordBar, "Button");
 class MessageBar extends BoxLayout {
   constructor(props = {}) {
     super();
@@ -7174,13 +7187,13 @@ class MessageBar extends BoxLayout {
     if (gameOver) {
       if (board.scorebar.players === 2) {
         if (board.scorebar.score_2 === board.scorebar.score) {
-          this.message = "DRAW!";
+          this.message = "GAME OVER: DRAW!";
         } else {
           const winner = board.scorebar.score_2 > board.scorebar.score ? 2 : 1;
           if (board.players[winner].type === 1) {
-            this.message = `PLAYER ${winner} WINS!`;
+            this.message = `GAME OVER: PLAYER ${winner} WINS!`;
           } else {
-            this.message = `${board.players[winner].name} WINS!`;
+            this.message = `GAME OVER: ${board.players[winner].name} WINS!`;
           }
         }
       } else {
@@ -7245,7 +7258,7 @@ class SlideWordsApp extends App {
       this.colors = loadTheme("default");
     }
     App.resources["colors"] = this.colors;
-    this.gb = new Board(words);
+    this.gb = new Board(this.words);
     this.baseWidget.addChild(this.gb);
   }
   static get() {
@@ -7297,8 +7310,8 @@ class SlideWordsApp extends App {
     }
   }
 }
-var words;
 loadWords(urlWords).then((result) => {
-  words = result;
-  new SlideWordsApp().start();
+  if (result) {
+    new SlideWordsApp().start();
+  }
 });
