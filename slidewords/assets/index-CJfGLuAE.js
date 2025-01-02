@@ -7248,6 +7248,7 @@ class SlideWordsApp extends App {
     super();
     __publicField(this, "prefDimH", 14);
     __publicField(this, "prefDimW", 10);
+    App.rules.add("ScrollView", { uiZoom: false, scrollW: false });
     parse(markup);
     this.updateProperties(props);
     this.config = /* @__PURE__ */ new Map();
