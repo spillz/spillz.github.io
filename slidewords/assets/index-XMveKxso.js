@@ -38,6 +38,48 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     fetch(link.href, fetchOpts);
   }
 })();
+const boardDim = 10;
+const tiles = [
+  ["A", 0, 7],
+  ["B", 2, 3],
+  ["C", 2, 3],
+  ["D", 1, 5],
+  ["E", 0, 10],
+  ["F", 2, 3],
+  ["G", 2, 4],
+  ["H", 3, 2],
+  ["I", 0, 7],
+  ["J", 4, 1],
+  ["K", 3, 2],
+  ["L", 0, 4],
+  ["M", 2, 3],
+  ["N", 1, 4],
+  ["O", 0, 7],
+  ["P", 2, 3],
+  ["Q", 4, 1],
+  ["R", 1, 5],
+  ["S", 1, 5],
+  ["T", 1, 5],
+  ["U", 1, 4],
+  ["V", 4, 1],
+  ["W", 3, 3],
+  ["X", 4, 1],
+  ["Y", 3, 2],
+  ["Z", 4, 1]
+];
+var words = /* @__PURE__ */ new Set();
+async function loadWords(url) {
+  try {
+    const response = await fetch(url);
+    const text = await response.text();
+    words = new Set(text.replace(/\r/g, "").split("\n"));
+    return true;
+  } catch (err) {
+    console.error(`Error loading file: ${url}`, err);
+    throw false;
+  }
+  return false;
+}
 class PRNG {
   constructor() {
     __publicField(this, "_seed", 0);
@@ -5574,48 +5616,6 @@ function loadTheme(themeName) {
   theme["menu_button_background"];
   return theme;
 }
-const boardDim = 10;
-const tiles = [
-  ["A", 0, 7],
-  ["B", 2, 3],
-  ["C", 2, 3],
-  ["D", 1, 5],
-  ["E", 0, 10],
-  ["F", 2, 3],
-  ["G", 2, 4],
-  ["H", 3, 2],
-  ["I", 0, 7],
-  ["J", 4, 1],
-  ["K", 3, 2],
-  ["L", 0, 4],
-  ["M", 2, 3],
-  ["N", 1, 4],
-  ["O", 0, 7],
-  ["P", 2, 3],
-  ["Q", 4, 1],
-  ["R", 1, 5],
-  ["S", 1, 5],
-  ["T", 1, 5],
-  ["U", 1, 4],
-  ["V", 4, 1],
-  ["W", 3, 3],
-  ["X", 4, 1],
-  ["Y", 3, 2],
-  ["Z", 4, 1]
-];
-var words = /* @__PURE__ */ new Set();
-async function loadWords(url) {
-  try {
-    const response = await fetch(url);
-    const text = await response.text();
-    words = new Set(text.split("\n"));
-    return true;
-  } catch (err) {
-    console.error(`Error loading file: ${url}`, err);
-    throw false;
-  }
-  return false;
-}
 function unweightedChoice(count, choices, seed) {
   const originalSeed = getSeed();
   setSeed(seed);
@@ -5668,6 +5668,7 @@ class AIPlayer extends Player {
    */
   constructor(board, pid) {
     super(board, pid);
+    this._findPromise = void 0;
     this.type = 1;
     this.vocab = 0;
     this.randomVocab = false;
@@ -5864,7 +5865,6 @@ class AIPlayer extends Player {
     let coords = this.coordList(d, position);
     for (let start_point = 0; start_point < coords.length; start_point++) {
       for (let end_point = start_point + 1; end_point < Math.min(coords.length, start_point + this.maxWordLen); end_point++) {
-        console.log("AI step", this.counter);
         if (this._abort) {
           return [];
         }
@@ -5887,6 +5887,12 @@ class AIPlayer extends Player {
       this.words = new Set([...words.values()].slice(-this.vocab));
     }
   }
+  /**
+   * Outer logic loop of the AI turn. Determines a set of "lines" (horizontally, vertically and diagonally) that run through an empty space
+   * Then for each line seeks out tile movements that produce a valid word on that line. The best scoring move of all candidates is selected
+   * in the UI and scored as the players turn
+   * @returns 
+   */
   async findMove() {
     this.counter = 0;
     let state = { ...this.initState };
@@ -5912,7 +5918,6 @@ class AIPlayer extends Player {
     if (candidates.length > 0) {
       let maxScore = Math.max(...candidates.map((c) => c[1]));
       let bestCandidates = candidates.filter((c) => c[1] === maxScore);
-      console.log("number of candidates", bestCandidates.length);
       setTimeout(() => this.foundWord(this.chooseRandom(bestCandidates)), 1);
       return;
     }
@@ -5928,7 +5933,7 @@ class AIPlayer extends Player {
   }
   startTurn() {
     this.initState = this.boardState();
-    this.findMove();
+    this._findPromise = this.findMove();
   }
   /**
    * 
@@ -5944,14 +5949,21 @@ class AIPlayer extends Player {
     this.doNext();
   }
   doNext() {
+    console.log("DO NEXT", this.sel);
     App.get().requestFrameUpdate();
     if (this._dead) {
       return;
     }
     if (this.sel.length > 0) {
-      const [src, dest] = this.sel.shift();
-      this.board.selectInPos(this.board.getAtGpos(new Vec2(src)), new Vec2(dest));
-      setTimeout(() => this.doNext(), 500);
+      const [src, dest] = (
+        /**@type {[[number, number], [number, number]]}*/
+        this.sel.shift()
+      );
+      const tile = this.board.getAtGpos(new Vec2(src));
+      if (tile) {
+        this.board.selectInPos(tile, new Vec2(dest));
+        setTimeout(() => this.doNext(), 500);
+      }
     } else {
       setTimeout(() => this.endTurn(), 2e3);
     }
@@ -6125,8 +6137,330 @@ const playerNames = {
   8: "AI GOLEM",
   9: "AI HARLIE"
 };
-const urlWords = "/assets/TWL06-lMEBC9W-.txt";
-const markup = "<TextButton@Button>:\n    color: 'rgb(1, 1, 1)'\n    bgColor: 'rgb(0xbb, 0xad, 0xa0)'\n    fontSize: 0.5\n    bold: true\n\n<HeadingLabel@Label>:\n    bgColor: resources['colors']['checker']\n    fontSize: 0.6\n\n<BodyLabel@Label>:\n    fontSize: 0.5\n\n\n<ScoreBar>:\n    id: 'scorebar'\n    bgColor: resources['colors']['background']\n    hints: {w: null, h: null}\n    score: 0\n    hiScore: 0\n    score_2: 0\n    players: 1\n    activePlayer: 1\n    gameId: ''\n    orientation: 'horizontal'\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.players === 1 ? 'SCORE' : 'PLAYER 1'\n            color: scorebar.activePlayer == 2 || scorebar.players == 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'bottom'\n            fontSize: 0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.score.toString()\n            color: scorebar.activePlayer === 2 || scorebar.players == 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'top'\n            fontSize: 0.5\n    BoxLayout:\n        orientation: 'vertical'\n        hints: {w:1, h:'2'}\n        Label:\n            text: scorebar.players === 2 ? '2-PLAYER\\nGAME': scorebar.gameId!=='default' ? 'DAILY\\nCHALLENGE' : 'RANDOM\\nGAME'\n            color: resources['colors']['score_text']\n            valign: 'middle'\n            fontSize: 0.6\n            wrap: True\n            shrinkToFit: true\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.players === 1 ? 'BEST' : 'PLAYER 2'\n            color: scorebar.activePlayer == 1 || scorebar.players == 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'bottom'\n            fontSize:0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.players === 1 ? scorebar.hiScore.toString() : scorebar.score_2.toString()\n            color: scorebar.activePlayer == 1 || scorebar.players == 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'top'\n            fontSize:0.5\n\n<WordBar>:\n    id: 'wordbar'\n    word: ''\n    wordScore: 0\n    canPass: true\n    text: this.word!=='' ? this.word+' for '+this.wordScore.toString() : this.canPass ? 'PASS' : ''\n    fontSize: 0.5\n    disable: this.word==='' && !this.canPass;\n    bgColor: resources['colors']['word_score_background']\n    selectColor: resources['colors']['menu_button_touched']\n    disableColor1: null;\n    disableColor2: null;\n\n<MessageBar@BoxLayout>:\n    id: 'messagebar'\n    orientation: 'vertical'\n    message: ''\n    Label:\n        text: messagebar.message\n        color: resources.colors['score_text']\n        fontSize: '0.4'\n\n\n<MenuItem@Button>:\n    bgColor: resources['colors']['menu_button_background']\n    selectColor: resources['colors']['menu_button_touched']\n    hints: {h:'1'}\n\n\n<InstructionsBox@BoxLayout>:\n    bgColor: resources['colors']['checker']\n\n\n\n<Instructions>:\n    id: 'instructions'\n    hints: {x:0.1, y:0.1, h:0.8, w:0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: 0.1}\n        text: 'How to Play'\n    ScrollView:\n        id: 'scroller'\n        hints: {w: 1, h: 0.8}\n        scrollW: false\n        BodyLabel:\n            color: 'white'\n            hints: {x:0, y:0, w:1, h:null}\n            text: 'Objective: Clear the board by arranging letters to form words, scoring points based on word length and letter rarity.\\n\\nTo form words, select letter tiles in place or drag them in a straight line into neighboring free tile spaces. A word is valid if it is composed of connected letter tiles in a straight line (either vertically, horizontally or diagonally in either direction), is in the dictionary, and at least one tile was moved to form it. Score a valid word by pressing the word cue at bottom of the screen. Each word scores points equal to the sum of the tile values multiplied by the number of letters in the word. Cancel a selection by tapping any of the selected tiles.'\n            align: 'left'\n            valign: 'top'\n            wrap: true\n\n\n<ScoreDetail1p@BoxLayout>:\n    id: 'scoredetails1p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetails1p.title\n        valign: 'middle'\n        align: 'center'\n    ScrollView:\n        padding: 0.1\n        scrollW: false\n        BodyLabel:\n            text: scoredetails1p.detail\n            align: 'left'\n            valign: 'top'\n            wrap: true\n            hints: {x:0, y:0, h:null,  w:1}\n            fontSize: 0.5\n\n\n<ScoreDetail2p@BoxLayout>:\n    id: 'scoredetail2p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail1: ''\n    detail2: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetail2p.title\n        valign: 'middle'\n        align: 'center'\n    BoxLayout:\n        orientation: 'horizontal'\n        paddingX: 0.05;\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail1\n                fontSize: 0.5\n                align: 'left'\n                valign: 'top'\n                wrap: true\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail2\n                align: 'right'\n                valign: 'top'\n                wrap: true\n                fontSize: 0.5\n\n\n<Menu>:\n    id: 'mainMenu'\n    orientation: 'vertical'\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    selection: '';\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'Restart Game'\n        on_press: \n            this.parent.selection = 'restartGame'\n    MenuItem:\n        text: 'Random Game'\n        on_press: \n            this.parent.selection = 'randomGame'\n    MenuItem:\n        text: 'Daily Challenge'\n        on_press: \n            this.parent.selection = 'dailyGame'\n    MenuItem:\n        text: 'Two-Player Game'\n        on_press: \n            this.parent.selection = 'multiplayerMenu'\n    MenuItem:\n        text: 'Instructions'\n        on_press: \n            this.parent.selection = 'instructions'\n#    MenuItem:\n#        text: 'Leaderboards'\n#        on_press: \n#            this.parent.selection = 'leaderboardMenu'\n#    MenuItem:\n#        text: 'Achievements'\n#        on_press: \n#            this.parent.selection = 'achievements'\n#    MenuItem:\n#        text: 'Theme'\n#        on_press: \n#            this.parent.selection = 'theme'\n#    MenuItem:\n#        text: 'Quit'\n#        on_press: \n#            this.parent.selection = 'quit'\n\n\n<MultiplayerMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    id: 'multiplayerMenu'\n    orientation: 'vertical'\n    player1: 1\n    player2: 1\n    players: ['','Human', 'AI']\n    selection: ''\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    MenuItem:\n        text: 'Start Game'\n        on_press:\n            this.parent.selection = 'multiplayerGame'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player1]\n        on_press:\n            this.parent.selection = 'player1'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player2]\n        on_press:\n            this.parent.selection = 'player2'\n\n\n<LeaderboardMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    orientation: 'vertical'\n    selection: ''\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'High Score'\n        on_press:\n            this.parent.selection = 'highScore'\n    MenuItem:\n        text: 'Daily Game High Score'\n        on_press:\n            this.parent.selection = 'dailyHighScore'\n    MenuItem:\n        text: 'Number of 1,000+ Games'\n        on_press:\n            this.parent.selection = 'number1000'\n";
+class MenuButton extends Button {
+  /**@type {eskv.Button['draw']}*/
+  draw(app, ctx) {
+    let r = this.rect;
+    ctx.beginPath();
+    ctx.rect(r[0], r[1], r[2], r[3] / 5);
+    ctx.rect(r[0], r[1] + r[3] * 0.4, r[2], r[3] / 5);
+    ctx.rect(r[0], r[1] + r[3] * 0.8, r[2], r[3] / 5);
+    ctx.fillStyle = this._touching ? App.resources["colors"]["menu_button_touched"] : App.resources["colors"]["score_text"];
+    ctx.fill();
+  }
+}
+class Instructions extends ModalView {
+  constructor(props = {}) {
+    super();
+    this.mScrollView = null;
+    this.updateProperties(props);
+  }
+}
+App.registerClass("Instructions", Instructions, "ModalView");
+class ScoreDetail1p extends ModalView {
+  constructor() {
+    super();
+    this.updateProperties({});
+    this.scoreData = [];
+    this.title = "Start of the Game";
+    this.detail = "SCORE: 0";
+  }
+  reset() {
+    this.scoreData = [];
+    this.title = "Start of the Game";
+    this.detail = "SCORE: 0";
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   * @param {[string, number][]} scoreData
+   */
+  setScoreData(players, scoreData) {
+    this.scoreData = scoreData;
+    this.updateText(players);
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   * @param {string} word
+   * @param {number} score
+   */
+  add(players, word, score) {
+    if (word === "" && score === 0) {
+      word = "<PASS>";
+    }
+    this.scoreData.push([word, score]);
+    this.updateText(players);
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   */
+  updateText(players) {
+    if (this.scoreData) {
+      this.title = `Turn ${this.scoreData.length + 1}`;
+      const total = this.scoreData.reduce((acc, item) => acc + item[1], 0);
+      let detail = `SCORE: ${total}
+
+`;
+      detail += this.scoreData.map((item, index) => `${item[1]} ${item[0]}`).join("\n");
+      this.detail = detail;
+    }
+  }
+}
+App.registerClass("ScoreDetail1p", ScoreDetail1p, "ModalView");
+class ScoreDetail2p extends ModalView {
+  constructor() {
+    super();
+    this.updateProperties({});
+    this.reset({});
+    this.scoreData1 = [];
+    this.scoreData2 = [];
+    this.title = "Start of the Game";
+    this.detail1 = "";
+    this.detail2 = "";
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   */
+  reset(players) {
+    this.scoreData1 = [];
+    this.scoreData2 = [];
+    this.title = "Start of the Game";
+    const pname1 = 1 in players ? players[1].name !== "HUMAN" ? players[1].name : "PLAYER 1" : "UNKNOWN";
+    this.detail1 = `${pname1}: 0`;
+    const pname2 = 2 in players ? players[2].name !== "HUMAN" ? players[2].name : "PLAYER 2" : "UNKNOWN";
+    this.detail2 = `${pname2}: 0`;
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   * @param {[string, number][]} scoreData1 
+   * @param {[string, number][]} scoreData2 
+   */
+  setScoreData(players, scoreData1, scoreData2) {
+    this.scoreData1 = scoreData1;
+    this.scoreData2 = scoreData2;
+    this.updateText(players);
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   * @param {number} player 
+   * @param {string} word
+   * @param {number} score
+   */
+  add(players, player, word, score) {
+    if (word === "" && score === 0) {
+      word = "<PASS>";
+    }
+    if (player === 1) {
+      this.scoreData1.push([word, score]);
+    } else if (player === 2) {
+      this.scoreData2.push([word, score]);
+    }
+    this.updateText(players);
+  }
+  /**
+   * 
+   * @param {Object<number, Player>} players 
+   */
+  updateText(players) {
+    if (!this.scoreData2) return;
+    this.title = `Turn ${this.scoreData2.length + 1}`;
+    const total1 = this.scoreData1.reduce((acc, item) => acc + item[1], 0);
+    const pname1 = players[1] ? players[1].name !== "HUMAN" ? players[1].name : "PLAYER 1" : "UNKNOWN";
+    let detail1 = `${pname1}: ${total1}
+
+`;
+    detail1 += this.scoreData1.map((item) => `${item[1]} ${item[0]}`).join("\n");
+    this.detail1 = detail1;
+    const total2 = this.scoreData2.reduce((acc, item) => acc + item[1], 0);
+    const pname2 = players[2] ? players[2].name !== "HUMAN" ? players[2].name : "PLAYER 2" : "UNKNOWN";
+    let detail2 = `${pname2}: ${total2}
+
+`;
+    detail2 += this.scoreData2.map((item) => `${item[0]} ${item[1]}`).join("\n");
+    this.detail2 = detail2;
+  }
+}
+App.registerClass("ScoreDetail2p", ScoreDetail2p, "ModalView");
+class Menu extends ModalView {
+  constructor(props = {}) {
+    super();
+    this.selection = "";
+    this.updateProperties(props);
+  }
+}
+App.registerClass("Menu", Menu, "ModalView");
+class MultiplayerMenu extends ModalView {
+  constructor() {
+    super();
+    this.selection = "";
+    this.player1 = 0;
+    this.player2 = 0;
+    this.updateProperties({});
+    this.players = playerNames;
+  }
+}
+App.registerClass("MultiplayerMenu", MultiplayerMenu, "ModalView");
+class LeaderboardMenu extends ModalView {
+  constructor() {
+    super();
+    this.selection = "";
+    this.players = ["", "Player 1", "Player 2"];
+    this.updateProperties({});
+  }
+}
+App.registerClass("LeaderboardMenu", LeaderboardMenu, "ModalView");
+class ScoreBar extends BoxLayout {
+  constructor(props = {}) {
+    super();
+    this.score = 0;
+    this.score_2 = 0;
+    this.hiScore = 0;
+    this.gameId = "";
+    this.playerCount = 1;
+    this.activePlayer = 1;
+    this.store = this.getStore();
+    this.bind("score", (e, o, v) => this.scoreChanged());
+    this.setGameId();
+    this.updateProperties(props);
+  }
+  getStore() {
+    const scores = localStorage.getItem("SlideWordsApp/scores");
+    return scores ? JSON.parse(scores) : {};
+  }
+  setStore(key, value) {
+    const scores = this.getStore();
+    scores[key] = value;
+    localStorage.setItem("SlideWordsApp/scores", JSON.stringify(scores));
+  }
+  setGameId(gameId = "default", multiplayer = false) {
+    this.playerCount = (multiplayer ? 1 : 0) + 1;
+    this.activePlayer = 1;
+    this.gameId = gameId;
+    if (this.playerCount === 1) {
+      const data = this.store[this.gameId];
+      this.hiScore = data ? data.highScore : 0;
+    }
+  }
+  scoreChanged() {
+    if (this.playerCount === 2) return;
+    if (this.gameId !== "default") {
+      const date = /* @__PURE__ */ new Date();
+      const gameDate = `d${date.getUTCFullYear()}${date.getUTCMonth()}${date.getUTCDate()}`;
+      if (this.gameId !== gameDate) {
+        this.setGameId();
+      } else {
+        let hiScore = 0;
+        if ("default" in this.store) {
+          hiScore = this.store["default"].highScore || 0;
+        }
+        if (this.score > hiScore) {
+          this.setStore("default", { highScore: this.score });
+        }
+      }
+    }
+    if (this.score > this.hiScore) {
+      this.hiScore = this.score;
+      this.setStore(this.gameId, { highScore: this.score });
+    }
+  }
+}
+App.registerClass("ScoreBar", ScoreBar, "BoxLayout");
+class WordBar extends Button {
+  constructor(props = {}) {
+    super();
+    __publicField(this, "word", "");
+    __publicField(this, "wordScore", 0);
+    __publicField(this, "canPass", false);
+    this.updateProperties(props);
+  }
+}
+App.registerClass("WordBar", WordBar, "Button");
+class MessageBar extends BoxLayout {
+  constructor(props = {}) {
+    super();
+    this.message = "";
+    this.updateProperties(props);
+  }
+  activePlayerChanged(scorebar, activePlayer) {
+    if (scorebar.playerCount === 2) {
+      this.message = `PLAYER ${scorebar.activePlayer}'S TURN`;
+    }
+  }
+  /**
+   * 
+   * @param {ScoreBar} scorebar 
+   * @param {Object<number, Player>} players
+   * @param {boolean} gameOver 
+   */
+  gameOver(scorebar, players, gameOver) {
+    if (gameOver) {
+      if (scorebar.playerCount === 2) {
+        if (scorebar.score_2 === scorebar.score) {
+          this.message = "GAME OVER: DRAW!";
+        } else {
+          const winner = scorebar.score_2 > scorebar.score ? 2 : 1;
+          if (players[winner].type === 1) {
+            this.message = `GAME OVER: PLAYER ${winner} WINS!`;
+          } else {
+            this.message = `GAME OVER: ${players[winner].name} WINS!`;
+          }
+        }
+      } else {
+        this.message = "GAME OVER";
+      }
+    } else {
+      if (this.message === "GAME OVER") {
+        this.message = "";
+      }
+    }
+  }
+  /**
+   * 
+   * @param {ScoreBar} scorebar 
+   * @param {string} gameId 
+   * @returns 
+   */
+  gameChanged(scorebar, gameId) {
+    if (scorebar.playerCount === 2) return;
+    this.gameId = gameId;
+    if (gameId !== "default") {
+      const now = /* @__PURE__ */ new Date();
+      const nextDate = new Date(now);
+      nextDate.setUTCHours(24, 0, 0, 0);
+      const delta = (nextDate.valueOf() - now.valueOf()) / 1e3;
+      if (delta > 0) {
+        const hours = Math.floor(delta / 3600);
+        const minutes = Math.floor(delta % 3600 / 60);
+        const seconds = delta % 60;
+        if (hours > 0) {
+          this.message = `${hours} HOUR${hours > 1 ? "S" : ""} LEFT`;
+          setTimeout(() => this.onDailyChallengeTimer(scorebar, gameId), hours * 36e5);
+        } else if (minutes > 0) {
+          this.message = `${minutes} MINUTE${minutes > 1 ? "S" : ""} LEFT`;
+          setTimeout(() => this.onDailyChallengeTimer(scorebar, gameId), minutes * 6e4);
+        } else {
+          this.message = `${seconds} SECOND${seconds > 1 ? "S" : ""} LEFT`;
+          setTimeout(() => this.onDailyChallengeTimer(scorebar, gameId), seconds * 1e3);
+        }
+      } else {
+        this.message = "THE DAILY CHALLENGE HAS EXPIRED";
+      }
+    } else {
+      this.message = "";
+    }
+  }
+  onDailyChallengeTimer(scorebar, gameId) {
+    if (gameId === this.gameId) {
+      this.gameChanged(scorebar, gameId);
+    }
+  }
+}
+App.registerClass("MessageBar", MessageBar, "BoxLayout");
 class Tile extends Widget {
   /**
    * 
@@ -6274,18 +6608,6 @@ class Tile extends Widget {
     [this.cposX, this.cposY] = value;
   }
 }
-class MenuButton extends Button {
-  /**@type {eskv.Button['draw']}*/
-  draw(app, ctx) {
-    let r = this.rect;
-    ctx.beginPath();
-    ctx.rect(r[0], r[1], r[2], r[3] / 5);
-    ctx.rect(r[0], r[1] + r[3] * 0.4, r[2], r[3] / 5);
-    ctx.rect(r[0], r[1] + r[3] * 0.8, r[2], r[3] / 5);
-    ctx.fillStyle = this._touching ? App.resources["colors"]["menu_button_touched"] : App.resources["colors"]["score_text"];
-    ctx.fill();
-  }
-}
 class Board extends Widget {
   /**
    * 
@@ -6301,14 +6623,14 @@ class Board extends Widget {
     this.scorebar = new ScoreBar();
     this.wordbar = new WordBar();
     this.messagebar = new MessageBar();
-    this.scorebar.bind("gameId", (e, o, v) => this.messagebar.gameChanged(o, v));
+    this.scorebar.bind("gameId", (e, o, v) => this.messagebar.gameChanged(this.scorebar, v));
     this.scorebar.bind("players", (e, o, v) => this.messagebar.activePlayerChanged(o, v));
     this.scorebar.bind("score", (e, o, v) => this.updatePassBar());
     this.scorebar.bind("score_2", (e, o, v) => this.updatePassBar());
     this.scorebar.bind("activePlayer", (e, o, v) => this.messagebar.activePlayerChanged(o, v));
     this.scorebar.bind("touch_down", (e, o, v) => this.onTouchScore(o, v));
     this.wordbar.bind("press", (e, o, v) => this.confirmWord(o, v));
-    this.bind("gameOver", (e, o, v) => this.messagebar.gameOver(o, v));
+    this.bind("gameOver", (e, o, v) => this.messagebar.gameOver(this.scorebar, this.players, this.gameOver));
     this.menu = new Menu();
     this.menu.bind("selection", (e, o, v) => this.menuChoice(o, v));
     this.menuButton = new MenuButton({
@@ -6498,7 +6820,7 @@ class Board extends Widget {
     this.wordbar.word = "";
     this.wordbar.wordScore = 0;
     this.selection = [];
-    this.scoreDetail1p.reset(this.players);
+    this.scoreDetail1p.reset();
     this.scoreDetail2p.reset(this.players);
     setTimeout(() => {
       this.resetTick(0);
@@ -6625,6 +6947,9 @@ class Board extends Widget {
     ctx.clearRect(this.x, this.y, this.w, this.h);
     ctx.fillStyle = background;
     ctx.fillRect(this.x, this.y, this.w, this.h);
+    ctx.strokeStyle = checker;
+    ctx.lineWidth = 0.05;
+    ctx.strokeRect(this.offX, this.offY, this.boardSize, this.boardSize);
     ctx.fillStyle = checker;
     for (let x = 0; x < boardDim; x++) {
       for (let y = 0; y < boardDim; y++) {
@@ -6674,7 +6999,7 @@ class Board extends Widget {
     this.wordbar.wordScore = res.value;
   }
   updatePassBar() {
-    this.wordbar.canPass = !this.gameOver && this.scorebar.players !== 1 && this.selection.length === 0;
+    this.wordbar.canPass = !this.gameOver && this.scorebar.playerCount !== 1 && this.selection.length === 0;
   }
   resetSelected() {
     this.block_gpos_updates = true;
@@ -6836,19 +7161,19 @@ class Board extends Widget {
       }
     });
     this.selection = [];
-    if (this.scorebar.players === 2) {
+    if (this.scorebar.playerCount === 2) {
       this.scoreDetail2p.add(this.players, this.scorebar.activePlayer, word, score);
     } else {
       this.scoreDetail1p.add(this.players, word, score);
     }
-    if (this.consecutivePasses === this.scorebar.players || this.tiles.size === 0) {
+    if (this.consecutivePasses === this.scorebar.playerCount || this.tiles.size === 0) {
       this.gameOver = true;
       this.updatePassBar();
       this.scoreDetail1p.title = "Game Over";
       this.scoreDetail2p.title = "Game Over";
       this.showScoreSummary();
     } else {
-      if (this.scorebar.players === 2) {
+      if (this.scorebar.playerCount === 2) {
         this.scorebar.activePlayer = 3 - this.scorebar.activePlayer;
         this.activePlayer = this.players[this.scorebar.activePlayer];
       }
@@ -6856,7 +7181,7 @@ class Board extends Widget {
       this.activePlayer.startTurn();
     }
   }
-  onTouchScore(scoreBar, touch) {
+  onTouchScore(scorebar, touch) {
     if (this.scorebar.collide(touch.rect)) {
       this.showScoreSummary();
       return true;
@@ -6887,11 +7212,11 @@ class Board extends Widget {
     }
     console.info("Loading game data");
     try {
-      this.scorebar.players = game.players;
+      this.scorebar.playerCount = game["playerCount"];
     } catch (error) {
-      this.scorebar.players = 1;
+      this.scorebar.playerCount = 1;
     }
-    if (this.scorebar.players === 1) {
+    if (this.scorebar.playerCount === 1) {
       this.selection = game["selection"];
       this.wordbar.wordScore = game["wordScore"];
       this.wordbar.word = game["word"];
@@ -6937,7 +7262,7 @@ class Board extends Widget {
     this._needsLayout = true;
     this.gameOver = game["gameOver"];
     this.activePlayer = this.players[this.scorebar.activePlayer];
-    if (this.scorebar.players === 2) {
+    if (this.scorebar.playerCount === 2) {
       this.activePlayer.startTurn();
     }
     return true;
@@ -6966,11 +7291,11 @@ class Board extends Widget {
       selection: this.selection,
       word: this.wordbar.word,
       wordScore: this.wordbar.wordScore,
-      players: this.scorebar.players,
+      playerCount: this.scorebar.playerCount,
       score: this.scorebar.score,
       gameOver: this.gameOver
     };
-    if (this.scorebar.players === 1) {
+    if (this.scorebar.playerCount === 1) {
       data.highScoreId = this.scorebar.gameId;
       data.scoreData = this.scoreDetail1p.scoreData;
     } else {
@@ -6985,263 +7310,7 @@ class Board extends Widget {
     console.log("Saved game data");
   }
 }
-class Instructions extends ModalView {
-  constructor(props = {}) {
-    super();
-    this.mScrollView = null;
-    this.updateProperties(props);
-  }
-}
-App.registerClass("Instructions", Instructions, "ModalView");
-class ScoreDetail1p extends ModalView {
-  constructor() {
-    super();
-    this.updateProperties({});
-    this.reset();
-  }
-  reset(players) {
-    this.scoreData = [];
-    this.title = "Start of the Game";
-    this.detail = "SCORE: 0";
-  }
-  setScoreData(players, scoreData) {
-    this.scoreData = scoreData;
-    this.updateText(players);
-  }
-  add(players, word, score) {
-    if (word === "" && score === 0) {
-      word = "<PASS>";
-    }
-    this.scoreData.push([word, score]);
-    this.updateText(players);
-  }
-  updateText(players) {
-    if (this.scoreData) {
-      this.title = `Turn ${this.scoreData.length + 1}`;
-      const total = this.scoreData.reduce((acc, item) => acc + item[1], 0);
-      let detail = `SCORE: ${total}
-
-`;
-      detail += this.scoreData.map((item, index) => `${item[1]} ${item[0]}`).join("\n");
-      this.detail = detail;
-    }
-  }
-}
-App.registerClass("ScoreDetail1p", ScoreDetail1p, "ModalView");
-class ScoreDetail2p extends ModalView {
-  constructor() {
-    super();
-    this.updateProperties({});
-    this.reset({});
-  }
-  reset(players) {
-    this.scoreData1 = [];
-    this.scoreData2 = [];
-    this.title = "Start of the Game";
-    const pname1 = 1 in players ? players[1].name !== "HUMAN" ? players[1].name : "PLAYER 1" : "UNKNOWN";
-    this.detail1 = `${pname1}: 0`;
-    const pname2 = 2 in players ? players[2].name !== "HUMAN" ? players[2].name : "PLAYER 2" : "UNKNOWN";
-    this.detail2 = `${pname2}: 0`;
-  }
-  setScoreData(players, scoreData1, scoreData2) {
-    this.scoreData1 = scoreData1;
-    this.scoreData2 = scoreData2;
-    this.updateText(players);
-  }
-  add(players, player, word, score) {
-    if (word === "" && score === 0) {
-      word = "<PASS>";
-    }
-    if (player === 1) {
-      this.scoreData1.push([word, score]);
-    } else if (player === 2) {
-      this.scoreData2.push([word, score]);
-    }
-    this.updateText(players);
-  }
-  updateText(players) {
-    if (!this.scoreData2) return;
-    this.title = `Turn ${this.scoreData2.length + 1}`;
-    const total1 = this.scoreData1.reduce((acc, item) => acc + item[1], 0);
-    const pname1 = players[1] ? players[1].name !== "HUMAN" ? players[1].name : "PLAYER 1" : "UNKNOWN";
-    let detail1 = `${pname1}: ${total1}
-
-`;
-    detail1 += this.scoreData1.map((item) => `${item[1]} ${item[0]}`).join("\n");
-    this.detail1 = detail1;
-    const total2 = this.scoreData2.reduce((acc, item) => acc + item[1], 0);
-    const pname2 = players[2] ? players[2].name !== "HUMAN" ? players[2].name : "PLAYER 2" : "UNKNOWN";
-    let detail2 = `${pname2}: ${total2}
-
-`;
-    detail2 += this.scoreData2.map((item) => `${item[0]} ${item[1]}`).join("\n");
-    this.detail2 = detail2;
-  }
-}
-App.registerClass("ScoreDetail2p", ScoreDetail2p, "ModalView");
-class Menu extends ModalView {
-  constructor(props = {}) {
-    super();
-    this.selection = "";
-    this.updateProperties(props);
-  }
-}
-App.registerClass("Menu", Menu, "ModalView");
-class MultiplayerMenu extends ModalView {
-  constructor() {
-    super();
-    this.selection = "";
-    this.player1 = 0;
-    this.player2 = 0;
-    this.updateProperties({});
-    this.players = playerNames;
-  }
-}
-App.registerClass("MultiplayerMenu", MultiplayerMenu, "ModalView");
-class LeaderboardMenu extends ModalView {
-  constructor() {
-    super();
-    this.selection = "";
-    this.players = ["", "Player 1", "Player 2"];
-    this.updateProperties({});
-  }
-}
-App.registerClass("LeaderboardMenu", LeaderboardMenu, "ModalView");
-class ScoreBar extends BoxLayout {
-  constructor(props = {}) {
-    super();
-    this.score = 0;
-    this.score_2 = 0;
-    this.hiScore = 0;
-    this.gameId = "";
-    this.players = 0;
-    this.activePlayer = 0;
-    this.store = this.getStore();
-    this.bind("score", (e, o, v) => this.scoreChanged());
-    this.setGameId();
-    this.updateProperties(props);
-  }
-  getStore() {
-    const scores = localStorage.getItem("SlideWordsApp/scores");
-    return scores ? JSON.parse(scores) : {};
-  }
-  setStore(key, value) {
-    const scores = this.getStore();
-    scores[key] = value;
-    localStorage.setItem("SlideWordsApp/scores", JSON.stringify(scores));
-  }
-  setGameId(gameId = "default", multiplayer = false) {
-    this.players = (multiplayer ? 1 : 0) + 1;
-    this.activePlayer = 1;
-    this.gameId = gameId;
-    if (this.players === 1) {
-      const data = this.store[this.gameId];
-      this.hiScore = data ? data.highScore : 0;
-    }
-  }
-  scoreChanged() {
-    if (this.players === 2) return;
-    if (this.gameId !== "default") {
-      const date = /* @__PURE__ */ new Date();
-      const gameDate = `d${date.getUTCFullYear()}${date.getUTCMonth()}${date.getUTCDate()}`;
-      if (this.gameId !== gameDate) {
-        this.setGameId();
-      } else {
-        let hiScore = 0;
-        if ("default" in this.store) {
-          hiScore = this.store["default"].highScore || 0;
-        }
-        if (this.score > hiScore) {
-          this.setStore("default", { highScore: this.score });
-        }
-      }
-    }
-    if (this.score > this.hiScore) {
-      this.hiScore = this.score;
-      this.setStore(this.gameId, { highScore: this.score });
-    }
-  }
-}
-App.registerClass("ScoreBar", ScoreBar, "BoxLayout");
-class WordBar extends Button {
-  constructor(props = {}) {
-    super();
-    __publicField(this, "word", "");
-    __publicField(this, "wordScore", 0);
-    __publicField(this, "canPass", false);
-    this.updateProperties(props);
-  }
-}
-App.registerClass("WordBar", WordBar, "Button");
-class MessageBar extends BoxLayout {
-  constructor(props = {}) {
-    super();
-    this.message = "";
-    this.updateProperties(props);
-  }
-  activePlayerChanged(scoreBar, activePlayer) {
-    if (scoreBar.players === 2) {
-      this.message = `PLAYER ${scoreBar.activePlayer}'S TURN`;
-    }
-  }
-  gameOver(board, gameOver) {
-    if (gameOver) {
-      if (board.scorebar.players === 2) {
-        if (board.scorebar.score_2 === board.scorebar.score) {
-          this.message = "GAME OVER: DRAW!";
-        } else {
-          const winner = board.scorebar.score_2 > board.scorebar.score ? 2 : 1;
-          if (board.players[winner].type === 1) {
-            this.message = `GAME OVER: PLAYER ${winner} WINS!`;
-          } else {
-            this.message = `GAME OVER: ${board.players[winner].name} WINS!`;
-          }
-        }
-      } else {
-        this.message = "GAME OVER";
-      }
-    } else {
-      if (this.message === "GAME OVER") {
-        this.message = "";
-      }
-    }
-  }
-  gameChanged(scoreBar, gameId) {
-    if (scoreBar.players === 2) return;
-    this.gameId = gameId;
-    if (gameId !== "default") {
-      const now = /* @__PURE__ */ new Date();
-      const nextDate = new Date(now);
-      nextDate.setUTCHours(24, 0, 0, 0);
-      const delta = (nextDate.valueOf() - now.valueOf()) / 1e3;
-      if (delta > 0) {
-        const hours = Math.floor(delta / 3600);
-        const minutes = Math.floor(delta % 3600 / 60);
-        const seconds = delta % 60;
-        if (hours > 0) {
-          this.message = `${hours} HOUR${hours > 1 ? "S" : ""} LEFT`;
-          setTimeout(() => this.onDailyChallengeTimer(gameId), hours * 36e5);
-        } else if (minutes > 0) {
-          this.message = `${minutes} MINUTE${minutes > 1 ? "S" : ""} LEFT`;
-          setTimeout(() => this.onDailyChallengeTimer(gameId), minutes * 6e4);
-        } else {
-          this.message = `${seconds} SECOND${seconds > 1 ? "S" : ""} LEFT`;
-          setTimeout(() => this.onDailyChallengeTimer(gameId), seconds * 1e3);
-        }
-      } else {
-        this.message = "THE DAILY CHALLENGE HAS EXPIRED";
-      }
-    } else {
-      this.message = "";
-    }
-  }
-  onDailyChallengeTimer(gameId) {
-    if (gameId === this.gameId) {
-      this.gameChanged(null, gameId);
-    }
-  }
-}
-App.registerClass("MessageBar", MessageBar, "BoxLayout");
+const markup = "<TextButton@Button>:\n    color: 'rgb(1, 1, 1)'\n    bgColor: 'rgb(0xbb, 0xad, 0xa0)'\n    fontSize: 0.5\n    bold: true\n\n<HeadingLabel@Label>:\n    bgColor: resources['colors']['checker']\n    fontSize: 0.6\n\n<BodyLabel@Label>:\n    fontSize: 0.5\n\n\n<ScoreBar>:\n    id: 'scorebar'\n    bgColor: resources['colors']['background']\n    hints: {w: null, h: null}\n    score: 0\n    hiScore: 0\n    score_2: 0\n    playerCount: 1\n    activePlayer: 1\n    gameId: ''\n    orientation: 'horizontal'\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.playerCount === 1 ? 'SCORE' : 'PLAYER 1'\n            color: scorebar.activePlayer === 2 || scorebar.playerCount === 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'bottom'\n            fontSize: 0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.score.toString()\n            color: scorebar.activePlayer === 2 || scorebar.playerCount === 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'top'\n            fontSize: 0.5\n    BoxLayout:\n        orientation: 'vertical'\n        hints: {w:1, h:'2'}\n        Label:\n            text: scorebar.playerCount === 2 ? '2-PLAYER\\nGAME': scorebar.gameId!=='default' ? 'DAILY\\nCHALLENGE' : 'RANDOM\\nGAME'\n            color: resources['colors']['score_text']\n            valign: 'middle'\n            fontSize: 0.6\n            wrap: True\n            shrinkToFit: true\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.playerCount === 1 ? 'BEST' : 'PLAYER 2'\n            color: scorebar.activePlayer === 1 || scorebar.playerCount === 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'bottom'\n            fontSize:0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.playerCount === 1 ? scorebar.hiScore.toString() : scorebar.score_2.toString()\n            color: scorebar.activePlayer === 1 || scorebar.playerCount === 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'top'\n            fontSize:0.5\n\n<WordBar>:\n    id: 'wordbar'\n    word: ''\n    wordScore: 0\n    canPass: true\n    text: this.word!=='' ? this.word+' for '+this.wordScore.toString() : this.canPass ? 'PASS' : ''\n    fontSize: 0.5\n    disable: this.word==='' && !this.canPass;\n    bgColor: resources['colors']['word_score_background']\n    selectColor: resources['colors']['menu_button_touched']\n    disableColor1: null;\n    disableColor2: null;\n\n<MessageBar@BoxLayout>:\n    id: 'messagebar'\n    orientation: 'vertical'\n    message: ''\n    Label:\n        text: messagebar.message\n        color: resources.colors['score_text']\n        fontSize: '0.4'\n\n\n<MenuItem@Button>:\n    bgColor: resources['colors']['menu_button_background']\n    selectColor: resources['colors']['menu_button_touched']\n    hints: {h:'1'}\n\n\n<InstructionsBox@BoxLayout>:\n    bgColor: resources['colors']['checker']\n\n\n\n<Instructions>:\n    id: 'instructions'\n    hints: {x:0.1, y:0.1, h:0.8, w:0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: 0.1}\n        text: 'How to Play'\n    ScrollView:\n        id: 'scroller'\n        hints: {w: 1, h: 0.8}\n        scrollW: false\n        BodyLabel:\n            color: 'white'\n            hints: {x:0, y:0, w:1, h:null}\n            text: 'Objective: Clear the board by arranging letters to form words, scoring points based on word length and letter rarity.\\n\\nTo form words, select letter tiles in place or drag them in a straight line into neighboring free tile spaces. A word is valid if it is composed of connected letter tiles in a straight line (either vertically, horizontally or diagonally in either direction), is in the dictionary, and at least one tile was moved to form it. Score a valid word by pressing the word cue at bottom of the screen. Each word scores points equal to the sum of the tile values multiplied by the number of letters in the word. Cancel a selection by tapping any of the selected tiles.'\n            align: 'left'\n            valign: 'top'\n            wrap: true\n\n\n<ScoreDetail1p@BoxLayout>:\n    id: 'scoredetails1p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetails1p.title\n        valign: 'middle'\n        align: 'center'\n    ScrollView:\n        padding: 0.1\n        scrollW: false\n        BodyLabel:\n            text: scoredetails1p.detail\n            align: 'left'\n            valign: 'top'\n            wrap: true\n            hints: {x:0, y:0, h:null,  w:1}\n            fontSize: 0.5\n\n\n<ScoreDetail2p@BoxLayout>:\n    id: 'scoredetail2p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail1: ''\n    detail2: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetail2p.title\n        valign: 'middle'\n        align: 'center'\n    BoxLayout:\n        orientation: 'horizontal'\n        paddingX: 0.05;\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail1\n                fontSize: 0.5\n                align: 'left'\n                valign: 'top'\n                wrap: true\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail2\n                align: 'right'\n                valign: 'top'\n                wrap: true\n                fontSize: 0.5\n\n\n<Menu>:\n    id: 'mainMenu'\n    orientation: 'vertical'\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    selection: '';\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'Restart Game'\n        on_press: \n            this.parent.selection = 'restartGame'\n    MenuItem:\n        text: 'Random Game'\n        on_press: \n            this.parent.selection = 'randomGame'\n    MenuItem:\n        text: 'Daily Challenge'\n        on_press: \n            this.parent.selection = 'dailyGame'\n    MenuItem:\n        text: 'Two-Player Game'\n        on_press: \n            this.parent.selection = 'multiplayerMenu'\n    MenuItem:\n        text: 'Instructions'\n        on_press: \n            this.parent.selection = 'instructions'\n#    MenuItem:\n#        text: 'Leaderboards'\n#        on_press: \n#            this.parent.selection = 'leaderboardMenu'\n#    MenuItem:\n#        text: 'Achievements'\n#        on_press: \n#            this.parent.selection = 'achievements'\n#    MenuItem:\n#        text: 'Theme'\n#        on_press: \n#            this.parent.selection = 'theme'\n#    MenuItem:\n#        text: 'Quit'\n#        on_press: \n#            this.parent.selection = 'quit'\n\n\n<MultiplayerMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    id: 'multiplayerMenu'\n    orientation: 'vertical'\n    player1: 1\n    player2: 1\n    players: ['','Human', 'AI']\n    selection: ''\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    MenuItem:\n        text: 'Start Game'\n        on_press:\n            this.parent.selection = 'multiplayerGame'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player1]\n        on_press:\n            this.parent.selection = 'player1'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player2]\n        on_press:\n            this.parent.selection = 'player2'\n\n\n<LeaderboardMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    orientation: 'vertical'\n    selection: ''\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'High Score'\n        on_press:\n            this.parent.selection = 'highScore'\n    MenuItem:\n        text: 'Daily Game High Score'\n        on_press:\n            this.parent.selection = 'dailyHighScore'\n    MenuItem:\n        text: 'Number of 1,000+ Games'\n        on_press:\n            this.parent.selection = 'number1000'\n";
 class SlideWordsApp extends App {
   constructor(props = {}) {
     var _a;
@@ -7312,6 +7381,7 @@ class SlideWordsApp extends App {
     }
   }
 }
+const urlWords = "/assets/TWL06-lMEBC9W-.txt";
 loadWords(urlWords).then((result) => {
   if (result) {
     new SlideWordsApp().start();
