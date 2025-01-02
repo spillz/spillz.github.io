@@ -7381,7 +7381,7 @@ class SlideWordsApp extends App {
     }
   }
 }
-const urlWords = "/assets/TWL06-lMEBC9W-.txt";
+const urlWords = "/slidewords/assets/TWL06-lMEBC9W-.txt";
 loadWords(urlWords).then((result) => {
   if (result) {
     new SlideWordsApp().start();
