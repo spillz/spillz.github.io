@@ -166,19 +166,19 @@ class PRNG {
     return result;
   }
 }
-function sfc32(a, b, c, d) {
+function sfc32(a, b, c2, d) {
   return function() {
     a >>>= 0;
     b >>>= 0;
-    c >>>= 0;
+    c2 >>>= 0;
     d >>>= 0;
     var t = a + b | 0;
     a = b ^ b >>> 9;
-    b = c + (c << 3) | 0;
-    c = c << 21 | c >>> 11;
+    b = c2 + (c2 << 3) | 0;
+    c2 = c2 << 21 | c2 >>> 11;
     d = d + 1 | 0;
     t = t + d | 0;
-    c = c + t | 0;
+    c2 = c2 + t | 0;
     return (t >>> 0) / 4294967296;
   };
 }
@@ -1270,9 +1270,9 @@ class MathArray extends Array {
     return a;
   }
   sum() {
-    let s = 0;
-    this.forEach((el) => s += el);
-    return s;
+    let s2 = 0;
+    this.forEach((el) => s2 += el);
+    return s2;
   }
   mean() {
     return this.sum() / this.length;
@@ -1284,14 +1284,14 @@ class MathArray extends Array {
     return Math.min.apply(null, this);
   }
   vars() {
-    let s = 0;
-    this.forEach((el) => s += el * el);
-    return (s - this.length * this.mean() ^ 2) / (this.length - 1);
+    let s2 = 0;
+    this.forEach((el) => s2 += el * el);
+    return (s2 - this.length * this.mean() ^ 2) / (this.length - 1);
   }
   var() {
-    let s = 0;
-    this.forEach((el) => s += el * el);
-    return s / this.length - this.mean() ^ 2;
+    let s2 = 0;
+    this.forEach((el) => s2 += el * el);
+    return s2 / this.length - this.mean() ^ 2;
   }
   std() {
     return Math.sqrt(this.var());
@@ -1626,8 +1626,8 @@ function evaluatedProperty(key, value, context, root) {
     let objCount = 0;
     if (value[0] !== "'" && value[0] !== '"') {
       for (let m of value.matchAll(/(?!\.)\b([a-z]\w*)\.([a-z_]\w*)\b/ig)) {
-        const c = m[1];
-        if (c !== "this" && c !== "parent" && c !== "root" && c !== "resources") objs.add(c);
+        const c2 = m[1];
+        if (c2 !== "this" && c2 !== "parent" && c2 !== "root" && c2 !== "resources") objs.add(c2);
         objCount++;
       }
     }
@@ -1726,14 +1726,14 @@ function instanceClassData(widget, objectData, rootWidget) {
     const val = merged[p];
     if ("children" === p && val instanceof Array) {
       const ch = [];
-      for (let c of val) {
-        if (c instanceof Object && "cls" in c) {
-          const [cls, clsExtends] = App.classes[c["cls"]];
+      for (let c2 of val) {
+        if (c2 instanceof Object && "cls" in c2) {
+          const [cls, clsExtends] = App.classes[c2["cls"]];
           const childWidget = new cls();
-          instanceClassData(childWidget, c, rootWidget);
+          instanceClassData(childWidget, c2, rootWidget);
           ch.push(childWidget);
         } else {
-          throw Error(`Unknown child class ${c} on clsName ${clsName}`);
+          throw Error(`Unknown child class ${c2} on clsName ${clsName}`);
         }
       }
       if (widget instanceof App) widget.baseWidget.children = ch;
@@ -1784,7 +1784,7 @@ function parse(markup2) {
         App.classes[customClass] = [cls, baseClass];
         App.rules.add(customClass, clsData);
       } else if (line.startsWith("<")) {
-        const ruledClasses = classType.slice(1, -1).split(",").map((s) => s.trim());
+        const ruledClasses = classType.slice(1, -1).split(",").map((s2) => s2.trim());
         for (let rc of ruledClasses) {
           const [cls, base] = App.classes[rc];
           const ruleset = App.rules.get(rc);
@@ -2190,8 +2190,8 @@ class Widget extends Rect {
   *iter(recursive = true, inView = true) {
     yield this;
     if (!recursive) return;
-    for (let c of this._children) {
-      yield* c.iter(...arguments);
+    for (let c2 of this._children) {
+      yield* c2.iter(...arguments);
     }
   }
   /**
@@ -2336,7 +2336,7 @@ class Widget extends Rect {
    * @param {Widget} child The child widget to add
    */
   removeChild(child, disconnect = true) {
-    this._children = this.children.filter((c) => c != child);
+    this._children = this.children.filter((c2) => c2 != child);
     if (disconnect) App.get()._eventManager.disconnect(child);
     this.emit("child_removed", child);
     child.parent = null;
@@ -2347,14 +2347,14 @@ class Widget extends Rect {
     return this._children;
   }
   set children(children) {
-    for (let c of this._children) {
-      this.emit("child_removed", c);
-      c.parent = null;
+    for (let c2 of this._children) {
+      this.emit("child_removed", c2);
+      c2.parent = null;
       this._needsLayout = true;
     }
     this._children = [];
-    for (let c of children) {
-      this.addChild(c);
+    for (let c2 of children) {
+      this.addChild(c2);
     }
   }
   /** @type {number} Leftmost position of the widget on the x-axis*/
@@ -2654,19 +2654,19 @@ class Widget extends Rect {
    * @param {number|null} w 
    * @param {number|null} h 
    */
-  applyHints(c, w = null, h = null) {
-    let hints = c.hints;
+  applyHints(c2, w = null, h = null) {
+    let hints = c2.hints;
     w = w != null ? w : this.w;
     h = h != null ? h : this.h;
     if ("w" in hints && hints["w"] != null && hints["w"].constructor == String && hints["w"].slice(-2) == "wh") {
-      if (hints["h"] !== void 0) this.applyHintMetric(c, "h", hints["h"], w, h);
-      if (hints["w"] !== void 0) this.applyHintMetric(c, "w", hints["w"], w, h);
+      if (hints["h"] !== void 0) this.applyHintMetric(c2, "h", hints["h"], w, h);
+      if (hints["w"] !== void 0) this.applyHintMetric(c2, "w", hints["w"], w, h);
     } else {
-      if (hints["w"] !== void 0) this.applyHintMetric(c, "w", hints["w"], w, h);
-      if (hints["h"] !== void 0) this.applyHintMetric(c, "h", hints["h"], w, h);
+      if (hints["w"] !== void 0) this.applyHintMetric(c2, "w", hints["w"], w, h);
+      if (hints["h"] !== void 0) this.applyHintMetric(c2, "h", hints["h"], w, h);
     }
     for (let ht in hints) {
-      if (ht != "w" && ht != "h") this.applyHintMetric(c, ht, hints[ht], w, h);
+      if (ht != "w" && ht != "h") this.applyHintMetric(c2, ht, hints[ht], w, h);
     }
   }
   /**
@@ -2680,9 +2680,9 @@ class Widget extends Rect {
   layoutChildren() {
     if (this._layoutNotify) this.emit("layout", null);
     this._needsLayout = false;
-    for (let c of this.children) {
-      this.applyHints(c);
-      c.layoutChildren();
+    for (let c2 of this.children) {
+      this.applyHints(c2);
+      c2.layoutChildren();
     }
   }
   /**
@@ -2701,13 +2701,13 @@ class Widget extends Rect {
     if (transform) {
       ctx.save();
       ctx.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
-      for (let c of this._children)
-        c._draw(app, ctx, millis);
+      for (let c2 of this._children)
+        c2._draw(app, ctx, millis);
       ctx.restore();
       return;
     }
-    for (let c of this._children)
-      c._draw(app, ctx, millis);
+    for (let c2 of this._children)
+      c2._draw(app, ctx, millis);
   }
   /**
    * Unlike _draw, this method handles the actual drawing of this widget 
@@ -2750,7 +2750,7 @@ class Widget extends Rect {
       this.layoutChildren();
       app.requestFrameUpdate();
     }
-    for (let c of this._children) c.update(app, millis);
+    for (let c2 of this._children) c2.update(app, millis);
   }
 }
 const _App = class _App extends Widget {
@@ -3096,8 +3096,8 @@ const _App = class _App extends Widget {
    * Given the geometry of the App, sets the geometry of children using their hints property
    * @param {Widget} c 
    */
-  applyHints(c) {
-    super.applyHints(c, this.dimW, this.dimH);
+  applyHints(c2) {
+    super.applyHints(c2, this.dimW, this.dimH);
   }
   /**
    * Can be called during the update loop to implement screen shake
@@ -3916,7 +3916,7 @@ class ImageWidget extends Widget {
    * Constructs a new ImageWidget, optionally apply properties in `props`
    * @param {ImageWidgetProperties|null} props 
    */
-  constructor(props = null) {
+  constructor(props = {}) {
     super();
     /**@type {string|null} */
     __publicField(this, "bgColor", null);
@@ -4037,7 +4037,7 @@ class BoxLayout extends Widget {
   }
   *iterChildren() {
     if (this.order === "forward") {
-      for (let c of this._children) yield c;
+      for (let c2 of this._children) yield c2;
     } else {
       for (let i = this._children.length - 1; i >= 0; i--) {
         yield this._children[i];
@@ -4077,12 +4077,12 @@ class BoxLayout extends Widget {
       let h = this.h - spacingY * (num - 1) - 2 * paddingY;
       let w = this.w - 2 * paddingX;
       let fixedh = 0;
-      for (let c of this.iterChildren()) {
-        c.w = w;
-        this.applyHints(c, w, h);
-        if ("h" in c.hints) {
-          if (c.hints["h"] === null) c.layoutChildren();
-          fixedh += c.h;
+      for (let c2 of this.iterChildren()) {
+        c2.w = w;
+        this.applyHints(c2, w, h);
+        if ("h" in c2.hints) {
+          if (c2.hints["h"] === null) c2.layoutChildren();
+          fixedh += c2.h;
           num--;
         }
       }
@@ -4091,13 +4091,13 @@ class BoxLayout extends Widget {
       if (num === 0 && h > 0) paddingY = (h - fixedh) / 2;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
-      for (let c of this.iterChildren()) {
-        c.y = y;
-        if (!("x" in c.hints) && !("center_x" in c.hints) && !("right" in c.hints)) c.x = x;
-        if (!("w" in c.hints)) c.w = cw;
-        if (!("h" in c.hints)) c.h = ch;
-        c.layoutChildren();
-        y += spacingY + c.h;
+      for (let c2 of this.iterChildren()) {
+        c2.y = y;
+        if (!("x" in c2.hints) && !("center_x" in c2.hints) && !("right" in c2.hints)) c2.x = x;
+        if (!("w" in c2.hints)) c2.w = cw;
+        if (!("h" in c2.hints)) c2.h = ch;
+        c2.layoutChildren();
+        y += spacingY + c2.h;
       }
       if (num === 0 && "h" in this.hints && this.hints["h"] === null) {
         const oldH = this[3];
@@ -4113,12 +4113,12 @@ class BoxLayout extends Widget {
       let h = this.h - 2 * paddingY;
       let w = this.w - spacingX * (num - 1) - 2 * paddingX;
       let fixedw = 0;
-      for (let c of this.iterChildren()) {
-        c.h = h;
-        this.applyHints(c, w, h);
-        if ("w" in c.hints) {
-          if (c.hints["w"] === null) c.layoutChildren();
-          fixedw += c.w;
+      for (let c2 of this.iterChildren()) {
+        c2.h = h;
+        this.applyHints(c2, w, h);
+        if ("w" in c2.hints) {
+          if (c2.hints["w"] === null) c2.layoutChildren();
+          fixedw += c2.w;
           num--;
         }
       }
@@ -4127,13 +4127,13 @@ class BoxLayout extends Widget {
       if (num === 0 && w > 0) paddingX = (w - fixedw) / 2;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
-      for (let c of this.iterChildren()) {
-        c.x = x;
-        if (!("y" in c.hints) && !("center_y" in c.hints) && !("bottom" in c.hints)) c.y = y;
-        if (!("w" in c.hints)) c.w = cw;
-        if (!("h" in c.hints)) c.h = ch;
-        c.layoutChildren();
-        x += spacingX + c.w;
+      for (let c2 of this.iterChildren()) {
+        c2.x = x;
+        if (!("y" in c2.hints) && !("center_y" in c2.hints) && !("bottom" in c2.hints)) c2.y = y;
+        if (!("w" in c2.hints)) c2.w = cw;
+        if (!("h" in c2.hints)) c2.h = ch;
+        c2.layoutChildren();
+        x += spacingX + c2.w;
       }
       if (num == 0 && "w" in this.hints && this.hints["w"] == null) {
         const oldW = this[2];
@@ -4436,15 +4436,15 @@ class TabbedNotebook extends Notebook {
     return this._children.slice(1);
   }
   set children(children) {
-    for (let c of this._children.slice(1)) {
-      this.emit("child_removed", c);
-      c.parent = null;
+    for (let c2 of this._children.slice(1)) {
+      this.emit("child_removed", c2);
+      c2.parent = null;
       this._needsLayout = true;
       this.updateButtons();
     }
     this._children = this._children.slice(0, 1);
-    for (let c of children) {
-      this.addChild(c);
+    for (let c2 of children) {
+      this.addChild(c2);
     }
   }
   updateButtons() {
@@ -4477,12 +4477,12 @@ class TabbedNotebook extends Notebook {
     bb.layoutChildren();
     const h = this.h - bb.h;
     const w = this.w;
-    for (let c of this.children) {
-      c.y = this.y + bb.h;
-      c.x = this.x;
-      c.w = w;
-      c.h = h;
-      c.layoutChildren();
+    for (let c2 of this.children) {
+      c2.y = this.y + bb.h;
+      c2.x = this.x;
+      c2.w = w;
+      c2.h = h;
+      c2.layoutChildren();
     }
   }
   /**@type {Widget['_draw']} */
@@ -4568,17 +4568,17 @@ class GridLayout extends Widget {
       let w = this.w - spacingX * (numX - 1) - 2 * paddingX;
       let _colWidths = new Array(numX).fill(0);
       let _rowHeights = new Array(numY).fill(0);
-      let r = 0, c = 0;
+      let r = 0, c2 = 0;
       let i = 0;
       for (let ch2 of this.children) {
         this.applyHints(ch2, w, h);
-        if ("w" in ch2.hints) _colWidths[c] = Math.max(ch2.w, _colWidths[c]);
+        if ("w" in ch2.hints) _colWidths[c2] = Math.max(ch2.w, _colWidths[c2]);
         if ("h" in ch2.hints) _rowHeights[r] = Math.max(ch2.h, _rowHeights[r]);
         if ((i + 1) % numX == 0) {
           r++;
-          c = 0;
+          c2 = 0;
         } else {
-          c++;
+          c2++;
         }
         i++;
       }
@@ -4596,10 +4596,10 @@ class GridLayout extends Widget {
       let cw = numX > nfX ? (w - fixedW) / (numX - nfX) : 0;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
-      r = 0, c = 0;
+      r = 0, c2 = 0;
       for (let i2 = 0; i2 < this.children.length; i2++) {
         let el = this.children[i2];
-        let cw0 = _colWidths[c] == 0 ? cw : _colWidths[c];
+        let cw0 = _colWidths[c2] == 0 ? cw : _colWidths[c2];
         let ch0 = _rowHeights[r] == 0 ? ch : _rowHeights[r];
         if (!("w" in el.hints)) el.w = cw0;
         if (!("h" in el.hints)) el.h = ch0;
@@ -4609,11 +4609,11 @@ class GridLayout extends Widget {
         if ((i2 + 1) % numX == 0) {
           x = this.x + paddingX;
           y += spacingY + ch0;
-          c = 0;
+          c2 = 0;
           r++;
         } else {
           x += spacingX + cw0;
-          c++;
+          c2++;
         }
       }
       return;
@@ -4624,14 +4624,14 @@ class GridLayout extends Widget {
       let w = this.w - spacingX * (numX - 1) - 2 * paddingX;
       let _colWidths = new Array(numX).fill(0);
       let _rowHeights = new Array(numY).fill(0);
-      let r = 0, c = 0;
+      let r = 0, c2 = 0;
       let i = 0;
       for (let ch2 of this.children) {
         this.applyHints(ch2, w, h);
-        if ("w" in ch2.hints) _colWidths[c] = Math.max(ch2.w, _colWidths[c]);
+        if ("w" in ch2.hints) _colWidths[c2] = Math.max(ch2.w, _colWidths[c2]);
         if ("h" in ch2.hints) _rowHeights[r] = Math.max(ch2.h, _rowHeights[r]);
         if ((i + 1) % numY == 0) {
-          c++;
+          c2++;
           r = 0;
         } else {
           r++;
@@ -4652,10 +4652,10 @@ class GridLayout extends Widget {
       let cw = numX > nfX ? (w - fixedW) / (numX - nfX) : 0;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
-      r = 0, c = 0;
+      r = 0, c2 = 0;
       for (let i2 = 0; i2 < this.children.length; i2++) {
         let el = this.children[i2];
-        let cw0 = _colWidths[c] == 0 ? cw : _colWidths[c];
+        let cw0 = _colWidths[c2] == 0 ? cw : _colWidths[c2];
         let ch0 = _rowHeights[r] == 0 ? ch : _rowHeights[r];
         if (!("w" in el.hints)) el.w = cw0;
         if (!("h" in el.hints)) el.h = ch0;
@@ -4666,7 +4666,7 @@ class GridLayout extends Widget {
           y = this.y + paddingY;
           x += spacingX + cw0;
           r = 0;
-          c++;
+          c2++;
         } else {
           y += spacingY + ch0;
           r++;
@@ -4751,8 +4751,8 @@ class ScrollView extends Widget {
     this.children[0][1] = 0;
     if (!this.scrollW) this.children[0][2] = this.w;
     if (!this.scrollH) this.children[0][3] = this.h;
-    for (let c of this.children) {
-      c.layoutChildren();
+    for (let c2 of this.children) {
+      c2.layoutChildren();
     }
   }
   fitToClient() {
@@ -4773,12 +4773,12 @@ class ScrollView extends Widget {
     yield this;
     if (!recursive) return;
     if (inView) {
-      for (let c of this._children) {
-        if (this.contains(c)) yield* c.iter(...arguments);
+      for (let c2 of this._children) {
+        if (this.contains(c2)) yield* c2.iter(...arguments);
       }
     } else {
-      for (let c of this._children) {
-        yield* c.iter(...arguments);
+      for (let c2 of this._children) {
+        yield* c2.iter(...arguments);
       }
     }
   }
@@ -5305,13 +5305,13 @@ class TileMap extends Widget {
     if (this.useCache) {
       if (this._data._cacheData === null) this.cacheCanvas();
       if (this._data._cacheData === null) return;
-      const s = this.spriteSheet.spriteSize;
+      const s2 = this.spriteSheet.spriteSize;
       ctx.drawImage(
         this._data._cacheData,
-        s * x0,
-        s * y0,
-        s * (x1 - x0),
-        s * (y1 - y0),
+        s2 * x0,
+        s2 * y0,
+        s2 * (x1 - x0),
+        s2 * (y1 - y0),
         this.x + x0,
         this.y + y0,
         x1 - x0,
@@ -5555,67 +5555,40 @@ App.registerClass("TabbedNotebook", TabbedNotebook, "");
 App.registerClass("SpriteWidget", SpriteWidget, "");
 App.registerClass("TileMap", TileMap, "");
 App.registerClass("LayeredTileMap", LayeredTileMap, "");
+const c = (col) => [Math.floor(255 * col[0]), Math.floor(255 * col[1]), Math.floor(255 * col[2]), col[3]];
+const s = (col) => `rgba(${col[0]},${col[1]},${col[2]},${col[3]})`;
 const default_theme = {
-  "background": [0.7, 0.7, 0.9, 1],
-  "tile": [0.5, 0.5, 0.75, 1],
-  "tile_selected": [0, 0, 0.5, 1],
-  "tile_letter_text": [0.9, 0.9, 0.9, 1],
-  "word_score_background": [0, 0, 0.5, 1],
-  //(0, 0, 0.8, 1],
-  "word_score_text": [0.9, 0.9, 0.9, 1],
-  //(0.9, 0.9, 0.9, 1],
-  "score_text": [0.9, 0.9, 0.9, 1],
-  "active_score_text": [0.5, 0.5, 0.75, 1],
-  "checker": [0.8, 0.8, 0.9, 1],
-  "move_candidates": [0.2, 0.3, 0.7, 1],
-  "menu_button_background": [0.5, 0.8, 0.7, 1],
-  "menu_button_touched": [0.7, 0.8, 0.9, 1]
+  "background": s(c([0.7, 0.7, 0.9, 1])),
+  "tile": s(c([0.5, 0.5, 0.75, 1])),
+  "tile_selected": s(c([0, 0, 0.5, 1])),
+  "tile_letter_text": s(c([0.9, 0.9, 0.9, 1])),
+  "word_score_background": s(c([0, 0, 0.5, 1])),
+  "word_score_text": s(c([0.9, 0.9, 0.9, 1])),
+  "score_text": s(c([0.9, 0.9, 0.9, 1])),
+  "active_score_text": s(c([0.5, 0.5, 0.75, 1])),
+  "checker": s(c([0.8, 0.8, 0.9, 1])),
+  "move_candidates": s(c([0.2, 0.3, 0.7, 1])),
+  "menu_button_background": s(c([0.5, 0.8, 0.7, 1])),
+  "menu_button_touched": s(c([0.7, 0.8, 0.9, 1]))
 };
 const beach_theme = {
-  "background": [20, 140, 156, 1],
-  "tile": [255, 241, 156, 1],
-  "tile_selected": [232, 180, 120, 1],
-  "tile_letter_text": [86, 148, 155, 1],
-  "word_score_background": [252, 200, 130, 1],
-  "word_score_text": [86, 148, 155, 1],
-  "score_text": [221, 238, 242, 1],
-  "active_score_text": [254, 241, 156, 1],
-  "checker": [0, 202, 199, 1],
-  "move_candidates": [252, 200, 130, 1],
-  "menu_button_background": [252, 136, 61, 1],
-  "menu_button_touched": [252, 157, 84, 1]
+  "background": s([20, 140, 156, 1]),
+  "tile": s([255, 241, 156, 1]),
+  "tile_selected": s([232, 180, 120, 1]),
+  "tile_letter_text": s([86, 148, 155, 1]),
+  "word_score_background": s([252, 200, 130, 1]),
+  "word_score_text": s([86, 148, 155, 1]),
+  "score_text": s([221, 238, 242, 1]),
+  "active_score_text": s([254, 241, 156, 1]),
+  "checker": s([0, 202, 199, 1]),
+  "move_candidates": s([252, 200, 130, 1]),
+  "menu_button_background": s([252, 136, 61, 1]),
+  "menu_button_touched": s([252, 157, 84, 1])
 };
 const themes = {
   "default": default_theme,
   "beach": beach_theme
 };
-var background, checker, moveCandidates;
-function loadTheme(themeName) {
-  const theme = themes[themeName];
-  if (themeName === "default") {
-    const c = (col) => [Math.floor(255 * col[0]), Math.floor(255 * col[1]), Math.floor(255 * col[2]), col[3]];
-    for (let k in theme) {
-      theme[k] = c(theme[k]);
-    }
-  }
-  for (let t in theme) {
-    let [r, g, b, a] = theme[t];
-    theme[t] = `rgba(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)},${a})`;
-  }
-  theme["id"] = themeName;
-  background = theme["background"];
-  theme["tile"];
-  theme["tile_selected"];
-  theme["tile_letter_text"];
-  theme["word_score_background"];
-  theme["word_score_text"];
-  theme["score_text"];
-  theme["active_score_text"];
-  checker = theme["checker"];
-  moveCandidates = theme["move_candidates"];
-  theme["menu_button_background"];
-  return theme;
-}
 function unweightedChoice(count, choices, seed) {
   const originalSeed = getSeed();
   setSeed(seed);
@@ -5763,12 +5736,12 @@ class AIPlayer extends Player {
    * @returns 
    */
   arrangeSel(state, sel) {
-    return sel.map((s) => `${s[0]},${s[1]}` in state ? (
+    return sel.map((s2) => `${s2[0]},${s2[1]}` in state ? (
       /**@type {[[number,number],[number,number]]}*/
-      [s, s]
+      [s2, s2]
     ) : (
       /**@type {[[number,number]|null,[number,number]]}*/
-      [null, s]
+      [null, s2]
     ));
   }
   /**
@@ -5784,10 +5757,10 @@ class AIPlayer extends Player {
       return [];
     }
     let stateCopy = { ...state };
-    arrSel.forEach((s) => {
-      if (s[0] !== null) {
-        if (`${s[0][0]},${s[0][1]}` in stateCopy) {
-          stateCopy[`${s[0][0]},${s[0][1]}`] = 1;
+    arrSel.forEach((s2) => {
+      if (s2[0] !== null) {
+        if (`${s2[0][0]},${s2[0][1]}` in stateCopy) {
+          stateCopy[`${s2[0][0]},${s2[0][1]}`] = 1;
         }
       }
     });
@@ -5810,10 +5783,10 @@ class AIPlayer extends Player {
           getWordsRecurs(state2, k + 1);
         } else {
           this.counter++;
-          const word = arrSel.map((s) => this.initState[`${s[0][0]},${s[0][1]}`].letter).join("");
+          const word = arrSel.map((s2) => this.initState[`${s2[0][0]},${s2[0][1]}`].letter).join("");
           if (this.words.has(word) || this.words.has([...word].reverse().join(""))) {
-            const score = arrSel.reduce((acc, s) => acc + this.initState[`${s[0][0]},${s[0][1]}`].value, 0) * word.length;
-            const nsel = arrSel.map((s) => [s[0], s[1]]);
+            const score = arrSel.reduce((acc, s2) => acc + this.initState[`${s2[0][0]},${s2[0][1]}`].value, 0) * word.length;
+            const nsel = arrSel.map((s2) => [s2[0], s2[1]]);
             candidates.push([word, score, nsel]);
           }
         }
@@ -5916,8 +5889,8 @@ class AIPlayer extends Player {
       }
     });
     if (candidates.length > 0) {
-      let maxScore = Math.max(...candidates.map((c) => c[1]));
-      let bestCandidates = candidates.filter((c) => c[1] === maxScore);
+      let maxScore = Math.max(...candidates.map((c2) => c2[1]));
+      let bestCandidates = candidates.filter((c2) => c2[1] === maxScore);
       setTimeout(() => this.foundWord(this.chooseRandom(bestCandidates)), 1);
       return;
     }
@@ -6138,14 +6111,18 @@ const playerNames = {
   9: "AI HARLIE"
 };
 class MenuButton extends Button {
-  /**@type {eskv.Button['draw']}*/
+  /**
+   * 
+   * @param {SlideWordsApp} app 
+   * @param {CanvasRenderingContext2D} ctx 
+   */
   draw(app, ctx) {
     let r = this.rect;
     ctx.beginPath();
     ctx.rect(r[0], r[1], r[2], r[3] / 5);
     ctx.rect(r[0], r[1] + r[3] * 0.4, r[2], r[3] / 5);
     ctx.rect(r[0], r[1] + r[3] * 0.8, r[2], r[3] / 5);
-    ctx.fillStyle = this._touching ? App.resources["colors"]["menu_button_touched"] : App.resources["colors"]["score_text"];
+    ctx.fillStyle = this._touching ? app.colors["menu_button_touched"] : app.colors["score_text"];
     ctx.fill();
   }
 }
@@ -6487,10 +6464,6 @@ class Tile extends Widget {
         hints: { x: 0.67, y: 0.67, w: 0.33, h: 0.33 }
       })
     ];
-    this.bgColor = App.resources["colors"]["tile"];
-    SlideWordsApp.get().bind("colors", (e, o, v) => {
-      this.updateBgColor();
-    });
     this.letter = letter;
     this.value = value;
     this.gposX = x;
@@ -6503,9 +6476,10 @@ class Tile extends Widget {
     [this.x, this.y] = this.gpos;
     this.board = board;
     this.selected = false;
-  }
-  draw(app, ctx) {
-    super.draw(app, ctx);
+    const props = {
+      bgColor: (app) => this.selected ? app.colors["tile_selected"] : app.colors["tile"]
+    };
+    this.updateProperties(props);
   }
   on_letter(event, object, value) {
     this.children[0].text = value;
@@ -6514,12 +6488,12 @@ class Tile extends Widget {
     this.children[1].text = "" + value;
   }
   updateBgColor() {
-    let colors = App.resources["colors"];
+    let colors = SlideWordsApp.get().colors;
     this.bgColor = this.selected ? colors["tile_selected"] : colors["tile"];
   }
-  on_selected(event, object, value) {
-    this.updateBgColor();
-  }
+  // on_selected(event, object, value) {
+  //     this.updateBgColor();
+  // }
   on_gpos(event, object, value) {
     if (this.cpos[0] === -1 && this.cpos[1] === -1) {
       this.opos = new Vec2(this.gpos);
@@ -6635,8 +6609,8 @@ class Board extends Widget {
     this.menu.bind("selection", (e, o, v) => this.menuChoice(o, v));
     this.menuButton = new MenuButton({
       text: "MENU",
-      bgColor: App.resources["colors"]["menu_button_background"],
-      selectColor: App.resources["colors"]["menu_button_touched"],
+      bgColor: (app) => app.colors["menu_button_background"],
+      selectColor: (app) => app.colors["menu_button_touched"],
       align: "center"
     });
     this.menuButton.bind("press", (e, o, v) => this.showMenu());
@@ -6942,15 +6916,19 @@ class Board extends Widget {
       window.onbeforeunload = () => SlideWordsApp.get().onStop();
     }
   }
-  /**@type {eskv.Widget['draw']} */
+  /**
+   * 
+   * @param {SlideWordsApp} app 
+   * @param {CanvasRenderingContext2D} ctx 
+   */
   draw(app, ctx) {
     ctx.clearRect(this.x, this.y, this.w, this.h);
-    ctx.fillStyle = background;
+    ctx.fillStyle = app.colors["background"];
     ctx.fillRect(this.x, this.y, this.w, this.h);
-    ctx.strokeStyle = checker;
+    ctx.strokeStyle = app.colors["checker"];
     ctx.lineWidth = 0.05;
     ctx.strokeRect(this.offX, this.offY, this.boardSize, this.boardSize);
-    ctx.fillStyle = checker;
+    ctx.fillStyle = app.colors["checker"];
     for (let x = 0; x < boardDim; x++) {
       for (let y = 0; y < boardDim; y++) {
         if ((x + y) % 2 === 0) {
@@ -6965,9 +6943,9 @@ class Board extends Widget {
     }
     const candidates = this.candidates;
     if (candidates !== null) {
-      ctx.fillStyle = moveCandidates;
-      candidates.forEach((c) => {
-        let [x, y] = c;
+      ctx.fillStyle = app.colors["moveCandidates"];
+      candidates.forEach((c2) => {
+        let [x, y] = c2;
         ctx.fillRect(
           this.offX + x * this.tileSpaceSize + this.tileSpaceSize / 4,
           this.offY + y * this.tileSpaceSize + this.tileSpaceSize / 4,
@@ -7048,7 +7026,7 @@ class Board extends Widget {
     });
     const selCandidates = this.getSelectionLineCandidates();
     if (selCandidates !== null) {
-      const icandidates = candidates.filter((c) => selCandidates.some((sc) => sc[0] === c[0] && sc[1] === c[1]));
+      const icandidates = candidates.filter((c2) => selCandidates.some((sc) => sc[0] === c2[0] && sc[1] === c2[1]));
       return icandidates;
     } else {
       return candidates;
@@ -7060,7 +7038,7 @@ class Board extends Widget {
       return null;
     }
     if (this.selection.length === 1) {
-      const s = this.selection[0];
+      const s2 = this.selection[0];
       const directions = [
         [-1, -1],
         [-1, 0],
@@ -7072,7 +7050,7 @@ class Board extends Widget {
         [1, 1]
       ];
       directions.forEach((direction) => {
-        let gp = [s[0] + direction[0], s[1] + direction[1]];
+        let gp = [s2[0] + direction[0], s2[1] + direction[1]];
         while (gp[0] >= 0 && gp[0] < boardDim && gp[1] >= 0 && gp[1] < boardDim) {
           candidates.push(gp.slice());
           gp = [gp[0] + direction[0], gp[1] + direction[1]];
@@ -7107,11 +7085,11 @@ class Board extends Widget {
     const dx = Math.sign(end[0] - start[0]);
     const dy = Math.sign(end[1] - start[1]);
     for (let i = 0; i < sel.length; i++) {
-      const s = sel[i];
-      if (s[0] !== start[0] + i * dx || s[1] !== start[1] + i * dy) {
+      const s2 = sel[i];
+      if (s2[0] !== start[0] + i * dx || s2[1] !== start[1] + i * dy) {
         return { word: "", value: 0 };
       }
-      const t = this.getAtGpos(s);
+      const t = this.getAtGpos(s2);
       if (t) {
         candidate += t.letter;
         sumValue += t.value;
@@ -7152,9 +7130,9 @@ class Board extends Widget {
     }
     this.wordbar.word = "";
     this.wordbar.wordScore = 0;
-    this.selection.forEach((s) => {
-      const t = this.getAtGpos(s);
-      this.deleteAtGpos(s);
+    this.selection.forEach((s2) => {
+      const t = this.getAtGpos(s2);
+      this.deleteAtGpos(s2);
       if (t) {
         t.selected = false;
         t.gpos = new Vec2([-1, -1]);
@@ -7310,25 +7288,24 @@ class Board extends Widget {
     console.log("Saved game data");
   }
 }
-const markup = "<TextButton@Button>:\n    color: 'rgb(1, 1, 1)'\n    bgColor: 'rgb(0xbb, 0xad, 0xa0)'\n    fontSize: 0.5\n    bold: true\n\n<HeadingLabel@Label>:\n    bgColor: resources['colors']['checker']\n    fontSize: 0.6\n\n<BodyLabel@Label>:\n    fontSize: 0.5\n\n\n<ScoreBar>:\n    id: 'scorebar'\n    hints: {w: null, h: null}\n    score: 0\n    hiScore: 0\n    score_2: 0\n    playerCount: 1\n    activePlayer: 1\n    gameId: ''\n    orientation: 'horizontal'\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.playerCount === 1 ? 'SCORE' : 'PLAYER 1'\n            color: scorebar.activePlayer === 2 || scorebar.playerCount === 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'bottom'\n            fontSize: 0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.score.toString()\n            color: scorebar.activePlayer === 2 || scorebar.playerCount === 1? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'left'\n            valign: 'top'\n            fontSize: 0.5\n    BoxLayout:\n        orientation: 'vertical'\n        hints: {w:1, h:'2'}\n        Label:\n            text: scorebar.playerCount === 2 ? '2-PLAYER\\nGAME': scorebar.gameId!=='default' ? 'DAILY\\nCHALLENGE' : 'RANDOM\\nGAME'\n            color: resources['colors']['score_text']\n            valign: 'middle'\n            fontSize: 0.6\n            wrap: True\n            shrinkToFit: true\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.playerCount === 1 ? 'BEST' : 'PLAYER 2'\n            color: scorebar.activePlayer === 1 || scorebar.playerCount === 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'bottom'\n            fontSize:0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.playerCount === 1 ? scorebar.hiScore.toString() : scorebar.score_2.toString()\n            color: scorebar.activePlayer === 1 || scorebar.playerCount === 1 ? resources['colors']['score_text'] : resources['colors']['active_score_text']\n            align: 'right'\n            valign: 'top'\n            fontSize:0.5\n\n<WordBar>:\n    id: 'wordbar'\n    word: ''\n    wordScore: 0\n    canPass: true\n    text: this.word!=='' ? this.word+' for '+this.wordScore.toString() : this.canPass ? 'PASS' : ''\n    fontSize: 0.5\n    disable: this.word==='' && !this.canPass;\n    bgColor: resources['colors']['word_score_background']\n    selectColor: resources['colors']['menu_button_touched']\n    disableColor1: null;\n    disableColor2: null;\n\n<MessageBar@BoxLayout>:\n    id: 'messagebar'\n    orientation: 'vertical'\n    message: ''\n    Label:\n        text: messagebar.message\n        color: resources.colors['score_text']\n        fontSize: '0.4'\n\n\n<MenuItem@Button>:\n    bgColor: resources['colors']['menu_button_background']\n    selectColor: resources['colors']['menu_button_touched']\n    hints: {h:'1'}\n\n\n<InstructionsBox@BoxLayout>:\n    bgColor: resources['colors']['checker']\n\n\n\n<Instructions>:\n    id: 'instructions'\n    hints: {x:0.1, y:0.1, h:0.8, w:0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: 0.1}\n        text: 'How to Play'\n    ScrollView:\n        id: 'scroller'\n        hints: {w: 1, h: 0.8}\n        scrollW: false\n        BodyLabel:\n            color: 'white'\n            hints: {x:0, y:0, w:1, h:null}\n            text: 'Objective: Clear the board by arranging letters to form words, scoring points based on word length and letter rarity.\\n\\nTo form words, select letter tiles in place or drag them in a straight line into neighboring free tile spaces. A word is valid if it is composed of connected letter tiles in a straight line (either vertically, horizontally or diagonally in either direction), is in the dictionary, and at least one tile was moved to form it. Score a valid word by pressing the word cue at bottom of the screen. Each word scores points equal to the sum of the tile values multiplied by the number of letters in the word. Cancel a selection by tapping any of the selected tiles.'\n            align: 'left'\n            valign: 'top'\n            wrap: true\n\n\n<ScoreDetail1p@BoxLayout>:\n    id: 'scoredetails1p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetails1p.title\n        valign: 'middle'\n        align: 'center'\n    ScrollView:\n        padding: 0.1\n        scrollW: false\n        BodyLabel:\n            text: scoredetails1p.detail\n            align: 'left'\n            valign: 'top'\n            wrap: true\n            hints: {x:0, y:0, h:null,  w:1}\n            fontSize: 0.5\n\n\n<ScoreDetail2p@BoxLayout>:\n    id: 'scoredetail2p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail1: ''\n    detail2: ''\n    title: 'In Progress'\n    bgColor: resources['colors']['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetail2p.title\n        valign: 'middle'\n        align: 'center'\n    BoxLayout:\n        orientation: 'horizontal'\n        paddingX: 0.05;\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail1\n                fontSize: 0.5\n                align: 'left'\n                valign: 'top'\n                wrap: true\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail2\n                align: 'right'\n                valign: 'top'\n                wrap: true\n                fontSize: 0.5\n\n\n<Menu>:\n    id: 'mainMenu'\n    orientation: 'vertical'\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    selection: '';\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'Restart Game'\n        on_press: \n            this.parent.selection = 'restartGame'\n    MenuItem:\n        text: 'Random Game'\n        on_press: \n            this.parent.selection = 'randomGame'\n    MenuItem:\n        text: 'Daily Challenge'\n        on_press: \n            this.parent.selection = 'dailyGame'\n    MenuItem:\n        text: 'Two-Player Game'\n        on_press: \n            this.parent.selection = 'multiplayerMenu'\n    MenuItem:\n        text: 'Instructions'\n        on_press: \n            this.parent.selection = 'instructions'\n#    MenuItem:\n#        text: 'Leaderboards'\n#        on_press: \n#            this.parent.selection = 'leaderboardMenu'\n#    MenuItem:\n#        text: 'Achievements'\n#        on_press: \n#            this.parent.selection = 'achievements'\n#    MenuItem:\n#        text: 'Theme'\n#        on_press: \n#            this.parent.selection = 'theme'\n#    MenuItem:\n#        text: 'Quit'\n#        on_press: \n#            this.parent.selection = 'quit'\n\n\n<MultiplayerMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    id: 'multiplayerMenu'\n    orientation: 'vertical'\n    player1: 1\n    player2: 1\n    players: ['','Human', 'AI']\n    selection: ''\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    bgColor: resources['colors']['background']\n    MenuItem:\n        text: 'Start Game'\n        on_press:\n            this.parent.selection = 'multiplayerGame'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player1]\n        on_press:\n            this.parent.selection = 'player1'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player2]\n        on_press:\n            this.parent.selection = 'player2'\n\n\n<LeaderboardMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:0.8}\n    orientation: 'vertical'\n    selection: ''\n    bgColor: resources['colors']['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'High Score'\n        on_press:\n            this.parent.selection = 'highScore'\n    MenuItem:\n        text: 'Daily Game High Score'\n        on_press:\n            this.parent.selection = 'dailyHighScore'\n    MenuItem:\n        text: 'Number of 1,000+ Games'\n        on_press:\n            this.parent.selection = 'number1000'\n";
+const markup = "<HeadingLabel@Label>:\n    bgColor: app.colors['checker']\n    fontSize: 0.6\n\n\n<BodyLabel@Label>:\n    fontSize: 0.5\n\n\n<ScoreBar>:\n    id: 'scorebar'\n    hints: {w: null, h: null}\n    score: 0\n    hiScore: 0\n    score_2: 0\n    playerCount: 1\n    activePlayer: 1\n    gameId: ''\n    orientation: 'horizontal'\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.playerCount === 1 ? 'SCORE' : 'PLAYER 1'\n            color: scorebar.activePlayer === 2 || scorebar.playerCount === 1? app.colors['score_text'] : app.colors['active_score_text']\n            align: 'left'\n            valign: 'bottom'\n            fontSize: 0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.score.toString()\n            color: scorebar.activePlayer === 2 || scorebar.playerCount === 1? app.colors['score_text'] : app.colors['active_score_text']\n            align: 'left'\n            valign: 'top'\n            fontSize: 0.5\n    BoxLayout:\n        orientation: 'vertical'\n        hints: {w:1, h:'2'}\n        Label:\n            text: scorebar.playerCount === 2 ? '2-PLAYER\\nGAME': scorebar.gameId!=='default' ? 'DAILY\\nCHALLENGE' : 'RANDOM\\nGAME'\n            color: app.colors['score_text']\n            valign: 'middle'\n            fontSize: 0.6\n            wrap: True\n            shrinkToFit: true\n    BoxLayout:\n        orientation: 'vertical'\n        Label:\n            hints: {w:1, h:'1'}\n            text: scorebar.playerCount === 1 ? 'BEST' : 'PLAYER 2'\n            color: scorebar.activePlayer === 1 || scorebar.playerCount === 1 ? app.colors['score_text'] : app.colors['active_score_text']\n            align: 'right'\n            valign: 'bottom'\n            fontSize:0.4\n            shrinkToFit: true\n        Label:\n            text: scorebar.playerCount === 1 ? scorebar.hiScore.toString() : scorebar.score_2.toString()\n            color: scorebar.activePlayer === 1 || scorebar.playerCount === 1 ? app.colors['score_text'] : app.colors['active_score_text']\n            align: 'right'\n            valign: 'top'\n            fontSize:0.5\n\n<WordBar>:\n    id: 'wordbar'\n    word: ''\n    wordScore: 0\n    canPass: true\n    text: this.word!=='' ? this.word+' for '+this.wordScore.toString() : this.canPass ? 'PASS' : ''\n    fontSize: 0.5\n    disable: this.word==='' && !this.canPass;\n    bgColor: app.colors['word_score_background']\n    selectColor: app.colors['menu_button_touched']\n    disableColor1: null;\n    disableColor2: null;\n\n<MessageBar@BoxLayout>:\n    id: 'messagebar'\n    orientation: 'vertical'\n    message: ''\n    Label:\n        text: messagebar.message\n        color: app.colors['score_text']\n        fontSize: '0.4'\n\n\n<MenuItem@Button>:\n    bgColor: app.colors['menu_button_background']\n    selectColor: app.colors['menu_button_touched']\n    hints: {h:'1'}\n\n\n<InstructionsBox@BoxLayout>:\n    bgColor: app.colors['checker']\n\n\n<Instructions>:\n    id: 'instructions'\n    hints: {x:0.1, y:0.1, h:0.8, w:0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingX: '0.01'\n    bgColor: app.colors['background']\n    HeadingLabel:\n        hints: {w: 1, h: 0.1}\n        text: 'How to Play'\n    ScrollView:\n        id: 'scroller'\n        hints: {w: 1, h: 0.8}\n        scrollW: false\n        BodyLabel:\n            color: 'white'\n            hints: {x:0, y:0, w:1, h:null}\n            text: 'Objective: Clear the board by arranging letters to form words, scoring points based on word length and letter rarity.\\n\\nTo form words, select letter tiles in place or drag them in a straight line into neighboring free tile spaces. A word is valid if it is composed of connected letter tiles in a straight line (either vertically, horizontally or diagonally in either direction), is in the dictionary, and at least one tile was moved to form it. Score a valid word by pressing the word cue at bottom of the screen. Each word scores points equal to the sum of the tile values multiplied by the number of letters in the word. Cancel a selection by tapping any of the selected tiles.'\n            align: 'left'\n            valign: 'top'\n            wrap: true\n\n\n<ScoreDetail1p@BoxLayout>:\n    id: 'scoredetails1p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail: ''\n    title: 'In Progress'\n    bgColor: app.colors['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetails1p.title\n        valign: 'middle'\n        align: 'center'\n    ScrollView:\n        padding: 0.1\n        scrollW: false\n        BodyLabel:\n            text: scoredetails1p.detail\n            align: 'left'\n            valign: 'top'\n            wrap: true\n            hints: {x:0, y:0, h:null,  w:1}\n            fontSize: 0.5\n\n\n<ScoreDetail2p@BoxLayout>:\n    id: 'scoredetail2p'\n    hints: {x: 0.1, y: 0.1, w: 0.8, h: 0.8}\n    orientation: 'vertical'\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    detail1: ''\n    detail2: ''\n    title: 'In Progress'\n    bgColor: app.colors['background']\n    HeadingLabel:\n        hints: {w: 1, h: '1'}\n        text: scoredetail2p.title\n        valign: 'middle'\n        align: 'center'\n    BoxLayout:\n        orientation: 'horizontal'\n        paddingX: 0.05;\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail1\n                fontSize: 0.5\n                align: 'left'\n                valign: 'top'\n                wrap: true\n        ScrollView:\n            hints: {w: 0.475, h: 1}\n            scrollW: false\n            BodyLabel:\n                hints: {x:0, y:0, h:null,  w:1}\n                text: scoredetail2p.detail2\n                align: 'right'\n                valign: 'top'\n                wrap: true\n                fontSize: 0.5\n\n\n<Menu>:\n    id: 'mainMenu'\n    orientation: 'vertical'\n    hints: {center_x:0.5, center_y:0.5, h:null, w:'8'}\n    selection: '';\n    bgColor: app.colors['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'Restart Game'\n        on_press: \n            this.parent.selection = 'restartGame'\n    MenuItem:\n        text: 'Random Game'\n        on_press: \n            this.parent.selection = 'randomGame'\n    MenuItem:\n        text: 'Daily Challenge'\n        on_press: \n            this.parent.selection = 'dailyGame'\n    MenuItem:\n        text: 'Two-Player Game'\n        on_press: \n            this.parent.selection = 'multiplayerMenu'\n    MenuItem:\n        text: 'Instructions'\n        on_press: \n            this.parent.selection = 'instructions'\n    MenuItem:\n        text: 'Color Scheme'\n        on_press: \n            this.parent.selection = 'theme'\n#    MenuItem:\n#        text: 'Leaderboards'\n#        on_press: \n#            this.parent.selection = 'leaderboardMenu'\n#    MenuItem:\n#        text: 'Achievements'\n#        on_press: \n#            this.parent.selection = 'achievements'\n#    MenuItem:\n#        text: 'Quit'\n#        on_press: \n#            this.parent.selection = 'quit'\n\n\n<MultiplayerMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:'8'}\n    id: 'multiplayerMenu'\n    orientation: 'vertical'\n    player1: 1\n    player2: 1\n    players: ['','Human', 'AI']\n    selection: ''\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    bgColor: app.colors['background']\n    MenuItem:\n        text: 'Start Game'\n        on_press:\n            this.parent.selection = 'multiplayerGame'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player1]\n        on_press:\n            this.parent.selection = 'player1'\n    MenuItem:\n        text: multiplayerMenu.players[multiplayerMenu.player2]\n        on_press:\n            this.parent.selection = 'player2'\n\n\n<LeaderboardMenu>:\n    hints: {center_x:0.5, center_y:0.5, h:null, w:'8'}\n    orientation: 'vertical'\n    selection: ''\n    bgColor: app.colors['background']\n    paddingX: '0.01'\n    paddingY: '0.01'\n    spacingY: '0.01'\n    spacingX: '0.01'\n    MenuItem:\n        text: 'High Score'\n        on_press:\n            this.parent.selection = 'highScore'\n    MenuItem:\n        text: 'Daily Game High Score'\n        on_press:\n            this.parent.selection = 'dailyHighScore'\n    MenuItem:\n        text: 'Number of 1,000+ Games'\n        on_press:\n            this.parent.selection = 'number1000'\n";
 class SlideWordsApp extends App {
   constructor(props = {}) {
     var _a;
     super();
     __publicField(this, "prefDimH", 14);
     __publicField(this, "prefDimW", 10);
+    __publicField(this, "id", "app");
+    try {
+      this.colors = themes[(_a = localStorage.getItem("SlideWords/theme")) != null ? _a : "default"];
+    } catch (error) {
+      this.colors = themes["default"];
+    }
     App.rules.add("ScrollView", { uiZoom: false, scrollW: false });
     parse(markup);
     this.updateProperties(props);
     this.config = /* @__PURE__ */ new Map();
-    this.colors = {};
     this.words = words;
-    try {
-      this.colors = loadTheme((_a = this.config.get("theme")) != null ? _a : "default");
-    } catch (error) {
-      this.colors = loadTheme("default");
-    }
-    App.resources["colors"] = this.colors;
     this.gb = new Board(this.words);
     this.baseWidget.addChild(this.gb);
   }
@@ -7341,15 +7318,11 @@ class SlideWordsApp extends App {
   setNextTheme() {
     var _a;
     const themes$1 = Object.keys(themes);
-    const currentTheme = (_a = this.config.get("theme")) != null ? _a : "theme";
+    const currentTheme = (_a = localStorage.getItem("SlideWords/theme")) != null ? _a : "default";
     const ind = themes$1.indexOf(currentTheme);
-    const newTheme = themes$1[(ind + 1) % themes$1.length];
+    const newTheme = ind >= 0 ? themes$1[(ind + 1) % themes$1.length] : "default";
     localStorage.setItem("SlideWords/theme", newTheme);
-    this.colors = loadTheme(newTheme);
-    App.resources["colors"] = this.colors;
-  }
-  buildConfig(config) {
-    config.setDefaults("theme", { "theme": "beach" });
+    this.colors = themes[newTheme];
   }
   on_key_down(event, object, keyInfo) {
     if ("Escape" in keyInfo.states && keyInfo.states["Escape"]) {
