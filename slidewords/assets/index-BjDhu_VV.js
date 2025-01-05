@@ -6943,7 +6943,7 @@ class Board extends Widget {
     }
     const candidates = this.candidates;
     if (candidates !== null) {
-      ctx.fillStyle = app.colors["moveCandidates"];
+      ctx.fillStyle = app.colors["move_candidates"];
       candidates.forEach((c2) => {
         let [x, y] = c2;
         ctx.fillRect(
