@@ -4106,6 +4106,8 @@ class ImageWidget extends Widget {
     }
   }
   on_src(event, object, data) {
+    if (this.image === void 0)
+      return;
     if (this.src) {
       this.image.src = this.src;
     } else {
