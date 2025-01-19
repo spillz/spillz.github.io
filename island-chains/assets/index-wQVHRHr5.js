@@ -7955,7 +7955,7 @@ class GameScreen extends Widget {
     if (p.localControl) {
       this.actionBar.active = true;
       if (p.scoreMarker.tilesPlacedThisTurn < 5) {
-        this.wStateLabel.text = "Select tile";
+        this.wStateLabel.text = "Select a building";
         this.wStateLabel.color = p.color;
       } else {
         this.wStateLabel.text = "End turn";
