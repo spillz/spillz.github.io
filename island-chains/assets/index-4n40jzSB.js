@@ -6027,7 +6027,7 @@ class ProductionChain extends Map {
     var _a;
     for (let r of quantity.keys()) {
       const q = quantity.get(r);
-      if (q !== void 0 && q !== 0 && ((_a = this.get(r)) == null ? void 0 : _a.length) !== q)
+      if (q !== void 0 && q !== 0 && ((_a = this.get(r)) != null ? _a : []).length < q)
         return false;
     }
     return true;
@@ -6978,8 +6978,8 @@ class NetworkTileOverlay extends Widget {
   updateIO() {
     this.outlineColor = this.primary ? "rgba(208, 212, 0,1)" : "rgba(208, 212, 240,1)";
     this.bgColor = this.primary ? "rgba(208, 212, 0, 0.5)" : null;
-    const inputColor = "rgba(192,100,100,0.7)";
-    const outputColor = this.primary ? "rgba(100,185,100,0.7)" : "rgba(100,100,192,0.7)";
+    const inputColor = "rgba(192,100,100,0.9)";
+    const outputColor = this.primary ? "rgba(100,185,100,0.9)" : "rgba(100,100,192,0.9)";
     if (this.input !== "" && this.output !== "") {
       this.children = [
         new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: inputColor }),
@@ -7243,14 +7243,12 @@ class Board extends Widget {
     for (let t of this.connectedAdjacentPriority(terr)) {
       if (t.tile && player.placedTiles.includes(t.tile)) {
         if (t.tile instanceof Castle) {
+          castles.add(t);
           for (let tc of this.connectedAdjacentPriority(t)) {
             if (visited.has(tc))
               continue;
             yield tc;
             visited.add(tc);
-          }
-          for (let tn of t.tile.network) {
-            castles.add(tn);
           }
         }
       }
@@ -7264,18 +7262,14 @@ class Board extends Widget {
             continue;
           yield tp;
           visited.add(tp);
-          if (tp.tile !== null && tp.tile instanceof Castle) {
-            castles.add(tp);
-          }
         }
       }
     }
     for (let tc of castles) {
       if (tc.tile !== null && tc.tile instanceof Castle) {
         for (let tn of tc.tile.network) {
-          if (visited.has(tn))
-            continue;
-          yield tn;
+          if (!visited.has(tn))
+            yield tn;
           visited.add(tn);
           for (let tnAdj of this.connectedAdjacentPriority(tn)) {
             if (visited.has(tnAdj))
@@ -7549,23 +7543,25 @@ class GameScreen extends Widget {
     if (this.gameOver)
       return true;
     const player = this.players[this.activePlayer];
+    if (!player.localControl)
+      return true;
     if (terrain.tile) {
       const verb = !(terrain.tile instanceof Rubble) && terrain.tile.needsFilled.meets(terrain.tile.needs) ? "Active" : "Inactive";
-      this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
-      if (!(terrain.tile instanceof Rubble)) {
+      if (!(terrain.tile instanceof Rubble && this.actionBar.selectedTile !== null)) {
         this.actionBar.selectedTile = null;
         this.displayTileNetworkInfo(player, terrain);
         this.tileInfoPane.tile = terrain.tile;
+        this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
         return true;
       }
       this.tileInfoPane.tile = terrain.tile;
     }
     if (this.actionBar.selectedTile === null) {
       this.displayTileNetworkInfo(player, terrain);
+      this.tileInfoPane.tile = null;
+      this.wStateLabel.text = "Select a building";
       return true;
     }
-    if (!player.localControl)
-      return true;
     const tile = this.actionBar.selectedTile;
     const tileToPlace = new playerTileClasses[tile.code]();
     if (!this.canReach(player, terrain))
@@ -7609,7 +7605,7 @@ class GameScreen extends Widget {
     if (v === null) {
       this.clearPlacementTargets();
       this.tileInfoPane.tile = null;
-      this.wStateLabel.text = "Select a building type";
+      this.wStateLabel.text = "Select a building";
       return;
     }
     const player = this.players[this.activePlayer];
@@ -7671,14 +7667,14 @@ class GameScreen extends Widget {
             const neededAmtFilled = (_a = adjTile.needsFilled.get(need)) != null ? _a : [];
             if (neededAmt === void 0)
               continue;
-            if (neededAmt === 0 && neededAmtFilled.length === 1 || neededAmt > 0 && neededAmtFilled.length === neededAmt)
+            if (neededAmt === 0 && neededAmtFilled.length >= 1 || neededAmt > 0 && neededAmtFilled.length >= neededAmt)
               continue;
             if (!tile.productionCapacity.has(need))
               continue;
             const providedAmt = tile.productionCapacity.get(need);
             if (providedAmt === void 0)
               continue;
-            if (((_b = tile.productionFilled.get(need)) == null ? void 0 : _b.length) === providedAmt)
+            if (((_b = tile.productionFilled.get(need)) != null ? _b : []).length >= providedAmt)
               continue;
             tile.productionFilled.addConnection(need, adjTile);
             adjTile.needsFilled.addConnection(need, tile);
@@ -7748,6 +7744,8 @@ class GameScreen extends Widget {
     if (!super.on_touch_down(e, o, touch)) {
       if (this.collide(touch.rect)) {
         this.displayTileNetworkInfo(this.players[this.activePlayer], null);
+        this.wStateLabel.text = "Select a building";
+        this.tileInfoPane.tile = null;
         if (this.actionBar.selectedTile !== null) {
           this.actionBar.selectedTile = null;
         }
