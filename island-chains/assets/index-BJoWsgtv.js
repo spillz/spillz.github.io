@@ -5923,7 +5923,7 @@ const tileDescriptions = {
   A: "An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.",
   F: "A farm produces food once supplied with workers.",
   M: "A mine produces ore once supplied with workers.",
-  S: "A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from active strongholds will attack enemies that they connect their resources to.",
+  S: "A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from activated strongholds will attack enemies that they can reach.",
   T: "A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once placed, tradeships allow production links between all structures within reach of the Tradeship.",
   X: "Rubble is the remains of a structure or enemy that you can build over.",
   ET: "An enemy tent is a temporary installation that expands enemy reach but does not attack.",
