@@ -7089,7 +7089,7 @@ class TileInfoPane extends Widget {
       this.resourceOutBox.children = roBoxChildren;
       this.resourceOutBox.hints.w = `${this.resourceOutBox.children.length}`;
     } else {
-      this.terrainLabel.text = "Placement and output bonus";
+      this.terrainLabel.text = "Terrain placement and output bonus";
       const tp = this.tile.terrainPlacement;
       const tboxChildren = Object.keys(tp).filter((terrainType) => tp[terrainType] !== null).map((terrainType) => new BoxLayout({
         orientation: "vertical",
