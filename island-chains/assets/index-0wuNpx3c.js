@@ -5918,7 +5918,7 @@ const tileNames = {
   ED: "enemy dragon"
 };
 const tileDescriptions = {
-  C: "A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3.",
+  C: "A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each turn.",
   V: "A village produces workers once provided with food.",
   A: "An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.",
   F: "A farm produces food once supplied with workers.",
