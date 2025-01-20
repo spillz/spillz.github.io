@@ -5920,7 +5920,7 @@ const tileNames = {
 const tileDescriptions = {
   C: "A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each turn.",
   V: "A village produces workers once provided with food.",
-  A: "An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.",
+  A: "An abbey produces blessings once supplied with food and workers. Blessings make farms and villages more productive.",
   F: "A farm produces food once supplied with workers.",
   M: "A mine produces ore once supplied with workers.",
   S: "A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from activated strongholds will attack enemies that they can reach.",
@@ -6998,7 +6998,7 @@ class NetworkTileOverlay extends Widget {
     }
   }
 }
-class TileInfoPane extends Widget {
+class TileInfoPane extends BoxLayout {
   /**
    * 
    * @param {Board} board 
@@ -7009,20 +7009,32 @@ class TileInfoPane extends Widget {
     this.board = board;
     this.hints = hints;
     this.tile = null;
-    this.tileImage = new ImageWidget({ hints: { x: 0, y: "0.0", h: "1.0", w: "1.0" } }), //Tile & name
-    this.terrainLabel = new Label({ align: "left", hints: { x: 0, y: "1.0", h: "0.5", w: 1 } }), //Terrain
-    this.terrainBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "1.5", w: 1, h: "1.5" } }), this.resourceInLabel = new Label({ align: "left", text: "Inputs", hints: { x: 0, y: "3.0", w: 1, h: "0.5" } }), this.resourceInBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "3.5", w: 1, h: "1.5" } }), this.resourceOutLabel = new Label({ align: "left", text: "Outputs", hints: { x: 0, y: "5.0", w: 1, h: "0.5" } }), this.resourceOutBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "5.5", w: 1, h: "1.5" } }), this.tileDescription = new Label({ align: "left", fontSize: "0.25", wrap: true, hints: { x: 0, y: "7", h: null, w: "5" } }), this.children = [
-      // this.tileLabel,
+    this.resourceInfo = new BoxLayout({ orientation: "vertical", hints: { w: 1, h: 0.5 } });
+    this.tileImage = new ImageWidget({ hints: { x: 0, y: "0.0", h: "1.5", w: "1.5" } }), //Tile
+    this.terrainLabel = new Label({ align: "left", hints: { x: 0, y: "1.5", h: "0.75", w: 1 } }), //Terrain
+    this.terrainBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "2.25", w: 1, h: "1.5" } }), this.resourceInLabel = new Label({ align: "left", text: "Inputs", hints: { x: 0, y: "3.75", w: 1, h: "0.75" } }), this.resourceInBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "4.5", w: 1, h: "1.5" } }), this.resourceOutLabel = new Label({ align: "left", text: "Outputs", hints: { x: 0, y: "6.0", w: 1, h: "0.75" } }), this.resourceOutBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "6.75", w: 1, h: "1.5" } }), this.resourceInfo.children = [
       this.tileImage,
       this.terrainLabel,
       this.terrainBox,
       this.resourceInLabel,
       this.resourceInBox,
       this.resourceOutLabel,
-      this.resourceOutBox,
-      this.tileDescription
+      this.resourceOutBox
+    ];
+    this.descriptionInfo = new BoxLayout({ orientation: "vertical", hints: { w: 0.5 } });
+    this.descriptionLabel = new Label({ align: "right", valign: "bottom", fontSize: "0.375", wrap: true, hints: { h: null } }), this.descriptionInfo.children = [
+      this.descriptionLabel
+      // new Widget(),
+    ];
+    this.children = [
+      this.resourceInfo,
+      new Widget(),
+      this.descriptionInfo
     ];
     this.updateProperties({});
+  }
+  on_orientation(event, object, value) {
+    this.on_tile(event, object, value);
   }
   /**
    * 
@@ -7036,18 +7048,12 @@ class TileInfoPane extends Widget {
       return;
     }
     this.children = [
-      // this.tileLabel,
-      this.tileImage,
-      this.terrainLabel,
-      this.terrainBox,
-      this.resourceInLabel,
-      this.resourceInBox,
-      this.resourceOutLabel,
-      this.resourceOutBox,
-      this.tileDescription
+      this.resourceInfo,
+      new Widget(),
+      this.descriptionInfo
     ];
     this.tileImage.src = gameImages[this.tile.code];
-    this.tileDescription.text = tileDescriptions[this.tile.code];
+    this.descriptionLabel.text = tileDescriptions[this.tile.code];
     const terrain = this.board.terrainMap.atPos(...this.tile.hexPos);
     if (terrain !== void 0) {
       this.terrainLabel.text = terrainNames[terrain.code];
@@ -7466,6 +7472,7 @@ class GameScreen extends Widget {
       this.board.hints = { right: 1, y: 0, w: "1h", h: 1 };
       this.board.orientation = "horizontal";
       this.tileInfoPane.hints = { x: "0.14wh", y: "1.0", w: "0.5h", h: 1 };
+      this.tileInfoPane.orientation = "vertical";
       this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
       this.scoreboard.hints = { right: 0.99, y: 0.01, w: 1, h: "1.0" };
       this.statusLabel.hints = { x: 0.01, y: 0.01, w: 1, h: "1.0" };
@@ -7475,7 +7482,8 @@ class GameScreen extends Widget {
     } else if (orienation === "vertical") {
       this.board.hints = { center_x: 0.5, y: "2.0", w: 1, h: "1w" };
       this.board.orientation = "vertical";
-      this.tileInfoPane.hints = { x: 0, y: "1w", w: 1, h: 1 };
+      this.tileInfoPane.hints = { x: 0, y: "1w", w: 1, h: 0.25 };
+      this.tileInfoPane.orientation = "horizontal";
       this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
       this.scoreboard.hints = { right: 0.99, y: 0, w: 1, h: "1.0" };
       this.statusLabel.hints = { x: 0.01, y: "1.0", w: 1, h: "1.0" };
