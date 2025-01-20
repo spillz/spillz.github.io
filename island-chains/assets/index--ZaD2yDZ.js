@@ -6407,7 +6407,7 @@ class Tile extends ImageWidget {
    */
   on_selected(event, object, value) {
     let parent = this.parent;
-    this.bgColor = value ? "green" : null;
+    this.bgColor = value ? "rgba(192,188,100, 1)" : null;
     if (!(parent instanceof GameScreen))
       return;
     if (value) {
