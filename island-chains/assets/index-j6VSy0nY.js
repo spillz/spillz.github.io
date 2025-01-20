@@ -6733,12 +6733,15 @@ class EnemyStronghold extends Tile {
       "ES"
     );
     __publicField(this, "name", "Enemy Stronghold");
-    __publicField(this, "terrainPlacement", { "p": 1, "f": 1, "m": 1, "w": null });
+    __publicField(this, "terrainPlacement", { "p": 0, "f": 0, "m": 0, "w": null });
     __publicField(this, "tileColor", colorString([0.7, 0.2, 0.2, 1]));
     __publicField(this, "textColor", "red");
     __publicField(this, "health", 1);
     this.src = urlTileEnemyStronghold;
     this.updateProperties(props);
+  }
+  get needs() {
+    return ProductionQuantity.from({ "rs": 1 });
   }
   /**@type {Tile['draw']} */
   draw(app, ctx) {
@@ -6761,6 +6764,9 @@ class EnemyDragon extends Tile {
     __publicField(this, "health", 2);
     this.src = urlTileEnemyDragon;
     this.updateProperties(props);
+  }
+  get needs() {
+    return ProductionQuantity.from({ "rs": 2 });
   }
   /**@type {Tile['draw']} */
   draw(app, ctx) {
