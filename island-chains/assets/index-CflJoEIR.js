@@ -7009,7 +7009,7 @@ class TileInfoPane extends BoxLayout {
     this.board = board;
     this.hints = hints;
     this.tile = null;
-    this.resourceInfo = new BoxLayout({ orientation: "vertical", hints: { w: 1, h: 0.5 } });
+    this.resourceInfo = new BoxLayout({ orientation: "vertical", hints: { h: 0.5 } });
     this.tileImage = new ImageWidget({ hints: { x: 0, y: "0.0", h: "1.5", w: "1.5" } }), //Tile
     this.terrainLabel = new Label({ align: "left", hints: { x: 0, y: "1.5", h: "0.75", w: 1 } }), //Terrain
     this.terrainBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "2.25", w: 1, h: "1.5" } }), this.resourceInLabel = new Label({ align: "left", text: "Inputs", hints: { x: 0, y: "3.75", w: 1, h: "0.75" } }), this.resourceInBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "4.5", w: 1, h: "1.5" } }), this.resourceOutLabel = new Label({ align: "left", text: "Outputs", hints: { x: 0, y: "6.0", w: 1, h: "0.75" } }), this.resourceOutBox = new BoxLayout({ orientation: "horizontal", hints: { x: 0, y: "6.75", w: 1, h: "1.5" } }), this.resourceInfo.children = [
@@ -7021,17 +7021,35 @@ class TileInfoPane extends BoxLayout {
       this.resourceOutLabel,
       this.resourceOutBox
     ];
-    this.descriptionInfo = new BoxLayout({ orientation: "vertical", hints: { w: 0.5 } });
-    this.descriptionLabel = new Label({ align: "right", valign: "bottom", fontSize: "0.375", wrap: true, hints: { h: null } }), this.descriptionInfo.children = [
+    this.descriptionInfo = new BoxLayout({ orientation: "vertical", hints: { w: 1, h: 0.5 } });
+    this.descriptionLabel = new Label({ align: "left", valing: "top", fontSize: "0.375", wrap: true, hints: { h: null } }), this.descriptionInfo.children = [
       this.descriptionLabel
       // new Widget(),
     ];
     this.children = [
       this.resourceInfo,
-      new Widget(),
       this.descriptionInfo
     ];
     this.updateProperties({});
+  }
+  on_orientation(event, object, value) {
+    if (this.orientation === "vertical") {
+      if (this.descriptionLabel) {
+        this.descriptionLabel.align = "left";
+        this.descriptionLabel.valign = "top";
+      }
+      if (this.descriptionInfo) {
+        this.descriptionInfo.hints = { h: 0.5, w: 1 };
+      }
+    } else {
+      if (this.descriptionLabel) {
+        this.descriptionLabel.align = "right";
+        this.descriptionLabel.valign = "middle";
+      }
+      if (this.descriptionInfo) {
+        this.descriptionInfo.hints = { h: 1, w: 0.5 };
+      }
+    }
   }
   /**
    * 
@@ -7046,7 +7064,6 @@ class TileInfoPane extends BoxLayout {
     }
     this.children = [
       this.resourceInfo,
-      new Widget(),
       this.descriptionInfo
     ];
     this.tileImage.src = gameImages[this.tile.code];
