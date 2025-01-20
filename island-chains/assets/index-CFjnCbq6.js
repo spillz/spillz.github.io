@@ -7615,7 +7615,7 @@ class GameScreen extends Widget {
     if (this.actionBar.selectedTile === null) {
       this.displayTileNetworkInfo(player, terrain);
       this.tileInfoPane.tile = null;
-      this.statusLabel.text = "Select a building";
+      this.statusLabel.text = player.scoreMarker.tilesPlacedThisTurn < 5 ? "Select a building" : "End turn";
       return true;
     }
     const tile = this.actionBar.selectedTile;
@@ -7661,7 +7661,7 @@ class GameScreen extends Widget {
     if (v === null) {
       this.clearPlacementTargets();
       this.tileInfoPane.tile = null;
-      this.statusLabel.text = "Select a building";
+      this.statusLabel.text = this.players[this.activePlayer].scoreMarker.tilesPlacedThisTurn < 5 ? "Select a building" : "End turn";
       return;
     }
     const player = this.players[this.activePlayer];
@@ -7800,7 +7800,7 @@ class GameScreen extends Widget {
     if (!super.on_touch_down(e, o, touch)) {
       if (this.collide(touch.rect)) {
         this.displayTileNetworkInfo(this.players[this.activePlayer], null);
-        this.statusLabel.text = "Select a building";
+        this.statusLabel.text = this.players[this.activePlayer].scoreMarker.tilesPlacedThisTurn < 5 ? "Select a building" : "End turn";
         this.tileInfoPane.tile = null;
         if (this.actionBar.selectedTile !== null) {
           this.actionBar.selectedTile = null;
