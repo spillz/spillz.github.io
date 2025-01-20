@@ -7033,9 +7033,6 @@ class TileInfoPane extends BoxLayout {
     ];
     this.updateProperties({});
   }
-  on_orientation(event, object, value) {
-    this.on_tile(event, object, value);
-  }
   /**
    * 
    * @param {string} event 
