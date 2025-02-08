@@ -6410,11 +6410,6 @@ class Tile extends ImageWidget {
     this.bgColor = value ? "rgba(192,188,100, 1)" : null;
     if (!(parent instanceof GameScreen))
       return;
-    if (value) {
-      let a = new WidgetAnimation();
-      a.add({ x: parent.selectPos[0], y: parent.selectPos[1] }, 100);
-      a.start(this);
-    }
   }
   /**@type {ImageWidget['_draw']} */
   _draw(app, ctx, millis) {
@@ -7029,8 +7024,8 @@ class TileInfoPane extends BoxLayout {
     ];
     this.descriptionInfo = new BoxLayout({ orientation: "vertical", hints: { w: 1, h: 0.5 } });
     this.descriptionLabel = new Label({ align: "left", valing: "top", fontSize: "0.375", wrap: true, hints: { h: null } }), this.descriptionInfo.children = [
-      this.descriptionLabel
-      // new Widget(),
+      this.descriptionLabel,
+      new Widget()
     ];
     this.children = [
       this.resourceInfo,
@@ -7050,7 +7045,7 @@ class TileInfoPane extends BoxLayout {
     } else {
       if (this.descriptionLabel) {
         this.descriptionLabel.align = "right";
-        this.descriptionLabel.valign = "middle";
+        this.descriptionLabel.valign = "bottom";
       }
       if (this.descriptionInfo) {
         this.descriptionInfo.hints = { h: 1, w: 0.5 };
@@ -7161,6 +7156,32 @@ class TileInfoPane extends BoxLayout {
       super._draw(app, ctx, millis);
   }
 }
+class PlacementLayer extends Widget {
+  /**
+   * 
+   * @param {*} board 
+   */
+  constructor(board) {
+    super();
+    this.board = board;
+    this.hints = { x: 0, y: 0, w: 1, h: 1 };
+    this.updateProperties({});
+  }
+  layoutChildren() {
+    super.layoutChildren();
+    for (
+      let tt of
+      /**@type {TargetTile[]}*/
+      this.children
+    ) {
+      let hp = this.board.pixelPos(tt.hexPos);
+      tt.w = this.board.hexSide;
+      tt.h = this.board.hexSide;
+      tt.center_x = hp[0];
+      tt.center_y = hp[1];
+    }
+  }
+}
 class Board extends Widget {
   constructor(props = {}) {
     super();
@@ -7184,16 +7205,20 @@ class Board extends Widget {
     for (let thex of this._terrainMap.iter()) {
       this.addChild(thex);
     }
+    this.placementLayer = new PlacementLayer(this);
+    this.addChild(this.placementLayer);
   }
   /**@type {TerrainMap} */
   set terrainMap(value) {
     for (let thex of this._terrainMap.iter()) {
       this.removeChild(thex);
     }
+    this.removeChild(this.placementLayer);
     this._terrainMap = value;
     for (let thex of this._terrainMap.iter()) {
       this.addChild(thex);
     }
+    this.addChild(this.placementLayer);
   }
   get terrainMap() {
     return this._terrainMap;
@@ -7366,9 +7391,10 @@ class Board extends Widget {
     return value;
   }
   layoutChildren() {
+    super.layoutChildren();
     this.hexSide = Math.min(
       this.w / (1.5 * this.boardSize + 1),
-      0.95 * this.h / (this.boardSize * Math.sqrt(3))
+      this.h / ((this.boardSize - 1) * Math.sqrt(3))
     );
     this.hexWidth = this.hexSide * 2;
     this.hexHeight = this.hexSide * Math.sqrt(3);
@@ -7451,7 +7477,7 @@ class ActionBar extends BoxLayout {
     }
   }
 }
-class GameScreen extends Widget {
+class GameScreen extends BoxLayout {
   constructor() {
     super();
     this.activePlayer = 0;
@@ -7460,57 +7486,66 @@ class GameScreen extends Widget {
     this.gameOver = false;
     this.tileStack = [];
     this.bgColor = "rgba(25, 102, 153, 1.0)";
-    this.selectPos = [0, 0];
-    this.board = new Board({ hints: { right: 1, y: 0, w: "1h", h: 1 } });
-    this.addChild(this.board);
+    this.orientation = "horizontal";
+    this.board = new Board({ hints: { right: 1, y: 0, w: "1.2h", h: 1 } });
     this.tileInfoPane = new TileInfoPane(this.board, { x: "0.14wh", y: "1.0", w: "0.5h", h: 1 });
-    this.addChild(this.tileInfoPane);
-    this.placementLayer = new Widget({ hints: { x: 0, y: 0, w: 1, h: 1 } });
-    this.addChild(this.placementLayer);
-    this.scoreboard = new BoxLayout({ align: "right", hints: { right: 0.99, y: 0.01, w: 1, h: 0.05 } });
-    this.addChild(this.scoreboard);
-    this.statusLabel = new Label({ text: "", color: "white", align: "left", hints: { x: 0.01, y: 0.01, w: 1, h: "1.0" } });
-    this.addChild(this.statusLabel);
     this.actionBar = new ActionBar({ hints: { x: 0, y: "1.0", w: "0.14wh", h: 0.84 }, bgColor: "gray", outlineColor: "white" });
-    this.addChild(this.actionBar);
     this.actionBar.bind("selectedTile", (e, o, v) => this.selectTile(e, o, v));
-    this.nextButton = new Button({
-      text: "End turn",
-      alight: "right",
-      hints: { right: 0.99, bottom: 0.99, w: 0.1, h: 0.05 },
-      on_press: (e, o, v) => this.finishTurn()
-    });
-    this.addChild(this.nextButton);
+    this.scoreboard = new BoxLayout({ align: "center" });
+    this.statusLabel = new Label({ text: "", color: "white", align: "left" });
+    this.nextButton = new Button({ text: "End turn", alight: "left", hints: { w: 0.1 }, on_press: (e, o, v) => this.finishTurn() });
+    this.infoArea = new BoxLayout({ orientation: "vertical" });
+    this.statusArea = new BoxLayout({ orientation: "vertical", hints: { h: "3.0" } });
+    this.actionArea = new BoxLayout({ orientation: "horizontal" });
+    this.actionArea.children = [this.actionBar, this.tileInfoPane];
+    this.statusArea.children = [this.scoreboard, this.nextButton, this.statusLabel];
+    this.infoArea.children = [this.statusArea, this.actionArea];
+    this.children = [this.infoArea, this.board];
     this.updateProperties({});
   }
   /**
    * 
-   * @param {'horizontal'|'vertical'} orienation 
+   * @param {'horizontal'|'vertical'} orientation 
    */
-  setLayoutForOrientation(orienation) {
-    if (orienation === "horizontal") {
-      this.board.hints = { right: 1, y: 0, w: "1h", h: 1 };
+  setLayoutForOrientation(orientation) {
+    if (orientation === "horizontal") {
+      this.orientation = "horizontal";
+      this.board.hints = { right: 1, w: "1.2h", h: 1 };
       this.board.orientation = "horizontal";
-      this.tileInfoPane.hints = { x: "0.14wh", y: "1.0", w: "0.5h", h: 1 };
+      this.tileInfoPane.hints = {};
       this.tileInfoPane.orientation = "vertical";
-      this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
-      this.scoreboard.hints = { right: 0.99, y: 0.01, w: 1, h: "1.0" };
-      this.statusLabel.hints = { x: 0.01, y: 0.01, w: 1, h: "1.0" };
-      this.actionBar.hints = { x: 0, y: "1.0", w: "0.14wh", h: 0.84 };
-      this.nextButton.hints = { right: 0.99, bottom: 0.99, w: 0.1, h: "1.0" };
+      this.scoreboard.hints = { w: 1, h: "1.0" };
+      this.statusLabel.hints = { w: 1, h: "1.0" };
+      this.actionBar.hints = { w: "2.0" };
       this.actionBar.orientation = "vertical";
-    } else if (orienation === "vertical") {
-      this.board.hints = { center_x: 0.5, y: "2.0", w: 1, h: "1w" };
+      this.actionArea.orientation = "horizontal";
+      this.nextButton.hints = { w: 0.1, h: "1.0" };
+    } else if (orientation === "vertical") {
+      this.orientation = "vertical";
+      this.board.hints = { w: 1, h: "1w" };
       this.board.orientation = "vertical";
-      this.tileInfoPane.hints = { x: 0, y: "1w", w: 1, h: 0.25 };
+      this.tileInfoPane.hints = {};
       this.tileInfoPane.orientation = "horizontal";
-      this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
-      this.scoreboard.hints = { right: 0.99, y: 0, w: 1, h: "1.0" };
-      this.statusLabel.hints = { x: 0.01, y: "1.0", w: 1, h: "1.0" };
-      this.actionBar.hints = { x: 0, bottom: 1, w: 1, h: "2.0" };
+      this.scoreboard.hints = { w: 1, h: "1.0" };
+      this.statusLabel.hints = { h: "1.0" };
+      this.actionBar.hints = { h: "2.0" };
       this.actionBar.orientation = "horizontal";
-      this.nextButton.hints = { right: 0.99, y: "1.0", w: 0.1, h: "1.0" };
+      this.actionArea.orientation = "vertical";
+      this.nextButton.hints = { right: 0.99, w: 0.1, h: "1.0" };
     }
+  }
+  layoutChildren() {
+    if (this.w < this.h) {
+      this.setLayoutForOrientation("vertical");
+    } else {
+      this.setLayoutForOrientation("horizontal");
+    }
+    super.layoutChildren();
+    let hexSide = this.board.hexSide;
+    for (let p of this.players) {
+      p.boardResize(this.board, hexSide);
+    }
+    this._needsLayout = false;
   }
   finishTurn() {
     if (this.activePlayer === 0) {
@@ -7727,7 +7762,7 @@ class GameScreen extends Widget {
           for (let need of adjTile.needs.keys()) {
             const neededAmt = adjTile.needs.get(need);
             const neededAmtFilled = (_a = adjTile.needsFilled.get(need)) != null ? _a : [];
-            if (neededAmt === void 0)
+            if (neededAmt === void 0 || neededAmtFilled.includes(adjTile))
               continue;
             if (neededAmt === 0 && neededAmtFilled.length >= 1 || neededAmt > 0 && neededAmtFilled.length >= neededAmt)
               continue;
@@ -7827,7 +7862,7 @@ class GameScreen extends Widget {
       for (let t of player.placedTiles) {
         t.showResourceStatus = true;
       }
-      this.placementLayer.children = [];
+      this.board.placementLayer.children = [];
       return;
     }
     const tile = terrain.tile;
@@ -7835,7 +7870,7 @@ class GameScreen extends Widget {
       for (let t of player.placedTiles) {
         t.showResourceStatus = true;
       }
-      this.placementLayer.children = [];
+      this.board.placementLayer.children = [];
       return;
     }
     for (let t of player.placedTiles) {
@@ -7876,7 +7911,7 @@ class GameScreen extends Widget {
       }
       info.push(new NetworkTileOverlay(this.board.hexSide, terr.hexPos, input, output, terr === terrain));
     }
-    this.placementLayer.children = info;
+    this.board.placementLayer.children = info;
   }
   /**
    * @param {TileType} tileType */
@@ -7904,10 +7939,10 @@ class GameScreen extends Widget {
       tt.center_y = xy[1];
       targets.push(tt);
     }
-    this.placementLayer.children = targets;
+    this.board.placementLayer.children = targets;
   }
   clearPlacementTargets() {
-    this.placementLayer.children = [];
+    this.board.placementLayer.children = [];
   }
   removePlayers() {
     this.activePlayer = 0;
@@ -8065,45 +8100,6 @@ class GameScreen extends Widget {
       return;
     this.actionBar.addChild(t);
   }
-  layoutChildren() {
-    if (this.w < this.h) {
-      this.setLayoutForOrientation("vertical");
-    } else {
-      this.setLayoutForOrientation("horizontal");
-    }
-    this.applyHints(this.board);
-    this.board.layoutChildren();
-    let hexSide = this.board.hexSide;
-    this.selectPos = [
-      3 * (hexSide * 2 + 0.01 * this.w),
-      this.h - hexSide * 2 - 0.01 * this.w
-    ];
-    for (let p of this.players) {
-      p.boardResize(this.board, hexSide);
-    }
-    for (
-      let tt of
-      /**@type {TargetTile[]}*/
-      this.placementLayer.children
-    ) {
-      let hp = this.board.pixelPos(tt.hexPos);
-      tt.w = hexSide, tt.h = hexSide, tt.center_x = hp[0];
-      tt.center_y = hp[1];
-    }
-    this.applyHints(this.tileInfoPane);
-    this.tileInfoPane.layoutChildren();
-    this.applyHints(this.scoreboard);
-    this.scoreboard.layoutChildren();
-    this.applyHints(this.actionBar);
-    this.actionBar.layoutChildren();
-    this.applyHints(this.statusLabel);
-    this.statusLabel.layoutChildren();
-    this.applyHints(this.nextButton);
-    this.nextButton.layoutChildren();
-    this.applyHints(this.placementLayer);
-    this.placementLayer.layoutChildren();
-    this._needsLayout = false;
-  }
 }
 class PlayerSpec {
   constructor(name, color, type) {
@@ -8121,7 +8117,7 @@ class PlayerScore extends Label {
     this.turn = 10;
     this.tilesPlacedThisTurn = 0;
     this.activeTurn = false;
-    this.align = "right";
+    this.align = "left";
   }
   on_score(event, object, data) {
     this.updateStatus();
@@ -8134,9 +8130,9 @@ class PlayerScore extends Label {
   }
   updateStatus() {
     if (this.turn > 1) {
-      this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Turn: ${11 - this.turn}/10 -- Score: ${this.score}`;
+      this.text = `Turn: ${11 - this.turn}/10 -- Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Score: ${this.score}`;
     } else if (this.turn === 1) {
-      this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Last turn -- Score: ${this.score}`;
+      this.text = `Last turn -- Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Score: ${this.score}`;
     } else {
       this.text = `Game over -- Score: ${this.score}`;
     }
