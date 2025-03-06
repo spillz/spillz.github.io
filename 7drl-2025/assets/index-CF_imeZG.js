@@ -4978,21 +4978,41 @@ class SpriteSheet extends Resource {
    * @param {string} srcFile 
    * @param {number} spriteSize 
    */
-  constructor(srcFile, spriteSize = 16) {
+  constructor(srcFile, spriteSize = 16, padding = 0) {
     super();
     this.spriteSize = spriteSize;
+    this.padding = padding;
     this.sw = 0;
     this.sh = 0;
     this.len = 0;
     this.sheet = new Image();
+    this.canvas = this.sheet;
     this.sheet.onload = (ev) => {
       this.sw = Math.floor(this.sheet.width / this.spriteSize);
       this.sh = Math.floor(this.sheet.height / this.spriteSize);
       this.len = this.sw * this.sh;
+      if (this.padding > 0) this.canvas = this.padSheet(this.padding);
       App.get().emit("sheetLoaded", this.sheet);
       App.get()._needsLayout = true;
     };
     this.sheet.src = srcFile;
+  }
+  padSheet(pad = 0) {
+    const newWidth = this.sw * (this.spriteSize + pad);
+    const newHeight = this.sh * (this.spriteSize + pad);
+    const newCanvas = new OffscreenCanvas(newWidth, newHeight);
+    const newCtx = newCanvas.getContext("2d");
+    newCtx.clearRect(0, 0, newWidth, newHeight);
+    for (let y = 0; y < this.sh; y++) {
+      for (let x = 0; x < this.sw; x++) {
+        const sx = x * this.spriteSize;
+        const sy = y * this.spriteSize;
+        const dx = x * (this.spriteSize + pad);
+        const dy = y * (this.spriteSize + pad);
+        newCtx.drawImage(this.sheet, sx, sy, this.spriteSize, this.spriteSize, dx, dy, this.spriteSize, this.spriteSize);
+      }
+    }
+    return newCanvas;
   }
   /**
    * Retrieves the alias for a given cell index value
@@ -5023,6 +5043,7 @@ class SpriteSheet extends Resource {
   serialize() {
     const data = {};
     data["spriteSize"] = this.spriteSize;
+    data["padding"] = this.padding;
     data["src"] = this.sheetToDataURL();
     const animations = {};
     for (let k of this.animations.keys()) animations[String(k)] = this.animations.get(k);
@@ -5038,13 +5059,16 @@ class SpriteSheet extends Resource {
    */
   deserialize(data) {
     this.spriteSize = data["spriteSize"];
+    this.padding = data["padding"];
     this.sheet = new Image();
+    this.canvas = this.sheet;
     this.sheet.onload = (ev) => {
       this.sw = Math.floor(this.sheet.width / this.spriteSize);
       this.sh = Math.floor(this.sheet.height / this.spriteSize);
       this.len = this.sw * this.sh;
       App.get().emit("sheetLoaded", this.sheet);
       App.get()._needsLayout = true;
+      if (this.padding > 0) this.canvas = this.padSheet(this.padding);
     };
     this.sheet.src = data["src"];
     this.animations = /* @__PURE__ */ new Map();
@@ -5089,12 +5113,14 @@ class SpriteSheet extends Resource {
     if (flipX) {
       ctx.scale(-1, 1);
     }
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
     ctx.drawImage(
-      this.sheet,
-      spriteLoc[0] * this.spriteSize,
-      spriteLoc[1] * this.spriteSize,
-      this.spriteSize,
-      this.spriteSize,
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz,
+      sz,
       flipped * x,
       y,
       flipped,
@@ -5118,12 +5144,14 @@ class SpriteSheet extends Resource {
     if (flipX) {
       ctx.scale(-1, 1);
     }
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
     ctx.drawImage(
-      this.sheet,
-      spriteLoc[0] * this.spriteSize,
-      spriteLoc[1] * this.spriteSize,
-      this.spriteSize,
-      this.spriteSize,
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz,
+      sz,
       flipped * x,
       y,
       flipped * scale,
@@ -5156,12 +5184,14 @@ class SpriteSheet extends Resource {
       ctx.scale(-1, 1);
     }
     ctx.translate(-anchor[0], -anchor[1]);
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
     ctx.drawImage(
-      this.sheet,
-      spriteLoc[0] * this.spriteSize,
-      spriteLoc[1] * this.spriteSize,
-      this.spriteSize,
-      this.spriteSize,
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz,
+      sz,
       0,
       //-game.tileSize+anchor[0],
       0,
@@ -5198,12 +5228,14 @@ class SpriteSheet extends Resource {
       ctx.scale(-1, 1);
     }
     ctx.translate(-anchor[0], -anchor[1]);
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
     ctx.drawImage(
-      this.sheet,
-      spriteLoc[0] * this.spriteSize,
-      spriteLoc[1] * this.spriteSize,
-      this.spriteSize * tw,
-      this.spriteSize * th,
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz * tw,
+      sz * th,
       0,
       0,
       tw,
@@ -6163,8 +6195,8 @@ class Character extends Entity {
    */
   updateCamera(mmap, animate = true) {
     const camera = (
-      /**@type {eskv.ScrollView}*/
-      App.get().findById("scroller")
+      /**@type {Camera}*/
+      App.get().findById("camera")
     );
     if (camera) {
       const target = this.gpos.add(FacingVec[this.heading].scale(5));
@@ -6261,7 +6293,7 @@ class PlayerCharacter extends Character {
     this.animationState = "standing";
     this.flipX = this.heading === 3 || this.heading === 0;
     this.gpos = vec2(map.tileMap.tileDim[0] / 2, map.tileMap.tileDim[1] / 2);
-    this.move(Facing.north, map);
+    this.pos = v2(this.gpos);
     this.actionsThisTurn = 1;
     if (this.activeCharacter) {
       this._visibleLayer = map.metaTileMap._layerData[MetaLayers.visible];
@@ -6270,7 +6302,7 @@ class PlayerCharacter extends Character {
       this._visibleLayer = new Grid2D([map.w, map.h]).fill(0);
     }
     this.updateFoV(map);
-    this.updateCamera(map);
+    this.updateCamera(map, false);
   }
   /**
    * Line of sight check from one character to another
@@ -6772,15 +6804,6 @@ class GameMap extends Widget {
   on_spriteSheet() {
     this.tileMap.spriteSheet = this.spriteSheet;
   }
-  on_parent(e, o, v) {
-    const scroller = this.parent;
-    if (!(scroller instanceof ScrollView)) return;
-    scroller.bind("scrollX", (e2, o2, v3) => this.updateClipRegion(o2));
-    scroller.bind("scrollY", (e2, o2, v3) => this.updateClipRegion(o2));
-    scroller.bind("zoom", (e2, o2, v3) => this.updateClipRegion(o2));
-    this.updateClipRegion(scroller);
-    this.playerCharacter.updateCamera(this, false);
-  }
   /**
    * 
    * @param {Vec2} pos 
@@ -6808,14 +6831,6 @@ class GameMap extends Widget {
       if (e instanceof Entity && e.pos.equals(pos)) sight &= e.allowsSight;
     }
     this.metaTileMap.setInLayer(MetaLayers.allowsSight, pos, sight);
-  }
-  updateClipRegion(scroller) {
-    this.tileMap.clipRegion = new Rect([
-      Math.floor(scroller._scrollX),
-      Math.floor(scroller._scrollY),
-      Math.ceil(scroller.w / scroller.zoom),
-      Math.ceil(scroller.h / scroller.zoom)
-    ]);
   }
   /**
    * 
@@ -6852,6 +6867,23 @@ class GameMap extends Widget {
       if (c.gpos.equals(position)) return c;
     }
     return null;
+  }
+}
+class Camera extends ScrollView {
+  layoutChildren() {
+    this.updateClipRegion();
+    super.layoutChildren();
+  }
+  updateClipRegion() {
+    const gm = this.children[0];
+    if (gm instanceof GameMap) {
+      gm.tileMap.clipRegion = new Rect([
+        Math.floor(this._scrollX),
+        Math.floor(this._scrollY),
+        Math.ceil(this.w / this.zoom),
+        Math.ceil(this.h / this.zoom)
+      ]);
+    }
   }
 }
 const urlTileset = "" + new URL("colored_tilemap-Y7qg7PJ2.png", import.meta.url).href;
@@ -6894,12 +6926,12 @@ class GLDemo extends App {
   showFPS = false;
   constructor() {
     super();
-    this.spritesheet = new SpriteSheet(urlTileset, 8);
+    this.spritesheet = new SpriteSheet(urlTileset, 8, 1);
     App.resources["sprites"] = this.spritesheet;
     this.gameMap = new GameMap({ hints: { w: null, h: null } });
     this.gameMap.spriteSheet = this.spritesheet;
-    this.scroller = new ScrollView({ id: "scroller", uiZoom: false, hints: { y: 0.1, h: "20", w: 1 } });
-    this.scroller.addChild(this.gameMap);
+    this.camera = new Camera({ id: "camera", uiZoom: false, hints: { y: 0.1, h: "20", w: "30" } });
+    this.camera.addChild(this.gameMap);
     this.header = new Label({
       text: `The Island`,
       fontName: "serif",
@@ -6909,16 +6941,20 @@ class GLDemo extends App {
     this.fps = new FPS({ hints: { right: 1, center_y: 0.05, w: 0.2, h: 0.1 } });
     this.baseWidget.children = [
       this.header,
-      this.scroller
+      this.camera
     ];
     this.updateProperties({});
     this.gameMap.setupLevel();
   }
+  layoutChildren() {
+    super.layoutChildren();
+    this.gameMap.playerCharacter.updateCamera(this.gameMap, false);
+  }
   on_showFPS(e, o, v) {
     if (this.showFPS) {
-      this.addChild(this.fps);
+      this.baseWidget.addChild(this.fps);
     } else {
-      this.children = this.children.filter((v3) => v3 !== this.fps);
+      this.baseWidget.children = this.baseWidget.children.filter((v3) => v3 !== this.fps);
     }
   }
   /**
@@ -6968,6 +7004,8 @@ class GLDemo extends App {
         player.move(Facing.east, mmap);
       } else if (ip.isKeyDown(" ")) {
         player.rest(mmap);
+      } else if (ip.isKeyDown("f")) {
+        this.showFPS = !this.showFPS;
       }
     }
     mmap.updateCharacterVisibility();
