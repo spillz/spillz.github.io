@@ -147,14 +147,20 @@ class PRNG_sfc32 extends PRNG {
   }
 }
 var defaultPRNG = new PRNG_sfc32();
-function random() {
-  return defaultPRNG.random();
+function getRandomInt(m1, m2 = 0) {
+  return defaultPRNG.getRandomInt(m1, m2);
 }
 function getRandomPos(max1, max2) {
   return defaultPRNG.getRandomPos(max1, max2);
 }
 function randomFloat(min = 0, max = 1) {
   return defaultPRNG.randomFloat(min, max);
+}
+function shuffle(arr) {
+  return defaultPRNG.shuffle(arr);
+}
+function choose(array) {
+  return defaultPRNG.choose(array);
 }
 function setSeed(seed) {
   return defaultPRNG.seed(seed);
@@ -208,7 +214,21 @@ class Vec2 extends Array {
     return new Vec2([this[0] - vec[0], this[1] - vec[1]]);
   }
   /**
-   * Scales elements of this vector
+   * Returns a new Vec2 with values floored to nearest integer below
+   * @returns 
+   */
+  floor() {
+    return new Vec2([Math.floor(this[0]), Math.floor(this[1])]);
+  }
+  /**
+   * Returns a new Vec2 with values shift to nearest integer above
+   * @returns 
+   */
+  ceil() {
+    return new Vec2([Math.floor(this[0]), Math.floor(this[1])]);
+  }
+  /**
+   * Returns a scaled copy of this vector
    * @param {number} scalar - amount to scale this vector
    * @returns {Vec2}
    */
@@ -225,7 +245,7 @@ class Vec2 extends Array {
   }
   /**
    * Element-wise division
-   * @param {Array<number>} vec - array like to element-wise divided this vector by
+   * @param {Array<number>} vec - array like to element-wise divide this vector by
    * @returns {Vec2}
    */
   div(vec) {
@@ -278,7 +298,7 @@ class Vec2 extends Array {
     return this.mul(rect.size).add(rect.pos);
   }
   /**
-   * Expresses a vector `pos` as a proportion of a length `sz`
+   * Expresses a vector `pos` as a proportion of a length `sz`. Functions as shift and transform
    * @param {Vec2} pos 
    * @param {number} sz 
    * @returns {Vec2}
@@ -287,7 +307,7 @@ class Vec2 extends Array {
     return this.sub(pos).scale(1 / sz);
   }
   /**
-   * Scales a vector `pos` in proportional to the length `sz`
+   * Scales a vector `pos` in proportional to the length `sz`. Functions as transform and shift
    * @param {Vec2} pos 
    * @param {number} sz 
    * @returns {Vec2}
@@ -578,11 +598,23 @@ class Rect extends Array {
   }
 }
 class Grid2D extends Array {
-  constructor(tileDim = [0, 0]) {
-    super(tileDim[0] * tileDim[1]);
+  /**
+   * 
+   * @param {VecLike} tileDim 
+   * @param {Grid2D|number[]|undefined} initialData 
+   */
+  constructor(tileDim = [0, 0], initialData = void 0) {
+    if (initialData === void 0) {
+      super(tileDim[0] * tileDim[1]);
+    } else {
+      super(...initialData);
+    }
     this.tileDim = new Vec2(tileDim);
     this.hidden = false;
     this._cacheData = null;
+  }
+  clone() {
+    return new Grid2D(this.tileDim, this);
   }
   /**
    * Return the tile index value of the tilemap at position `pos`
@@ -796,11 +828,13 @@ class Grid2D extends Array {
   }
   /**
    * Iterate over the four orthogonally adjacent positions
-   * @param {VecLike} pos 
+   * @param {VecLike} pos
+   * @param {boolean} [diagonal=false]  
    */
-  *iterAdjacent(pos) {
+  *iterAdjacent(pos, diagonal = false) {
     pos = new Vec2(pos);
-    for (let dir of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const dirs = diagonal ? [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]] : [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    for (let dir of dirs) {
       const npos = pos.add(dir);
       if (npos[0] >= 0 && npos[0] < this.tileDim[0] && npos[1] >= 0 && npos[1] < this.tileDim[1]) yield npos;
     }
@@ -809,10 +843,11 @@ class Grid2D extends Array {
    * Iterate over the four orthogonally adjacent positions
    * @param {VecLike} pos 
    * @param {number[]} types 
+   * @param {boolean} diagonal
    */
-  hasAdjacent(pos, types) {
-    for (let npos of this.iterAdjacent(pos)) {
-      if (types.includes(this.get(pos))) return true;
+  hasAdjacent(pos, types, diagonal = false) {
+    for (let npos of this.iterAdjacent(pos, diagonal)) {
+      if (types.includes(this.get(npos))) return true;
     }
     return false;
   }
@@ -1060,7 +1095,6 @@ function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordw
         nextLine = paraText.slice(0, guess);
         w = scale * ctx.measureText(nextLine).width;
       }
-      guess--;
     }
     if (wordwrap) {
       if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
@@ -1122,7 +1156,6 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
         nextLine = paraText.slice(0, guess);
         w = scale * ctx.measureText(nextLine).width;
       }
-      guess--;
     }
     if (wordwrap && guess < paraText.length) {
       if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
@@ -2545,15 +2578,19 @@ class Widget extends Rect {
     ctx.beginPath();
     ctx.rect(r[0], r[1], r[2], r[3]);
     if (this.bgColor != null) {
+      const origFill = ctx.fillStyle;
       ctx.fillStyle = this.bgColor;
       ctx.fill();
+      ctx.fillStyle = origFill;
     }
     if (this.outlineColor != null) {
       let lw = ctx.lineWidth;
       ctx.lineWidth = 1 / app.tileSize;
+      const origStroke = ctx.strokeStyle;
       ctx.strokeStyle = this.outlineColor;
       ctx.stroke();
       ctx.lineWidth = lw;
+      ctx.strokeStyle = origStroke;
     }
   }
   /**
@@ -4927,12 +4964,16 @@ class AutoTiler {
    * @param {number[]} matchTiles The list of valid tile indexes that can be autotiled
    * @param {number[]} matchAdjTiles The list of valid adjacent tile indexes that can be autotiled
    * @param {Object<number, number>} autos The mapping from adjacency bits to autotiled indexes
+   * @param {4|8} directions 
+   * @param {number|undefined} def Default value to set
    */
-  constructor(id = "", matchTiles = [], matchAdjTiles = [], autos = {}) {
+  constructor(id = "", matchTiles = [], matchAdjTiles = [], autos = {}, directions = 4, def = void 0) {
     this.id = id;
     this.matchTiles = new Set(matchTiles);
     this.matchAdjTiles = new Set(matchAdjTiles);
     this.autos = autos;
+    this.directions = directions;
+    this.default = def;
   }
   /**
    * Autotile at position `pos` using `testMap` to check for valid values and setting 
@@ -4946,7 +4987,14 @@ class AutoTiler {
     let level = 1;
     const tile = testMap.get(pos);
     if (this.matchTiles.has(tile)) {
-      for (let delta of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      const directions = this.directions == 4 ? (
+        // N       E      S       W
+        [[0, -1], [1, 0], [0, 1], [-1, 0]]
+      ) : (
+        // N       E      S       W      NE      SE      SW      NW
+        [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]
+      );
+      for (let delta of directions) {
         const aPos = pos.add(delta);
         const aTile = testMap.get(aPos);
         if (this.matchAdjTiles.has(aTile)) {
@@ -4955,8 +5003,10 @@ class AutoTiler {
         level *= 2;
       }
       const ind = this.autos[auto] ?? void 0;
-      if (ind) {
+      if (ind !== void 0) {
         destMap.set(pos, ind);
+      } else {
+        if (this.default !== void 0) destMap.set(pos, this.default);
       }
     }
   }
@@ -4977,8 +5027,11 @@ class SpriteSheet extends Resource {
    * 
    * @param {string} srcFile 
    * @param {number} spriteSize 
+   * @param {number} [padding=0] 
+   * @param {Widget|null} [owner=null] 
+   * 
    */
-  constructor(srcFile, spriteSize = 16, padding = 0) {
+  constructor(srcFile, spriteSize = 16, padding = 0, owner = null) {
     super();
     this.spriteSize = spriteSize;
     this.padding = padding;
@@ -4992,8 +5045,12 @@ class SpriteSheet extends Resource {
       this.sh = Math.floor(this.sheet.height / this.spriteSize);
       this.len = this.sw * this.sh;
       if (this.padding > 0) this.canvas = this.padSheet(this.padding);
-      App.get().emit("sheetLoaded", this.sheet);
-      App.get()._needsLayout = true;
+      if (owner === null) {
+        App.get().emit("sheetLoaded", this.canvas);
+        App.get()._needsLayout = true;
+      } else {
+        owner.emit("sheetLoaded", this.canvas);
+      }
     };
     this.sheet.src = srcFile;
   }
@@ -5262,11 +5319,10 @@ class LayeredAnimationFrame extends Array {
   }
   /**
    * Yields [frame, x-offset, y-offset] tuples
-   * @yields {[number, number, number]}
    */
   *iter() {
     for (let i = 0; i < this.length / 3; i++) {
-      yield this.slice(i * 3, i * 3 + 3);
+      yield [this[i * 3], this[i * 3 + 1], this[i * 3 + 2]];
     }
   }
 }
@@ -5681,6 +5737,3682 @@ class LayeredTileMap extends TileMap {
     this._data = this._layerData[this.activeLayer];
   }
 }
+class Color extends Array {
+  /**
+   * Constructs a new RGBA value from red, green, blue and alpha values.
+   * @param {number} r red value (0-255)
+   * @param {number} g green value (0-255)
+   * @param {number} b blue value (0-255)
+   * @param {number} a alpha value (0-1) 
+   */
+  constructor(r = 0, g = 0, b = 0, a = 1) {
+    super(4);
+    this[0] = r;
+    this[1] = g;
+    this[2] = b;
+    this[3] = a;
+  }
+  /**
+   * Creates a new Color object from a string
+   * @param {string} colorName 
+   * @returns {Color}
+   */
+  static fromString(colorName) {
+    if (colorName === null) {
+      return new Color(0, 0, 0, 0);
+    }
+    if (colorName.startsWith("#")) {
+      const match = colorName.match(/^#([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])?$/);
+      if (!match) throw Error(`Unkwown color string ${colorName}`);
+      const r2 = parseInt(match[1], 16) ?? 0;
+      const g2 = parseInt(match[2], 16) ?? 0;
+      const b2 = parseInt(match[3], 16) ?? 0;
+      const a = 0;
+      return new Color(r2, g2, b2, a);
+    }
+    if (colorName.startsWith("rgba(")) {
+      const match = colorName.match(/^rgba\((\d{1,3}%?),\s*(\d{1,3}%?),\s*(\d{1,3}%?),\s*([\d.]+)\)$/);
+      if (!match) throw Error(`Unkwown color string ${colorName}`);
+      const r2 = match[1].endsWith("%") ? Math.round(parseInt(match[1]) * 255 / 100) : parseInt(match[1]);
+      const g2 = match[2].endsWith("%") ? Math.round(parseInt(match[2]) * 255 / 100) : parseInt(match[2]);
+      const b2 = match[3].endsWith("%") ? Math.round(parseInt(match[3]) * 255 / 100) : parseInt(match[3]);
+      const a = parseFloat(match[4]);
+      return new Color(r2, g2, b2, a);
+    }
+    if (colorName.startsWith("rgb(")) {
+      const match = colorName.match(/^rgb\((\d{1,3}%?),\s*(\d{1,3}%?),\s*(\d{1,3}%?)\)$/);
+      if (!match) throw Error(`Unkwown color string ${colorName}`);
+      const r2 = match[1].endsWith("%") ? Math.round(parseInt(match[1]) * 255 / 100) : parseInt(match[1]);
+      const g2 = match[2].endsWith("%") ? Math.round(parseInt(match[2]) * 255 / 100) : parseInt(match[2]);
+      const b2 = match[3].endsWith("%") ? Math.round(parseInt(match[3]) * 255 / 100) : parseInt(match[3]);
+      return new Color(r2, g2, b2, 1);
+    }
+    let [r, g, b] = colorLookup[colorName]["rgb"];
+    return new Color(r, g, b, 1);
+  }
+  /**
+   * Return a CSS string representation for given RGBA values
+   * @param {number} r red, 0 - 255
+   * @param {number} g green, 0 - 255
+   * @param {number} b blue, 0 - 255
+   * @param {number} a alpha, 0 - 1
+   * @returns {string} CSS string represenation of the color
+   */
+  static stringFromValues(r, g, b, a = 1) {
+    return `rgba(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)},${a})`;
+  }
+  /**
+   * Return a CSS string representation of RGBA color for given HSV values
+   * @param {number} h hue, 0-360
+   * @param {number} s green, 0-100
+   * @param {number} v blue, 0-100
+   * @param {number} a alpha, 0 - 1
+   * @returns {string} CSS string represenation of the color
+   */
+  static stringFromHSV(h, s, v, a = 1) {
+    return Color.fromHSV(h, s, v, a).toString();
+  }
+  /**
+   * Returns a CSS string representation of this object
+   * @returns {string} CSS string representation of this object
+   */
+  toString() {
+    return `rgba(${this[0]},${this[1]},${this[2]},${this[3]})`;
+  }
+  /**
+   * 
+   * @returns {[number, number, number]}
+   */
+  rgb() {
+    return this.slice(0, 3);
+  }
+  /**
+   * Mix this color with another in proportions specified by wgt
+   * @param {Color} color Color to mix with
+   * @param {number} wgt proportion the added color
+   * @returns {Color}
+   */
+  mix(color, wgt) {
+    return new Color(
+      this[0] * (1 - wgt) + color[0] * wgt,
+      this[1] * (1 - wgt) + color[1] * wgt,
+      this[2] * (1 - wgt) + color[2] * wgt,
+      this[3] * (1 - wgt) + color[3] * wgt
+    );
+  }
+  /**
+   * Scale the value of the color by a fixed proportion
+   * @param {number} value proportion to scale RGB values by, 0-1 typically
+   * @returns {Color}
+   */
+  scale(value) {
+    return new Color(
+      this[0] * value,
+      this[1] * value,
+      this[2] * value,
+      this[3]
+    );
+  }
+  toStringWithAlpha(alpha = 1) {
+    return `rgba(${this[0]},${this[1]},${this[2]},${alpha})`;
+  }
+  /**
+   * Return Color from Hue, Staturation, Value trio
+   * @param {number} h hue (color) from 0 to 360
+   * @param {number} s saturation (intensity) from 0 to 100
+   * @param {number} v value (brightness) from 0 to 100
+   * @param {number} a alpha value
+   */
+  static fromHSV(h, s, v, a = 1) {
+    h /= 360;
+    s /= 100;
+    v /= 100;
+    let r = 0, g = 0, b = 0;
+    let i = Math.floor(h * 6);
+    let f = h * 6 - i;
+    let p = v * (1 - s);
+    let q = v * (1 - f * s);
+    let t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+      case 0:
+        r = v, g = t, b = p;
+        break;
+      case 1:
+        r = q, g = v, b = p;
+        break;
+      case 2:
+        r = p, g = v, b = t;
+        break;
+      case 3:
+        r = p, g = q, b = v;
+        break;
+      case 4:
+        r = t, g = p, b = v;
+        break;
+      case 5:
+        r = v, g = p, b = q;
+        break;
+    }
+    return new Color(Math.floor(r * 255), Math.floor(g * 255), Math.floor(b * 255), a);
+  }
+  /**
+   * Returns HSV + Alpha channel in an array
+   * Value ranges: H - 0 to 360, S - 0 to 100, V - 0 to 100, A - 0 to 1
+   * @returns {[number, number, number, number]}
+   */
+  toHSVA() {
+    let [r, g, b, a] = this;
+    let max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s, v = max;
+    let d = max - min;
+    s = max === 0 ? 0 : d / max;
+    if (max !== min) {
+      switch (max) {
+        case r:
+          h = (g - b) / d + (g < b ? 6 : 0);
+          break;
+        case g:
+          h = (b - r) / d + 2;
+          break;
+        case b:
+          h = (r - g) / d + 4;
+          break;
+      }
+      h /= 6;
+    }
+    return [Math.floor(h * 360), Math.floor(s * 100), Math.floor(v * 100), a];
+  }
+  /**@type {number} red value, 0-255 */
+  get r() {
+    return this[0];
+  }
+  /**@type {number} green value, 0-255 */
+  get g() {
+    return this[1];
+  }
+  /**@type {number} blue value, 0-255 */
+  get b() {
+    return this[2];
+  }
+  /**@type {number} alpha value, 0-1 */
+  get a() {
+    return this[3];
+  }
+  set r(val) {
+    this[0] = val;
+  }
+  set g(val) {
+    this[1] = val;
+  }
+  set b(val) {
+    this[2] = val;
+  }
+  set a(val) {
+    this[3] = val;
+  }
+}
+var colorLookup = {
+  "air_force_blue_raf": {
+    "name": "Air Force Blue (Raf)",
+    "rgb": [93, 138, 168]
+  },
+  "air_force_blue_usaf": {
+    "name": "Air Force Blue (Usaf)",
+    "rgb": [0, 48, 143]
+  },
+  "air_superiority_blue": {
+    "name": "Air Superiority Blue",
+    "rgb": [114, 160, 193]
+  },
+  "alabama_crimson": {
+    "name": "Alabama Crimson",
+    "rgb": [163, 38, 56]
+  },
+  "alice_blue": {
+    "name": "Alice Blue",
+    "rgb": [240, 248, 255]
+  },
+  "alizarin_crimson": {
+    "name": "Alizarin Crimson",
+    "rgb": [227, 38, 54]
+  },
+  "alloy_orange": {
+    "name": "Alloy Orange",
+    "rgb": [196, 98, 16]
+  },
+  "almond": {
+    "name": "Almond",
+    "rgb": [239, 222, 205]
+  },
+  "amaranth": {
+    "name": "Amaranth",
+    "rgb": [229, 43, 80]
+  },
+  "amber": {
+    "name": "Amber",
+    "rgb": [255, 191, 0]
+  },
+  "amber_sae_ece": {
+    "name": "Amber (Sae/Ece)",
+    "rgb": [255, 126, 0]
+  },
+  "american_rose": {
+    "name": "American Rose",
+    "rgb": [255, 3, 62]
+  },
+  "amethyst": {
+    "name": "Amethyst",
+    "rgb": [153, 102, 204]
+  },
+  "android_green": {
+    "name": "Android Green",
+    "rgb": [164, 198, 57]
+  },
+  "anti_flash_white": {
+    "name": "Anti-Flash White",
+    "rgb": [242, 243, 244]
+  },
+  "antique_brass": {
+    "name": "Antique Brass",
+    "rgb": [205, 149, 117]
+  },
+  "antique_fuchsia": {
+    "name": "Antique Fuchsia",
+    "rgb": [145, 92, 131]
+  },
+  "antique_ruby": {
+    "name": "Antique Ruby",
+    "rgb": [132, 27, 45]
+  },
+  "antique_white": {
+    "name": "Antique White",
+    "rgb": [250, 235, 215]
+  },
+  "ao_english": {
+    "name": "Ao (English)",
+    "rgb": [0, 128, 0]
+  },
+  "apple_green": {
+    "name": "Apple Green",
+    "rgb": [141, 182, 0]
+  },
+  "apricot": {
+    "name": "Apricot",
+    "rgb": [251, 206, 177]
+  },
+  "aqua": {
+    "name": "Aqua",
+    "rgb": [0, 255, 255]
+  },
+  "aquamarine": {
+    "name": "Aquamarine",
+    "rgb": [127, 255, 212]
+  },
+  "army_green": {
+    "name": "Army Green",
+    "rgb": [75, 83, 32]
+  },
+  "arsenic": {
+    "name": "Arsenic",
+    "rgb": [59, 68, 75]
+  },
+  "arylide_yellow": {
+    "name": "Arylide Yellow",
+    "rgb": [233, 214, 107]
+  },
+  "ash_grey": {
+    "name": "Ash Grey",
+    "rgb": [178, 190, 181]
+  },
+  "asparagus": {
+    "name": "Asparagus",
+    "rgb": [135, 169, 107]
+  },
+  "atomic_tangerine": {
+    "name": "Atomic Tangerine",
+    "rgb": [255, 153, 102]
+  },
+  "auburn": {
+    "name": "Auburn",
+    "rgb": [165, 42, 42]
+  },
+  "aureolin": {
+    "name": "Aureolin",
+    "rgb": [253, 238, 0]
+  },
+  "aurometalsaurus": {
+    "name": "Aurometalsaurus",
+    "rgb": [110, 127, 128]
+  },
+  "avocado": {
+    "name": "Avocado",
+    "rgb": [86, 130, 3]
+  },
+  "azure": {
+    "name": "Azure",
+    "rgb": [0, 127, 255]
+  },
+  "azure_mist_web": {
+    "name": "Azure Mist/Web",
+    "rgb": [240, 255, 255]
+  },
+  "baby_blue": {
+    "name": "Baby Blue",
+    "rgb": [137, 207, 240]
+  },
+  "baby_blue_eyes": {
+    "name": "Baby Blue Eyes",
+    "rgb": [161, 202, 241]
+  },
+  "baby_pink": {
+    "name": "Baby Pink",
+    "rgb": [244, 194, 194]
+  },
+  "ball_blue": {
+    "name": "Ball Blue",
+    "rgb": [33, 171, 205]
+  },
+  "banana_mania": {
+    "name": "Banana Mania",
+    "rgb": [250, 231, 181]
+  },
+  "banana_yellow": {
+    "name": "Banana Yellow",
+    "rgb": [255, 225, 53]
+  },
+  "barn_red": {
+    "name": "Barn Red",
+    "rgb": [124, 10, 2]
+  },
+  "battleship_grey": {
+    "name": "Battleship Grey",
+    "rgb": [132, 132, 130]
+  },
+  "bazaar": {
+    "name": "Bazaar",
+    "rgb": [152, 119, 123]
+  },
+  "beau_blue": {
+    "name": "Beau Blue",
+    "rgb": [188, 212, 230]
+  },
+  "beaver": {
+    "name": "Beaver",
+    "rgb": [159, 129, 112]
+  },
+  "beige": {
+    "name": "Beige",
+    "rgb": [245, 245, 220]
+  },
+  "big_dip_o_ruby": {
+    "name": "Big Dip O’Ruby",
+    "rgb": [156, 37, 66]
+  },
+  "bisque": {
+    "name": "Bisque",
+    "rgb": [255, 228, 196]
+  },
+  "bistre": {
+    "name": "Bistre",
+    "rgb": [61, 43, 31]
+  },
+  "bittersweet": {
+    "name": "Bittersweet",
+    "rgb": [254, 111, 94]
+  },
+  "bittersweet_shimmer": {
+    "name": "Bittersweet Shimmer",
+    "rgb": [191, 79, 81]
+  },
+  "black": {
+    "name": "Black",
+    "rgb": [0, 0, 0]
+  },
+  "black_bean": {
+    "name": "Black Bean",
+    "rgb": [61, 12, 2]
+  },
+  "black_leather_jacket": {
+    "name": "Black Leather Jacket",
+    "rgb": [37, 53, 41]
+  },
+  "black_olive": {
+    "name": "Black Olive",
+    "rgb": [59, 60, 54]
+  },
+  "blanched_almond": {
+    "name": "Blanched Almond",
+    "rgb": [255, 235, 205]
+  },
+  "blast_off_bronze": {
+    "name": "Blast-Off Bronze",
+    "rgb": [165, 113, 100]
+  },
+  "bleu_de_france": {
+    "name": "Bleu De France",
+    "rgb": [49, 140, 231]
+  },
+  "blizzard_blue": {
+    "name": "Blizzard Blue",
+    "rgb": [172, 229, 238]
+  },
+  "blond": {
+    "name": "Blond",
+    "rgb": [250, 240, 190]
+  },
+  "blue": {
+    "name": "Blue",
+    "rgb": [0, 0, 255]
+  },
+  "blue_bell": {
+    "name": "Blue Bell",
+    "rgb": [162, 162, 208]
+  },
+  "blue_crayola": {
+    "name": "Blue (Crayola)",
+    "rgb": [31, 117, 254]
+  },
+  "blue_gray": {
+    "name": "Blue Gray",
+    "rgb": [102, 153, 204]
+  },
+  "blue_green": {
+    "name": "Blue-Green",
+    "rgb": [13, 152, 186]
+  },
+  "blue_munsell": {
+    "name": "Blue (Munsell)",
+    "rgb": [0, 147, 175]
+  },
+  "blue_ncs": {
+    "name": "Blue (Ncs)",
+    "rgb": [0, 135, 189]
+  },
+  "blue_pigment": {
+    "name": "Blue (Pigment)",
+    "rgb": [51, 51, 153]
+  },
+  "blue_ryb": {
+    "name": "Blue (Ryb)",
+    "rgb": [2, 71, 254]
+  },
+  "blue_sapphire": {
+    "name": "Blue Sapphire",
+    "rgb": [18, 97, 128]
+  },
+  "blue_violet": {
+    "name": "Blue-Violet",
+    "rgb": [138, 43, 226]
+  },
+  "blush": {
+    "name": "Blush",
+    "rgb": [222, 93, 131]
+  },
+  "bole": {
+    "name": "Bole",
+    "rgb": [121, 68, 59]
+  },
+  "bondi_blue": {
+    "name": "Bondi Blue",
+    "rgb": [0, 149, 182]
+  },
+  "bone": {
+    "name": "Bone",
+    "rgb": [227, 218, 201]
+  },
+  "boston_university_red": {
+    "name": "Boston University Red",
+    "rgb": [204, 0, 0]
+  },
+  "bottle_green": {
+    "name": "Bottle Green",
+    "rgb": [0, 106, 78]
+  },
+  "boysenberry": {
+    "name": "Boysenberry",
+    "rgb": [135, 50, 96]
+  },
+  "brandeis_blue": {
+    "name": "Brandeis Blue",
+    "rgb": [0, 112, 255]
+  },
+  "brass": {
+    "name": "Brass",
+    "rgb": [181, 166, 66]
+  },
+  "brick_red": {
+    "name": "Brick Red",
+    "rgb": [203, 65, 84]
+  },
+  "bright_cerulean": {
+    "name": "Bright Cerulean",
+    "rgb": [29, 172, 214]
+  },
+  "bright_green": {
+    "name": "Bright Green",
+    "rgb": [102, 255, 0]
+  },
+  "bright_lavender": {
+    "name": "Bright Lavender",
+    "rgb": [191, 148, 228]
+  },
+  "bright_maroon": {
+    "name": "Bright Maroon",
+    "rgb": [195, 33, 72]
+  },
+  "bright_pink": {
+    "name": "Bright Pink",
+    "rgb": [255, 0, 127]
+  },
+  "bright_turquoise": {
+    "name": "Bright Turquoise",
+    "rgb": [8, 232, 222]
+  },
+  "bright_ube": {
+    "name": "Bright Ube",
+    "rgb": [209, 159, 232]
+  },
+  "brilliant_lavender": {
+    "name": "Brilliant Lavender",
+    "rgb": [244, 187, 255]
+  },
+  "brilliant_rose": {
+    "name": "Brilliant Rose",
+    "rgb": [255, 85, 163]
+  },
+  "brink_pink": {
+    "name": "Brink Pink",
+    "rgb": [251, 96, 127]
+  },
+  "british_racing_green": {
+    "name": "British Racing Green",
+    "rgb": [0, 66, 37]
+  },
+  "bronze": {
+    "name": "Bronze",
+    "rgb": [205, 127, 50]
+  },
+  "brown_traditional": {
+    "name": "Brown (Traditional)",
+    "rgb": [150, 75, 0]
+  },
+  "brown_web": {
+    "name": "Brown (Web)",
+    "rgb": [165, 42, 42]
+  },
+  "bubble_gum": {
+    "name": "Bubble Gum",
+    "rgb": [255, 193, 204]
+  },
+  "bubbles": {
+    "name": "Bubbles",
+    "rgb": [231, 254, 255]
+  },
+  "buff": {
+    "name": "Buff",
+    "rgb": [240, 220, 130]
+  },
+  "bulgarian_rose": {
+    "name": "Bulgarian Rose",
+    "rgb": [72, 6, 7]
+  },
+  "burgundy": {
+    "name": "Burgundy",
+    "rgb": [128, 0, 32]
+  },
+  "burlywood": {
+    "name": "Burlywood",
+    "rgb": [222, 184, 135]
+  },
+  "burnt_orange": {
+    "name": "Burnt Orange",
+    "rgb": [204, 85, 0]
+  },
+  "burnt_sienna": {
+    "name": "Burnt Sienna",
+    "rgb": [233, 116, 81]
+  },
+  "burnt_umber": {
+    "name": "Burnt Umber",
+    "rgb": [138, 51, 36]
+  },
+  "byzantine": {
+    "name": "Byzantine",
+    "rgb": [189, 51, 164]
+  },
+  "byzantium": {
+    "name": "Byzantium",
+    "rgb": [112, 41, 99]
+  },
+  "cadet": {
+    "name": "Cadet",
+    "rgb": [83, 104, 114]
+  },
+  "cadet_blue": {
+    "name": "Cadet Blue",
+    "rgb": [95, 158, 160]
+  },
+  "cadet_grey": {
+    "name": "Cadet Grey",
+    "rgb": [145, 163, 176]
+  },
+  "cadmium_green": {
+    "name": "Cadmium Green",
+    "rgb": [0, 107, 60]
+  },
+  "cadmium_orange": {
+    "name": "Cadmium Orange",
+    "rgb": [237, 135, 45]
+  },
+  "cadmium_red": {
+    "name": "Cadmium Red",
+    "rgb": [227, 0, 34]
+  },
+  "cadmium_yellow": {
+    "name": "Cadmium Yellow",
+    "rgb": [255, 246, 0]
+  },
+  "caf_au_lait": {
+    "name": "Café Au Lait",
+    "rgb": [166, 123, 91]
+  },
+  "caf_noir": {
+    "name": "Café Noir",
+    "rgb": [75, 54, 33]
+  },
+  "cal_poly_green": {
+    "name": "Cal Poly Green",
+    "rgb": [30, 77, 43]
+  },
+  "cambridge_blue": {
+    "name": "Cambridge Blue",
+    "rgb": [163, 193, 173]
+  },
+  "camel": {
+    "name": "Camel",
+    "rgb": [193, 154, 107]
+  },
+  "cameo_pink": {
+    "name": "Cameo Pink",
+    "rgb": [239, 187, 204]
+  },
+  "camouflage_green": {
+    "name": "Camouflage Green",
+    "rgb": [120, 134, 107]
+  },
+  "canary_yellow": {
+    "name": "Canary Yellow",
+    "rgb": [255, 239, 0]
+  },
+  "candy_apple_red": {
+    "name": "Candy Apple Red",
+    "rgb": [255, 8, 0]
+  },
+  "candy_pink": {
+    "name": "Candy Pink",
+    "rgb": [228, 113, 122]
+  },
+  "capri": {
+    "name": "Capri",
+    "rgb": [0, 191, 255]
+  },
+  "caput_mortuum": {
+    "name": "Caput Mortuum",
+    "rgb": [89, 39, 32]
+  },
+  "cardinal": {
+    "name": "Cardinal",
+    "rgb": [196, 30, 58]
+  },
+  "caribbean_green": {
+    "name": "Caribbean Green",
+    "rgb": [0, 204, 153]
+  },
+  "carmine": {
+    "name": "Carmine",
+    "rgb": [150, 0, 24]
+  },
+  "carmine_m_p": {
+    "name": "Carmine (M&P)",
+    "rgb": [215, 0, 64]
+  },
+  "carmine_pink": {
+    "name": "Carmine Pink",
+    "rgb": [235, 76, 66]
+  },
+  "carmine_red": {
+    "name": "Carmine Red",
+    "rgb": [255, 0, 56]
+  },
+  "carnation_pink": {
+    "name": "Carnation Pink",
+    "rgb": [255, 166, 201]
+  },
+  "carnelian": {
+    "name": "Carnelian",
+    "rgb": [179, 27, 27]
+  },
+  "carolina_blue": {
+    "name": "Carolina Blue",
+    "rgb": [153, 186, 221]
+  },
+  "carrot_orange": {
+    "name": "Carrot Orange",
+    "rgb": [237, 145, 33]
+  },
+  "catalina_blue": {
+    "name": "Catalina Blue",
+    "rgb": [6, 42, 120]
+  },
+  "ceil": {
+    "name": "Ceil",
+    "rgb": [146, 161, 207]
+  },
+  "celadon": {
+    "name": "Celadon",
+    "rgb": [172, 225, 175]
+  },
+  "celadon_blue": {
+    "name": "Celadon Blue",
+    "rgb": [0, 123, 167]
+  },
+  "celadon_green": {
+    "name": "Celadon Green",
+    "rgb": [47, 132, 124]
+  },
+  "celeste_colour": {
+    "name": "Celeste (Colour)",
+    "rgb": [178, 255, 255]
+  },
+  "celestial_blue": {
+    "name": "Celestial Blue",
+    "rgb": [73, 151, 208]
+  },
+  "cerise": {
+    "name": "Cerise",
+    "rgb": [222, 49, 99]
+  },
+  "cerise_pink": {
+    "name": "Cerise Pink",
+    "rgb": [236, 59, 131]
+  },
+  "cerulean": {
+    "name": "Cerulean",
+    "rgb": [0, 123, 167]
+  },
+  "cerulean_blue": {
+    "name": "Cerulean Blue",
+    "rgb": [42, 82, 190]
+  },
+  "cerulean_frost": {
+    "name": "Cerulean Frost",
+    "rgb": [109, 155, 195]
+  },
+  "cg_blue": {
+    "name": "Cg Blue",
+    "rgb": [0, 122, 165]
+  },
+  "cg_red": {
+    "name": "Cg Red",
+    "rgb": [224, 60, 49]
+  },
+  "chamoisee": {
+    "name": "Chamoisee",
+    "rgb": [160, 120, 90]
+  },
+  "champagne": {
+    "name": "Champagne",
+    "rgb": [250, 214, 165]
+  },
+  "charcoal": {
+    "name": "Charcoal",
+    "rgb": [54, 69, 79]
+  },
+  "charm_pink": {
+    "name": "Charm Pink",
+    "rgb": [230, 143, 172]
+  },
+  "chartreuse_traditional": {
+    "name": "Chartreuse (Traditional)",
+    "rgb": [223, 255, 0]
+  },
+  "chartreuse_web": {
+    "name": "Chartreuse (Web)",
+    "rgb": [127, 255, 0]
+  },
+  "cherry": {
+    "name": "Cherry",
+    "rgb": [222, 49, 99]
+  },
+  "cherry_blossom_pink": {
+    "name": "Cherry Blossom Pink",
+    "rgb": [255, 183, 197]
+  },
+  "chestnut": {
+    "name": "Chestnut",
+    "rgb": [205, 92, 92]
+  },
+  "china_pink": {
+    "name": "China Pink",
+    "rgb": [222, 111, 161]
+  },
+  "china_rose": {
+    "name": "China Rose",
+    "rgb": [168, 81, 110]
+  },
+  "chinese_red": {
+    "name": "Chinese Red",
+    "rgb": [170, 56, 30]
+  },
+  "chocolate_traditional": {
+    "name": "Chocolate (Traditional)",
+    "rgb": [123, 63, 0]
+  },
+  "chocolate_web": {
+    "name": "Chocolate (Web)",
+    "rgb": [210, 105, 30]
+  },
+  "chrome_yellow": {
+    "name": "Chrome Yellow",
+    "rgb": [255, 167, 0]
+  },
+  "cinereous": {
+    "name": "Cinereous",
+    "rgb": [152, 129, 123]
+  },
+  "cinnabar": {
+    "name": "Cinnabar",
+    "rgb": [227, 66, 52]
+  },
+  "cinnamon": {
+    "name": "Cinnamon",
+    "rgb": [210, 105, 30]
+  },
+  "citrine": {
+    "name": "Citrine",
+    "rgb": [228, 208, 10]
+  },
+  "classic_rose": {
+    "name": "Classic Rose",
+    "rgb": [251, 204, 231]
+  },
+  "cobalt": {
+    "name": "Cobalt",
+    "rgb": [0, 71, 171]
+  },
+  "cocoa_brown": {
+    "name": "Cocoa Brown",
+    "rgb": [210, 105, 30]
+  },
+  "coffee": {
+    "name": "Coffee",
+    "rgb": [111, 78, 55]
+  },
+  "columbia_blue": {
+    "name": "Columbia Blue",
+    "rgb": [155, 221, 255]
+  },
+  "congo_pink": {
+    "name": "Congo Pink",
+    "rgb": [248, 131, 121]
+  },
+  "cool_black": {
+    "name": "Cool Black",
+    "rgb": [0, 46, 99]
+  },
+  "cool_grey": {
+    "name": "Cool Grey",
+    "rgb": [140, 146, 172]
+  },
+  "copper": {
+    "name": "Copper",
+    "rgb": [184, 115, 51]
+  },
+  "copper_crayola": {
+    "name": "Copper (Crayola)",
+    "rgb": [218, 138, 103]
+  },
+  "copper_penny": {
+    "name": "Copper Penny",
+    "rgb": [173, 111, 105]
+  },
+  "copper_red": {
+    "name": "Copper Red",
+    "rgb": [203, 109, 81]
+  },
+  "copper_rose": {
+    "name": "Copper Rose",
+    "rgb": [153, 102, 102]
+  },
+  "coquelicot": {
+    "name": "Coquelicot",
+    "rgb": [255, 56, 0]
+  },
+  "coral": {
+    "name": "Coral",
+    "rgb": [255, 127, 80]
+  },
+  "coral_pink": {
+    "name": "Coral Pink",
+    "rgb": [248, 131, 121]
+  },
+  "coral_red": {
+    "name": "Coral Red",
+    "rgb": [255, 64, 64]
+  },
+  "cordovan": {
+    "name": "Cordovan",
+    "rgb": [137, 63, 69]
+  },
+  "corn": {
+    "name": "Corn",
+    "rgb": [251, 236, 93]
+  },
+  "cornell_red": {
+    "name": "Cornell Red",
+    "rgb": [179, 27, 27]
+  },
+  "cornflower_blue": {
+    "name": "Cornflower Blue",
+    "rgb": [100, 149, 237]
+  },
+  "cornsilk": {
+    "name": "Cornsilk",
+    "rgb": [255, 248, 220]
+  },
+  "cosmic_latte": {
+    "name": "Cosmic Latte",
+    "rgb": [255, 248, 231]
+  },
+  "cotton_candy": {
+    "name": "Cotton Candy",
+    "rgb": [255, 188, 217]
+  },
+  "cream": {
+    "name": "Cream",
+    "rgb": [255, 253, 208]
+  },
+  "crimson": {
+    "name": "Crimson",
+    "rgb": [220, 20, 60]
+  },
+  "crimson_glory": {
+    "name": "Crimson Glory",
+    "rgb": [190, 0, 50]
+  },
+  "cyan": {
+    "name": "Cyan",
+    "rgb": [0, 255, 255]
+  },
+  "cyan_process": {
+    "name": "Cyan (Process)",
+    "rgb": [0, 183, 235]
+  },
+  "daffodil": {
+    "name": "Daffodil",
+    "rgb": [255, 255, 49]
+  },
+  "dandelion": {
+    "name": "Dandelion",
+    "rgb": [240, 225, 48]
+  },
+  "dark_blue": {
+    "name": "Dark Blue",
+    "rgb": [0, 0, 139]
+  },
+  "dark_brown": {
+    "name": "Dark Brown",
+    "rgb": [101, 67, 33]
+  },
+  "dark_byzantium": {
+    "name": "Dark Byzantium",
+    "rgb": [93, 57, 84]
+  },
+  "dark_candy_apple_red": {
+    "name": "Dark Candy Apple Red",
+    "rgb": [164, 0, 0]
+  },
+  "dark_cerulean": {
+    "name": "Dark Cerulean",
+    "rgb": [8, 69, 126]
+  },
+  "dark_chestnut": {
+    "name": "Dark Chestnut",
+    "rgb": [152, 105, 96]
+  },
+  "dark_coral": {
+    "name": "Dark Coral",
+    "rgb": [205, 91, 69]
+  },
+  "dark_cyan": {
+    "name": "Dark Cyan",
+    "rgb": [0, 139, 139]
+  },
+  "dark_electric_blue": {
+    "name": "Dark Electric Blue",
+    "rgb": [83, 104, 120]
+  },
+  "dark_goldenrod": {
+    "name": "Dark Goldenrod",
+    "rgb": [184, 134, 11]
+  },
+  "dark_gray": {
+    "name": "Dark Gray",
+    "rgb": [169, 169, 169]
+  },
+  "dark_green": {
+    "name": "Dark Green",
+    "rgb": [1, 50, 32]
+  },
+  "dark_imperial_blue": {
+    "name": "Dark Imperial Blue",
+    "rgb": [0, 65, 106]
+  },
+  "dark_jungle_green": {
+    "name": "Dark Jungle Green",
+    "rgb": [26, 36, 33]
+  },
+  "dark_khaki": {
+    "name": "Dark Khaki",
+    "rgb": [189, 183, 107]
+  },
+  "dark_lava": {
+    "name": "Dark Lava",
+    "rgb": [72, 60, 50]
+  },
+  "dark_lavender": {
+    "name": "Dark Lavender",
+    "rgb": [115, 79, 150]
+  },
+  "dark_magenta": {
+    "name": "Dark Magenta",
+    "rgb": [139, 0, 139]
+  },
+  "dark_midnight_blue": {
+    "name": "Dark Midnight Blue",
+    "rgb": [0, 51, 102]
+  },
+  "dark_olive_green": {
+    "name": "Dark Olive Green",
+    "rgb": [85, 107, 47]
+  },
+  "dark_orange": {
+    "name": "Dark Orange",
+    "rgb": [255, 140, 0]
+  },
+  "dark_orchid": {
+    "name": "Dark Orchid",
+    "rgb": [153, 50, 204]
+  },
+  "dark_pastel_blue": {
+    "name": "Dark Pastel Blue",
+    "rgb": [119, 158, 203]
+  },
+  "dark_pastel_green": {
+    "name": "Dark Pastel Green",
+    "rgb": [3, 192, 60]
+  },
+  "dark_pastel_purple": {
+    "name": "Dark Pastel Purple",
+    "rgb": [150, 111, 214]
+  },
+  "dark_pastel_red": {
+    "name": "Dark Pastel Red",
+    "rgb": [194, 59, 34]
+  },
+  "dark_pink": {
+    "name": "Dark Pink",
+    "rgb": [231, 84, 128]
+  },
+  "dark_powder_blue": {
+    "name": "Dark Powder Blue",
+    "rgb": [0, 51, 153]
+  },
+  "dark_raspberry": {
+    "name": "Dark Raspberry",
+    "rgb": [135, 38, 87]
+  },
+  "dark_red": {
+    "name": "Dark Red",
+    "rgb": [139, 0, 0]
+  },
+  "dark_salmon": {
+    "name": "Dark Salmon",
+    "rgb": [233, 150, 122]
+  },
+  "dark_scarlet": {
+    "name": "Dark Scarlet",
+    "rgb": [86, 3, 25]
+  },
+  "dark_sea_green": {
+    "name": "Dark Sea Green",
+    "rgb": [143, 188, 143]
+  },
+  "dark_sienna": {
+    "name": "Dark Sienna",
+    "rgb": [60, 20, 20]
+  },
+  "dark_slate_blue": {
+    "name": "Dark Slate Blue",
+    "rgb": [72, 61, 139]
+  },
+  "dark_slate_gray": {
+    "name": "Dark Slate Gray",
+    "rgb": [47, 79, 79]
+  },
+  "dark_spring_green": {
+    "name": "Dark Spring Green",
+    "rgb": [23, 114, 69]
+  },
+  "dark_tan": {
+    "name": "Dark Tan",
+    "rgb": [145, 129, 81]
+  },
+  "dark_tangerine": {
+    "name": "Dark Tangerine",
+    "rgb": [255, 168, 18]
+  },
+  "dark_taupe": {
+    "name": "Dark Taupe",
+    "rgb": [72, 60, 50]
+  },
+  "dark_terra_cotta": {
+    "name": "Dark Terra Cotta",
+    "rgb": [204, 78, 92]
+  },
+  "dark_turquoise": {
+    "name": "Dark Turquoise",
+    "rgb": [0, 206, 209]
+  },
+  "dark_violet": {
+    "name": "Dark Violet",
+    "rgb": [148, 0, 211]
+  },
+  "dark_yellow": {
+    "name": "Dark Yellow",
+    "rgb": [155, 135, 12]
+  },
+  "dartmouth_green": {
+    "name": "Dartmouth Green",
+    "rgb": [0, 112, 60]
+  },
+  "davy_s_grey": {
+    "name": "Davy'S Grey",
+    "rgb": [85, 85, 85]
+  },
+  "debian_red": {
+    "name": "Debian Red",
+    "rgb": [215, 10, 83]
+  },
+  "deep_carmine": {
+    "name": "Deep Carmine",
+    "rgb": [169, 32, 62]
+  },
+  "deep_carmine_pink": {
+    "name": "Deep Carmine Pink",
+    "rgb": [239, 48, 56]
+  },
+  "deep_carrot_orange": {
+    "name": "Deep Carrot Orange",
+    "rgb": [233, 105, 44]
+  },
+  "deep_cerise": {
+    "name": "Deep Cerise",
+    "rgb": [218, 50, 135]
+  },
+  "deep_champagne": {
+    "name": "Deep Champagne",
+    "rgb": [250, 214, 165]
+  },
+  "deep_chestnut": {
+    "name": "Deep Chestnut",
+    "rgb": [185, 78, 72]
+  },
+  "deep_coffee": {
+    "name": "Deep Coffee",
+    "rgb": [112, 66, 65]
+  },
+  "deep_fuchsia": {
+    "name": "Deep Fuchsia",
+    "rgb": [193, 84, 193]
+  },
+  "deep_jungle_green": {
+    "name": "Deep Jungle Green",
+    "rgb": [0, 75, 73]
+  },
+  "deep_lilac": {
+    "name": "Deep Lilac",
+    "rgb": [153, 85, 187]
+  },
+  "deep_magenta": {
+    "name": "Deep Magenta",
+    "rgb": [204, 0, 204]
+  },
+  "deep_peach": {
+    "name": "Deep Peach",
+    "rgb": [255, 203, 164]
+  },
+  "deep_pink": {
+    "name": "Deep Pink",
+    "rgb": [255, 20, 147]
+  },
+  "deep_ruby": {
+    "name": "Deep Ruby",
+    "rgb": [132, 63, 91]
+  },
+  "deep_saffron": {
+    "name": "Deep Saffron",
+    "rgb": [255, 153, 51]
+  },
+  "deep_sky_blue": {
+    "name": "Deep Sky Blue",
+    "rgb": [0, 191, 255]
+  },
+  "deep_tuscan_red": {
+    "name": "Deep Tuscan Red",
+    "rgb": [102, 66, 77]
+  },
+  "denim": {
+    "name": "Denim",
+    "rgb": [21, 96, 189]
+  },
+  "desert": {
+    "name": "Desert",
+    "rgb": [193, 154, 107]
+  },
+  "desert_sand": {
+    "name": "Desert Sand",
+    "rgb": [237, 201, 175]
+  },
+  "dim_gray": {
+    "name": "Dim Gray",
+    "rgb": [105, 105, 105]
+  },
+  "dodger_blue": {
+    "name": "Dodger Blue",
+    "rgb": [30, 144, 255]
+  },
+  "dogwood_rose": {
+    "name": "Dogwood Rose",
+    "rgb": [215, 24, 104]
+  },
+  "dollar_bill": {
+    "name": "Dollar Bill",
+    "rgb": [133, 187, 101]
+  },
+  "drab": {
+    "name": "Drab",
+    "rgb": [150, 113, 23]
+  },
+  "duke_blue": {
+    "name": "Duke Blue",
+    "rgb": [0, 0, 156]
+  },
+  "earth_yellow": {
+    "name": "Earth Yellow",
+    "rgb": [225, 169, 95]
+  },
+  "ebony": {
+    "name": "Ebony",
+    "rgb": [85, 93, 80]
+  },
+  "ecru": {
+    "name": "Ecru",
+    "rgb": [194, 178, 128]
+  },
+  "eggplant": {
+    "name": "Eggplant",
+    "rgb": [97, 64, 81]
+  },
+  "eggshell": {
+    "name": "Eggshell",
+    "rgb": [240, 234, 214]
+  },
+  "egyptian_blue": {
+    "name": "Egyptian Blue",
+    "rgb": [16, 52, 166]
+  },
+  "electric_blue": {
+    "name": "Electric Blue",
+    "rgb": [125, 249, 255]
+  },
+  "electric_crimson": {
+    "name": "Electric Crimson",
+    "rgb": [255, 0, 63]
+  },
+  "electric_cyan": {
+    "name": "Electric Cyan",
+    "rgb": [0, 255, 255]
+  },
+  "electric_green": {
+    "name": "Electric Green",
+    "rgb": [0, 255, 0]
+  },
+  "electric_indigo": {
+    "name": "Electric Indigo",
+    "rgb": [111, 0, 255]
+  },
+  "electric_lavender": {
+    "name": "Electric Lavender",
+    "rgb": [244, 187, 255]
+  },
+  "electric_lime": {
+    "name": "Electric Lime",
+    "rgb": [204, 255, 0]
+  },
+  "electric_purple": {
+    "name": "Electric Purple",
+    "rgb": [191, 0, 255]
+  },
+  "electric_ultramarine": {
+    "name": "Electric Ultramarine",
+    "rgb": [63, 0, 255]
+  },
+  "electric_violet": {
+    "name": "Electric Violet",
+    "rgb": [143, 0, 255]
+  },
+  "electric_yellow": {
+    "name": "Electric Yellow",
+    "rgb": [255, 255, 0]
+  },
+  "emerald": {
+    "name": "Emerald",
+    "rgb": [80, 200, 120]
+  },
+  "english_lavender": {
+    "name": "English Lavender",
+    "rgb": [180, 131, 149]
+  },
+  "eton_blue": {
+    "name": "Eton Blue",
+    "rgb": [150, 200, 162]
+  },
+  "fallow": {
+    "name": "Fallow",
+    "rgb": [193, 154, 107]
+  },
+  "falu_red": {
+    "name": "Falu Red",
+    "rgb": [128, 24, 24]
+  },
+  "fandango": {
+    "name": "Fandango",
+    "rgb": [181, 51, 137]
+  },
+  "fashion_fuchsia": {
+    "name": "Fashion Fuchsia",
+    "rgb": [244, 0, 161]
+  },
+  "fawn": {
+    "name": "Fawn",
+    "rgb": [229, 170, 112]
+  },
+  "feldgrau": {
+    "name": "Feldgrau",
+    "rgb": [77, 93, 83]
+  },
+  "fern_green": {
+    "name": "Fern Green",
+    "rgb": [79, 121, 66]
+  },
+  "ferrari_red": {
+    "name": "Ferrari Red",
+    "rgb": [255, 40, 0]
+  },
+  "field_drab": {
+    "name": "Field Drab",
+    "rgb": [108, 84, 30]
+  },
+  "fire_engine_red": {
+    "name": "Fire Engine Red",
+    "rgb": [206, 32, 41]
+  },
+  "firebrick": {
+    "name": "Firebrick",
+    "rgb": [178, 34, 34]
+  },
+  "flame": {
+    "name": "Flame",
+    "rgb": [226, 88, 34]
+  },
+  "flamingo_pink": {
+    "name": "Flamingo Pink",
+    "rgb": [252, 142, 172]
+  },
+  "flavescent": {
+    "name": "Flavescent",
+    "rgb": [247, 233, 142]
+  },
+  "flax": {
+    "name": "Flax",
+    "rgb": [238, 220, 130]
+  },
+  "floral_white": {
+    "name": "Floral White",
+    "rgb": [255, 250, 240]
+  },
+  "fluorescent_orange": {
+    "name": "Fluorescent Orange",
+    "rgb": [255, 191, 0]
+  },
+  "fluorescent_pink": {
+    "name": "Fluorescent Pink",
+    "rgb": [255, 20, 147]
+  },
+  "fluorescent_yellow": {
+    "name": "Fluorescent Yellow",
+    "rgb": [204, 255, 0]
+  },
+  "folly": {
+    "name": "Folly",
+    "rgb": [255, 0, 79]
+  },
+  "forest_green_traditional": {
+    "name": "Forest Green (Traditional)",
+    "rgb": [1, 68, 33]
+  },
+  "forest_green_web": {
+    "name": "Forest Green (Web)",
+    "rgb": [34, 139, 34]
+  },
+  "french_beige": {
+    "name": "French Beige",
+    "rgb": [166, 123, 91]
+  },
+  "french_blue": {
+    "name": "French Blue",
+    "rgb": [0, 114, 187]
+  },
+  "french_lilac": {
+    "name": "French Lilac",
+    "rgb": [134, 96, 142]
+  },
+  "french_lime": {
+    "name": "French Lime",
+    "rgb": [204, 255, 0]
+  },
+  "french_raspberry": {
+    "name": "French Raspberry",
+    "rgb": [199, 44, 72]
+  },
+  "french_rose": {
+    "name": "French Rose",
+    "rgb": [246, 74, 138]
+  },
+  "fuchsia": {
+    "name": "Fuchsia",
+    "rgb": [255, 0, 255]
+  },
+  "fuchsia_crayola": {
+    "name": "Fuchsia (Crayola)",
+    "rgb": [193, 84, 193]
+  },
+  "fuchsia_pink": {
+    "name": "Fuchsia Pink",
+    "rgb": [255, 119, 255]
+  },
+  "fuchsia_rose": {
+    "name": "Fuchsia Rose",
+    "rgb": [199, 67, 117]
+  },
+  "fulvous": {
+    "name": "Fulvous",
+    "rgb": [228, 132, 0]
+  },
+  "fuzzy_wuzzy": {
+    "name": "Fuzzy Wuzzy",
+    "rgb": [204, 102, 102]
+  },
+  "gainsboro": {
+    "name": "Gainsboro",
+    "rgb": [220, 220, 220]
+  },
+  "gamboge": {
+    "name": "Gamboge",
+    "rgb": [228, 155, 15]
+  },
+  "ghost_white": {
+    "name": "Ghost White",
+    "rgb": [248, 248, 255]
+  },
+  "ginger": {
+    "name": "Ginger",
+    "rgb": [176, 101, 0]
+  },
+  "glaucous": {
+    "name": "Glaucous",
+    "rgb": [96, 130, 182]
+  },
+  "glitter": {
+    "name": "Glitter",
+    "rgb": [230, 232, 250]
+  },
+  "gold_metallic": {
+    "name": "Gold (Metallic)",
+    "rgb": [212, 175, 55]
+  },
+  "gold_web_golden": {
+    "name": "Gold (Web) (Golden)",
+    "rgb": [255, 215, 0]
+  },
+  "golden_brown": {
+    "name": "Golden Brown",
+    "rgb": [153, 101, 21]
+  },
+  "golden_poppy": {
+    "name": "Golden Poppy",
+    "rgb": [252, 194, 0]
+  },
+  "golden_yellow": {
+    "name": "Golden Yellow",
+    "rgb": [255, 223, 0]
+  },
+  "goldenrod": {
+    "name": "Goldenrod",
+    "rgb": [218, 165, 32]
+  },
+  "granny_smith_apple": {
+    "name": "Granny Smith Apple",
+    "rgb": [168, 228, 160]
+  },
+  "gray": {
+    "name": "Gray",
+    "rgb": [128, 128, 128]
+  },
+  "gray_asparagus": {
+    "name": "Gray-Asparagus",
+    "rgb": [70, 89, 69]
+  },
+  "gray_html_css_gray": {
+    "name": "Gray (Html/Css Gray)",
+    "rgb": [128, 128, 128]
+  },
+  "gray_x11_gray": {
+    "name": "Gray (X11 Gray)",
+    "rgb": [190, 190, 190]
+  },
+  "green_color_wheel_x11_green": {
+    "name": "Green (Color Wheel) (X11 Green)",
+    "rgb": [0, 255, 0]
+  },
+  "green_crayola": {
+    "name": "Green (Crayola)",
+    "rgb": [28, 172, 120]
+  },
+  "green_html_css_green": {
+    "name": "Green (Html/Css Green)",
+    "rgb": [0, 128, 0]
+  },
+  "green_munsell": {
+    "name": "Green (Munsell)",
+    "rgb": [0, 168, 119]
+  },
+  "green_ncs": {
+    "name": "Green (Ncs)",
+    "rgb": [0, 159, 107]
+  },
+  "green_pigment": {
+    "name": "Green (Pigment)",
+    "rgb": [0, 165, 80]
+  },
+  "green_ryb": {
+    "name": "Green (Ryb)",
+    "rgb": [102, 176, 50]
+  },
+  "green_yellow": {
+    "name": "Green-Yellow",
+    "rgb": [173, 255, 47]
+  },
+  "grullo": {
+    "name": "Grullo",
+    "rgb": [169, 154, 134]
+  },
+  "guppie_green": {
+    "name": "Guppie Green",
+    "rgb": [0, 255, 127]
+  },
+  "halay_be": {
+    "name": "Halayà úBe",
+    "rgb": [102, 56, 84]
+  },
+  "han_blue": {
+    "name": "Han Blue",
+    "rgb": [68, 108, 207]
+  },
+  "han_purple": {
+    "name": "Han Purple",
+    "rgb": [82, 24, 250]
+  },
+  "hansa_yellow": {
+    "name": "Hansa Yellow",
+    "rgb": [233, 214, 107]
+  },
+  "harlequin": {
+    "name": "Harlequin",
+    "rgb": [63, 255, 0]
+  },
+  "harvard_crimson": {
+    "name": "Harvard Crimson",
+    "rgb": [201, 0, 22]
+  },
+  "harvest_gold": {
+    "name": "Harvest Gold",
+    "rgb": [218, 145, 0]
+  },
+  "heart_gold": {
+    "name": "Heart Gold",
+    "rgb": [128, 128, 0]
+  },
+  "heliotrope": {
+    "name": "Heliotrope",
+    "rgb": [223, 115, 255]
+  },
+  "hollywood_cerise": {
+    "name": "Hollywood Cerise",
+    "rgb": [244, 0, 161]
+  },
+  "honeydew": {
+    "name": "Honeydew",
+    "rgb": [240, 255, 240]
+  },
+  "honolulu_blue": {
+    "name": "Honolulu Blue",
+    "rgb": [0, 127, 191]
+  },
+  "hooker_s_green": {
+    "name": "Hooker'S Green",
+    "rgb": [73, 121, 107]
+  },
+  "hot_magenta": {
+    "name": "Hot Magenta",
+    "rgb": [255, 29, 206]
+  },
+  "hot_pink": {
+    "name": "Hot Pink",
+    "rgb": [255, 105, 180]
+  },
+  "hunter_green": {
+    "name": "Hunter Green",
+    "rgb": [53, 94, 59]
+  },
+  "iceberg": {
+    "name": "Iceberg",
+    "rgb": [113, 166, 210]
+  },
+  "icterine": {
+    "name": "Icterine",
+    "rgb": [252, 247, 94]
+  },
+  "imperial_blue": {
+    "name": "Imperial Blue",
+    "rgb": [0, 35, 149]
+  },
+  "inchworm": {
+    "name": "Inchworm",
+    "rgb": [178, 236, 93]
+  },
+  "india_green": {
+    "name": "India Green",
+    "rgb": [19, 136, 8]
+  },
+  "indian_red": {
+    "name": "Indian Red",
+    "rgb": [205, 92, 92]
+  },
+  "indian_yellow": {
+    "name": "Indian Yellow",
+    "rgb": [227, 168, 87]
+  },
+  "indigo": {
+    "name": "Indigo",
+    "rgb": [111, 0, 255]
+  },
+  "indigo_dye": {
+    "name": "Indigo (Dye)",
+    "rgb": [0, 65, 106]
+  },
+  "indigo_web": {
+    "name": "Indigo (Web)",
+    "rgb": [75, 0, 130]
+  },
+  "international_klein_blue": {
+    "name": "International Klein Blue",
+    "rgb": [0, 47, 167]
+  },
+  "international_orange_aerospace": {
+    "name": "International Orange (Aerospace)",
+    "rgb": [255, 79, 0]
+  },
+  "international_orange_engineering": {
+    "name": "International Orange (Engineering)",
+    "rgb": [186, 22, 12]
+  },
+  "international_orange_golden_gate_bridge": {
+    "name": "International Orange (Golden Gate Bridge)",
+    "rgb": [192, 54, 44]
+  },
+  "iris": {
+    "name": "Iris",
+    "rgb": [90, 79, 207]
+  },
+  "isabelline": {
+    "name": "Isabelline",
+    "rgb": [244, 240, 236]
+  },
+  "islamic_green": {
+    "name": "Islamic Green",
+    "rgb": [0, 144, 0]
+  },
+  "ivory": {
+    "name": "Ivory",
+    "rgb": [255, 255, 240]
+  },
+  "jade": {
+    "name": "Jade",
+    "rgb": [0, 168, 107]
+  },
+  "jasmine": {
+    "name": "Jasmine",
+    "rgb": [248, 222, 126]
+  },
+  "jasper": {
+    "name": "Jasper",
+    "rgb": [215, 59, 62]
+  },
+  "jazzberry_jam": {
+    "name": "Jazzberry Jam",
+    "rgb": [165, 11, 94]
+  },
+  "jet": {
+    "name": "Jet",
+    "rgb": [52, 52, 52]
+  },
+  "jonquil": {
+    "name": "Jonquil",
+    "rgb": [250, 218, 94]
+  },
+  "june_bud": {
+    "name": "June Bud",
+    "rgb": [189, 218, 87]
+  },
+  "jungle_green": {
+    "name": "Jungle Green",
+    "rgb": [41, 171, 135]
+  },
+  "kelly_green": {
+    "name": "Kelly Green",
+    "rgb": [76, 187, 23]
+  },
+  "kenyan_copper": {
+    "name": "Kenyan Copper",
+    "rgb": [124, 28, 5]
+  },
+  "khaki_html_css_khaki": {
+    "name": "Khaki (Html/Css) (Khaki)",
+    "rgb": [195, 176, 145]
+  },
+  "khaki_x11_light_khaki": {
+    "name": "Khaki (X11) (Light Khaki)",
+    "rgb": [240, 230, 140]
+  },
+  "ku_crimson": {
+    "name": "Ku Crimson",
+    "rgb": [232, 0, 13]
+  },
+  "la_salle_green": {
+    "name": "La Salle Green",
+    "rgb": [8, 120, 48]
+  },
+  "languid_lavender": {
+    "name": "Languid Lavender",
+    "rgb": [214, 202, 221]
+  },
+  "lapis_lazuli": {
+    "name": "Lapis Lazuli",
+    "rgb": [38, 97, 156]
+  },
+  "laser_lemon": {
+    "name": "Laser Lemon",
+    "rgb": [254, 254, 34]
+  },
+  "laurel_green": {
+    "name": "Laurel Green",
+    "rgb": [169, 186, 157]
+  },
+  "lava": {
+    "name": "Lava",
+    "rgb": [207, 16, 32]
+  },
+  "lavender_blue": {
+    "name": "Lavender Blue",
+    "rgb": [204, 204, 255]
+  },
+  "lavender_blush": {
+    "name": "Lavender Blush",
+    "rgb": [255, 240, 245]
+  },
+  "lavender_floral": {
+    "name": "Lavender (Floral)",
+    "rgb": [181, 126, 220]
+  },
+  "lavender_gray": {
+    "name": "Lavender Gray",
+    "rgb": [196, 195, 208]
+  },
+  "lavender_indigo": {
+    "name": "Lavender Indigo",
+    "rgb": [148, 87, 235]
+  },
+  "lavender_magenta": {
+    "name": "Lavender Magenta",
+    "rgb": [238, 130, 238]
+  },
+  "lavender_mist": {
+    "name": "Lavender Mist",
+    "rgb": [230, 230, 250]
+  },
+  "lavender_pink": {
+    "name": "Lavender Pink",
+    "rgb": [251, 174, 210]
+  },
+  "lavender_purple": {
+    "name": "Lavender Purple",
+    "rgb": [150, 123, 182]
+  },
+  "lavender_rose": {
+    "name": "Lavender Rose",
+    "rgb": [251, 160, 227]
+  },
+  "lavender_web": {
+    "name": "Lavender (Web)",
+    "rgb": [230, 230, 250]
+  },
+  "lawn_green": {
+    "name": "Lawn Green",
+    "rgb": [124, 252, 0]
+  },
+  "lemon": {
+    "name": "Lemon",
+    "rgb": [255, 247, 0]
+  },
+  "lemon_chiffon": {
+    "name": "Lemon Chiffon",
+    "rgb": [255, 250, 205]
+  },
+  "lemon_lime": {
+    "name": "Lemon Lime",
+    "rgb": [227, 255, 0]
+  },
+  "licorice": {
+    "name": "Licorice",
+    "rgb": [26, 17, 16]
+  },
+  "light_apricot": {
+    "name": "Light Apricot",
+    "rgb": [253, 213, 177]
+  },
+  "light_blue": {
+    "name": "Light Blue",
+    "rgb": [173, 216, 230]
+  },
+  "light_brown": {
+    "name": "Light Brown",
+    "rgb": [181, 101, 29]
+  },
+  "light_carmine_pink": {
+    "name": "Light Carmine Pink",
+    "rgb": [230, 103, 113]
+  },
+  "light_coral": {
+    "name": "Light Coral",
+    "rgb": [240, 128, 128]
+  },
+  "light_cornflower_blue": {
+    "name": "Light Cornflower Blue",
+    "rgb": [147, 204, 234]
+  },
+  "light_crimson": {
+    "name": "Light Crimson",
+    "rgb": [245, 105, 145]
+  },
+  "light_cyan": {
+    "name": "Light Cyan",
+    "rgb": [224, 255, 255]
+  },
+  "light_fuchsia_pink": {
+    "name": "Light Fuchsia Pink",
+    "rgb": [249, 132, 239]
+  },
+  "light_goldenrod_yellow": {
+    "name": "Light Goldenrod Yellow",
+    "rgb": [250, 250, 210]
+  },
+  "light_gray": {
+    "name": "Light Gray",
+    "rgb": [211, 211, 211]
+  },
+  "light_green": {
+    "name": "Light Green",
+    "rgb": [144, 238, 144]
+  },
+  "light_khaki": {
+    "name": "Light Khaki",
+    "rgb": [240, 230, 140]
+  },
+  "light_pastel_purple": {
+    "name": "Light Pastel Purple",
+    "rgb": [177, 156, 217]
+  },
+  "light_pink": {
+    "name": "Light Pink",
+    "rgb": [255, 182, 193]
+  },
+  "light_red_ochre": {
+    "name": "Light Red Ochre",
+    "rgb": [233, 116, 81]
+  },
+  "light_salmon": {
+    "name": "Light Salmon",
+    "rgb": [255, 160, 122]
+  },
+  "light_salmon_pink": {
+    "name": "Light Salmon Pink",
+    "rgb": [255, 153, 153]
+  },
+  "light_sea_green": {
+    "name": "Light Sea Green",
+    "rgb": [32, 178, 170]
+  },
+  "light_sky_blue": {
+    "name": "Light Sky Blue",
+    "rgb": [135, 206, 250]
+  },
+  "light_slate_gray": {
+    "name": "Light Slate Gray",
+    "rgb": [119, 136, 153]
+  },
+  "light_taupe": {
+    "name": "Light Taupe",
+    "rgb": [179, 139, 109]
+  },
+  "light_thulian_pink": {
+    "name": "Light Thulian Pink",
+    "rgb": [230, 143, 172]
+  },
+  "light_yellow": {
+    "name": "Light Yellow",
+    "rgb": [255, 255, 224]
+  },
+  "lilac": {
+    "name": "Lilac",
+    "rgb": [200, 162, 200]
+  },
+  "lime_color_wheel": {
+    "name": "Lime (Color Wheel)",
+    "rgb": [191, 255, 0]
+  },
+  "lime_green": {
+    "name": "Lime Green",
+    "rgb": [50, 205, 50]
+  },
+  "lime_web_x11_green": {
+    "name": "Lime (Web) (X11 Green)",
+    "rgb": [0, 255, 0]
+  },
+  "limerick": {
+    "name": "Limerick",
+    "rgb": [157, 194, 9]
+  },
+  "lincoln_green": {
+    "name": "Lincoln Green",
+    "rgb": [25, 89, 5]
+  },
+  "linen": {
+    "name": "Linen",
+    "rgb": [250, 240, 230]
+  },
+  "lion": {
+    "name": "Lion",
+    "rgb": [193, 154, 107]
+  },
+  "little_boy_blue": {
+    "name": "Little Boy Blue",
+    "rgb": [108, 160, 220]
+  },
+  "liver": {
+    "name": "Liver",
+    "rgb": [83, 75, 79]
+  },
+  "lust": {
+    "name": "Lust",
+    "rgb": [230, 32, 32]
+  },
+  "magenta": {
+    "name": "Magenta",
+    "rgb": [255, 0, 255]
+  },
+  "magenta_dye": {
+    "name": "Magenta (Dye)",
+    "rgb": [202, 31, 123]
+  },
+  "magenta_process": {
+    "name": "Magenta (Process)",
+    "rgb": [255, 0, 144]
+  },
+  "magic_mint": {
+    "name": "Magic Mint",
+    "rgb": [170, 240, 209]
+  },
+  "magnolia": {
+    "name": "Magnolia",
+    "rgb": [248, 244, 255]
+  },
+  "mahogany": {
+    "name": "Mahogany",
+    "rgb": [192, 64, 0]
+  },
+  "maize": {
+    "name": "Maize",
+    "rgb": [251, 236, 93]
+  },
+  "majorelle_blue": {
+    "name": "Majorelle Blue",
+    "rgb": [96, 80, 220]
+  },
+  "malachite": {
+    "name": "Malachite",
+    "rgb": [11, 218, 81]
+  },
+  "manatee": {
+    "name": "Manatee",
+    "rgb": [151, 154, 170]
+  },
+  "mango_tango": {
+    "name": "Mango Tango",
+    "rgb": [255, 130, 67]
+  },
+  "mantis": {
+    "name": "Mantis",
+    "rgb": [116, 195, 101]
+  },
+  "mardi_gras": {
+    "name": "Mardi Gras",
+    "rgb": [136, 0, 133]
+  },
+  "maroon_crayola": {
+    "name": "Maroon (Crayola)",
+    "rgb": [195, 33, 72]
+  },
+  "maroon_html_css": {
+    "name": "Maroon (Html/Css)",
+    "rgb": [128, 0, 0]
+  },
+  "maroon_x11": {
+    "name": "Maroon (X11)",
+    "rgb": [176, 48, 96]
+  },
+  "mauve": {
+    "name": "Mauve",
+    "rgb": [224, 176, 255]
+  },
+  "mauve_taupe": {
+    "name": "Mauve Taupe",
+    "rgb": [145, 95, 109]
+  },
+  "mauvelous": {
+    "name": "Mauvelous",
+    "rgb": [239, 152, 170]
+  },
+  "maya_blue": {
+    "name": "Maya Blue",
+    "rgb": [115, 194, 251]
+  },
+  "meat_brown": {
+    "name": "Meat Brown",
+    "rgb": [229, 183, 59]
+  },
+  "medium_aquamarine": {
+    "name": "Medium Aquamarine",
+    "rgb": [102, 221, 170]
+  },
+  "medium_blue": {
+    "name": "Medium Blue",
+    "rgb": [0, 0, 205]
+  },
+  "medium_candy_apple_red": {
+    "name": "Medium Candy Apple Red",
+    "rgb": [226, 6, 44]
+  },
+  "medium_carmine": {
+    "name": "Medium Carmine",
+    "rgb": [175, 64, 53]
+  },
+  "medium_champagne": {
+    "name": "Medium Champagne",
+    "rgb": [243, 229, 171]
+  },
+  "medium_electric_blue": {
+    "name": "Medium Electric Blue",
+    "rgb": [3, 80, 150]
+  },
+  "medium_jungle_green": {
+    "name": "Medium Jungle Green",
+    "rgb": [28, 53, 45]
+  },
+  "medium_lavender_magenta": {
+    "name": "Medium Lavender Magenta",
+    "rgb": [221, 160, 221]
+  },
+  "medium_orchid": {
+    "name": "Medium Orchid",
+    "rgb": [186, 85, 211]
+  },
+  "medium_persian_blue": {
+    "name": "Medium Persian Blue",
+    "rgb": [0, 103, 165]
+  },
+  "medium_purple": {
+    "name": "Medium Purple",
+    "rgb": [147, 112, 219]
+  },
+  "medium_red_violet": {
+    "name": "Medium Red-Violet",
+    "rgb": [187, 51, 133]
+  },
+  "medium_ruby": {
+    "name": "Medium Ruby",
+    "rgb": [170, 64, 105]
+  },
+  "medium_sea_green": {
+    "name": "Medium Sea Green",
+    "rgb": [60, 179, 113]
+  },
+  "medium_slate_blue": {
+    "name": "Medium Slate Blue",
+    "rgb": [123, 104, 238]
+  },
+  "medium_spring_bud": {
+    "name": "Medium Spring Bud",
+    "rgb": [201, 220, 135]
+  },
+  "medium_spring_green": {
+    "name": "Medium Spring Green",
+    "rgb": [0, 250, 154]
+  },
+  "medium_taupe": {
+    "name": "Medium Taupe",
+    "rgb": [103, 76, 71]
+  },
+  "medium_turquoise": {
+    "name": "Medium Turquoise",
+    "rgb": [72, 209, 204]
+  },
+  "medium_tuscan_red": {
+    "name": "Medium Tuscan Red",
+    "rgb": [121, 68, 59]
+  },
+  "medium_vermilion": {
+    "name": "Medium Vermilion",
+    "rgb": [217, 96, 59]
+  },
+  "medium_violet_red": {
+    "name": "Medium Violet-Red",
+    "rgb": [199, 21, 133]
+  },
+  "mellow_apricot": {
+    "name": "Mellow Apricot",
+    "rgb": [248, 184, 120]
+  },
+  "mellow_yellow": {
+    "name": "Mellow Yellow",
+    "rgb": [248, 222, 126]
+  },
+  "melon": {
+    "name": "Melon",
+    "rgb": [253, 188, 180]
+  },
+  "midnight_blue": {
+    "name": "Midnight Blue",
+    "rgb": [25, 25, 112]
+  },
+  "midnight_green_eagle_green": {
+    "name": "Midnight Green (Eagle Green)",
+    "rgb": [0, 73, 83]
+  },
+  "mikado_yellow": {
+    "name": "Mikado Yellow",
+    "rgb": [255, 196, 12]
+  },
+  "mint": {
+    "name": "Mint",
+    "rgb": [62, 180, 137]
+  },
+  "mint_cream": {
+    "name": "Mint Cream",
+    "rgb": [245, 255, 250]
+  },
+  "mint_green": {
+    "name": "Mint Green",
+    "rgb": [152, 255, 152]
+  },
+  "misty_rose": {
+    "name": "Misty Rose",
+    "rgb": [255, 228, 225]
+  },
+  "moccasin": {
+    "name": "Moccasin",
+    "rgb": [250, 235, 215]
+  },
+  "mode_beige": {
+    "name": "Mode Beige",
+    "rgb": [150, 113, 23]
+  },
+  "moonstone_blue": {
+    "name": "Moonstone Blue",
+    "rgb": [115, 169, 194]
+  },
+  "mordant_red_19": {
+    "name": "Mordant Red 19",
+    "rgb": [174, 12, 0]
+  },
+  "moss_green": {
+    "name": "Moss Green",
+    "rgb": [173, 223, 173]
+  },
+  "mountain_meadow": {
+    "name": "Mountain Meadow",
+    "rgb": [48, 186, 143]
+  },
+  "mountbatten_pink": {
+    "name": "Mountbatten Pink",
+    "rgb": [153, 122, 141]
+  },
+  "msu_green": {
+    "name": "Msu Green",
+    "rgb": [24, 69, 59]
+  },
+  "mulberry": {
+    "name": "Mulberry",
+    "rgb": [197, 75, 140]
+  },
+  "mustard": {
+    "name": "Mustard",
+    "rgb": [255, 219, 88]
+  },
+  "myrtle": {
+    "name": "Myrtle",
+    "rgb": [33, 66, 30]
+  },
+  "nadeshiko_pink": {
+    "name": "Nadeshiko Pink",
+    "rgb": [246, 173, 198]
+  },
+  "napier_green": {
+    "name": "Napier Green",
+    "rgb": [42, 128, 0]
+  },
+  "naples_yellow": {
+    "name": "Naples Yellow",
+    "rgb": [250, 218, 94]
+  },
+  "navajo_white": {
+    "name": "Navajo White",
+    "rgb": [255, 222, 173]
+  },
+  "navy_blue": {
+    "name": "Navy Blue",
+    "rgb": [0, 0, 128]
+  },
+  "neon_carrot": {
+    "name": "Neon Carrot",
+    "rgb": [255, 163, 67]
+  },
+  "neon_fuchsia": {
+    "name": "Neon Fuchsia",
+    "rgb": [254, 65, 100]
+  },
+  "neon_green": {
+    "name": "Neon Green",
+    "rgb": [57, 255, 20]
+  },
+  "new_york_pink": {
+    "name": "New York Pink",
+    "rgb": [215, 131, 127]
+  },
+  "non_photo_blue": {
+    "name": "Non-Photo Blue",
+    "rgb": [164, 221, 237]
+  },
+  "north_texas_green": {
+    "name": "North Texas Green",
+    "rgb": [5, 144, 51]
+  },
+  "ocean_boat_blue": {
+    "name": "Ocean Boat Blue",
+    "rgb": [0, 119, 190]
+  },
+  "ochre": {
+    "name": "Ochre",
+    "rgb": [204, 119, 34]
+  },
+  "office_green": {
+    "name": "Office Green",
+    "rgb": [0, 128, 0]
+  },
+  "old_gold": {
+    "name": "Old Gold",
+    "rgb": [207, 181, 59]
+  },
+  "old_lace": {
+    "name": "Old Lace",
+    "rgb": [253, 245, 230]
+  },
+  "old_lavender": {
+    "name": "Old Lavender",
+    "rgb": [121, 104, 120]
+  },
+  "old_mauve": {
+    "name": "Old Mauve",
+    "rgb": [103, 49, 71]
+  },
+  "old_rose": {
+    "name": "Old Rose",
+    "rgb": [192, 128, 129]
+  },
+  "olive": {
+    "name": "Olive",
+    "rgb": [128, 128, 0]
+  },
+  "olive_drab_7": {
+    "name": "Olive Drab #7",
+    "rgb": [60, 52, 31]
+  },
+  "olive_drab_web_olive_drab_3": {
+    "name": "Olive Drab (Web) (Olive Drab #3)",
+    "rgb": [107, 142, 35]
+  },
+  "olivine": {
+    "name": "Olivine",
+    "rgb": [154, 185, 115]
+  },
+  "onyx": {
+    "name": "Onyx",
+    "rgb": [53, 56, 57]
+  },
+  "opera_mauve": {
+    "name": "Opera Mauve",
+    "rgb": [183, 132, 167]
+  },
+  "orange_color_wheel": {
+    "name": "Orange (Color Wheel)",
+    "rgb": [255, 127, 0]
+  },
+  "orange_peel": {
+    "name": "Orange Peel",
+    "rgb": [255, 159, 0]
+  },
+  "orange_red": {
+    "name": "Orange-Red",
+    "rgb": [255, 69, 0]
+  },
+  "orange_ryb": {
+    "name": "Orange (Ryb)",
+    "rgb": [251, 153, 2]
+  },
+  "orange_web_color": {
+    "name": "Orange (Web Color)",
+    "rgb": [255, 165, 0]
+  },
+  "orchid": {
+    "name": "Orchid",
+    "rgb": [218, 112, 214]
+  },
+  "otter_brown": {
+    "name": "Otter Brown",
+    "rgb": [101, 67, 33]
+  },
+  "ou_crimson_red": {
+    "name": "Ou Crimson Red",
+    "rgb": [153, 0, 0]
+  },
+  "outer_space": {
+    "name": "Outer Space",
+    "rgb": [65, 74, 76]
+  },
+  "outrageous_orange": {
+    "name": "Outrageous Orange",
+    "rgb": [255, 110, 74]
+  },
+  "oxford_blue": {
+    "name": "Oxford Blue",
+    "rgb": [0, 33, 71]
+  },
+  "pakistan_green": {
+    "name": "Pakistan Green",
+    "rgb": [0, 102, 0]
+  },
+  "palatinate_blue": {
+    "name": "Palatinate Blue",
+    "rgb": [39, 59, 226]
+  },
+  "palatinate_purple": {
+    "name": "Palatinate Purple",
+    "rgb": [104, 40, 96]
+  },
+  "pale_aqua": {
+    "name": "Pale Aqua",
+    "rgb": [188, 212, 230]
+  },
+  "pale_blue": {
+    "name": "Pale Blue",
+    "rgb": [175, 238, 238]
+  },
+  "pale_brown": {
+    "name": "Pale Brown",
+    "rgb": [152, 118, 84]
+  },
+  "pale_carmine": {
+    "name": "Pale Carmine",
+    "rgb": [175, 64, 53]
+  },
+  "pale_cerulean": {
+    "name": "Pale Cerulean",
+    "rgb": [155, 196, 226]
+  },
+  "pale_chestnut": {
+    "name": "Pale Chestnut",
+    "rgb": [221, 173, 175]
+  },
+  "pale_copper": {
+    "name": "Pale Copper",
+    "rgb": [218, 138, 103]
+  },
+  "pale_cornflower_blue": {
+    "name": "Pale Cornflower Blue",
+    "rgb": [171, 205, 239]
+  },
+  "pale_gold": {
+    "name": "Pale Gold",
+    "rgb": [230, 190, 138]
+  },
+  "pale_goldenrod": {
+    "name": "Pale Goldenrod",
+    "rgb": [238, 232, 170]
+  },
+  "pale_green": {
+    "name": "Pale Green",
+    "rgb": [152, 251, 152]
+  },
+  "pale_lavender": {
+    "name": "Pale Lavender",
+    "rgb": [220, 208, 255]
+  },
+  "pale_magenta": {
+    "name": "Pale Magenta",
+    "rgb": [249, 132, 229]
+  },
+  "pale_pink": {
+    "name": "Pale Pink",
+    "rgb": [250, 218, 221]
+  },
+  "pale_plum": {
+    "name": "Pale Plum",
+    "rgb": [221, 160, 221]
+  },
+  "pale_red_violet": {
+    "name": "Pale Red-Violet",
+    "rgb": [219, 112, 147]
+  },
+  "pale_robin_egg_blue": {
+    "name": "Pale Robin Egg Blue",
+    "rgb": [150, 222, 209]
+  },
+  "pale_silver": {
+    "name": "Pale Silver",
+    "rgb": [201, 192, 187]
+  },
+  "pale_spring_bud": {
+    "name": "Pale Spring Bud",
+    "rgb": [236, 235, 189]
+  },
+  "pale_taupe": {
+    "name": "Pale Taupe",
+    "rgb": [188, 152, 126]
+  },
+  "pale_violet_red": {
+    "name": "Pale Violet-Red",
+    "rgb": [219, 112, 147]
+  },
+  "pansy_purple": {
+    "name": "Pansy Purple",
+    "rgb": [120, 24, 74]
+  },
+  "papaya_whip": {
+    "name": "Papaya Whip",
+    "rgb": [255, 239, 213]
+  },
+  "paris_green": {
+    "name": "Paris Green",
+    "rgb": [80, 200, 120]
+  },
+  "pastel_blue": {
+    "name": "Pastel Blue",
+    "rgb": [174, 198, 207]
+  },
+  "pastel_brown": {
+    "name": "Pastel Brown",
+    "rgb": [131, 105, 83]
+  },
+  "pastel_gray": {
+    "name": "Pastel Gray",
+    "rgb": [207, 207, 196]
+  },
+  "pastel_green": {
+    "name": "Pastel Green",
+    "rgb": [119, 221, 119]
+  },
+  "pastel_magenta": {
+    "name": "Pastel Magenta",
+    "rgb": [244, 154, 194]
+  },
+  "pastel_orange": {
+    "name": "Pastel Orange",
+    "rgb": [255, 179, 71]
+  },
+  "pastel_pink": {
+    "name": "Pastel Pink",
+    "rgb": [222, 165, 164]
+  },
+  "pastel_purple": {
+    "name": "Pastel Purple",
+    "rgb": [179, 158, 181]
+  },
+  "pastel_red": {
+    "name": "Pastel Red",
+    "rgb": [255, 105, 97]
+  },
+  "pastel_violet": {
+    "name": "Pastel Violet",
+    "rgb": [203, 153, 201]
+  },
+  "pastel_yellow": {
+    "name": "Pastel Yellow",
+    "rgb": [253, 253, 150]
+  },
+  "patriarch": {
+    "name": "Patriarch",
+    "rgb": [128, 0, 128]
+  },
+  "payne_s_grey": {
+    "name": "Payne'S Grey",
+    "rgb": [83, 104, 120]
+  },
+  "peach": {
+    "name": "Peach",
+    "rgb": [255, 229, 180]
+  },
+  "peach_crayola": {
+    "name": "Peach (Crayola)",
+    "rgb": [255, 203, 164]
+  },
+  "peach_orange": {
+    "name": "Peach-Orange",
+    "rgb": [255, 204, 153]
+  },
+  "peach_puff": {
+    "name": "Peach Puff",
+    "rgb": [255, 218, 185]
+  },
+  "peach_yellow": {
+    "name": "Peach-Yellow",
+    "rgb": [250, 223, 173]
+  },
+  "pear": {
+    "name": "Pear",
+    "rgb": [209, 226, 49]
+  },
+  "pearl": {
+    "name": "Pearl",
+    "rgb": [234, 224, 200]
+  },
+  "pearl_aqua": {
+    "name": "Pearl Aqua",
+    "rgb": [136, 216, 192]
+  },
+  "pearly_purple": {
+    "name": "Pearly Purple",
+    "rgb": [183, 104, 162]
+  },
+  "peridot": {
+    "name": "Peridot",
+    "rgb": [230, 226, 0]
+  },
+  "periwinkle": {
+    "name": "Periwinkle",
+    "rgb": [204, 204, 255]
+  },
+  "persian_blue": {
+    "name": "Persian Blue",
+    "rgb": [28, 57, 187]
+  },
+  "persian_green": {
+    "name": "Persian Green",
+    "rgb": [0, 166, 147]
+  },
+  "persian_indigo": {
+    "name": "Persian Indigo",
+    "rgb": [50, 18, 122]
+  },
+  "persian_orange": {
+    "name": "Persian Orange",
+    "rgb": [217, 144, 88]
+  },
+  "persian_pink": {
+    "name": "Persian Pink",
+    "rgb": [247, 127, 190]
+  },
+  "persian_plum": {
+    "name": "Persian Plum",
+    "rgb": [112, 28, 28]
+  },
+  "persian_red": {
+    "name": "Persian Red",
+    "rgb": [204, 51, 51]
+  },
+  "persian_rose": {
+    "name": "Persian Rose",
+    "rgb": [254, 40, 162]
+  },
+  "persimmon": {
+    "name": "Persimmon",
+    "rgb": [236, 88, 0]
+  },
+  "peru": {
+    "name": "Peru",
+    "rgb": [205, 133, 63]
+  },
+  "phlox": {
+    "name": "Phlox",
+    "rgb": [223, 0, 255]
+  },
+  "phthalo_blue": {
+    "name": "Phthalo Blue",
+    "rgb": [0, 15, 137]
+  },
+  "phthalo_green": {
+    "name": "Phthalo Green",
+    "rgb": [18, 53, 36]
+  },
+  "piggy_pink": {
+    "name": "Piggy Pink",
+    "rgb": [253, 221, 230]
+  },
+  "pine_green": {
+    "name": "Pine Green",
+    "rgb": [1, 121, 111]
+  },
+  "pink": {
+    "name": "Pink",
+    "rgb": [255, 192, 203]
+  },
+  "pink_lace": {
+    "name": "Pink Lace",
+    "rgb": [255, 221, 244]
+  },
+  "pink_orange": {
+    "name": "Pink-Orange",
+    "rgb": [255, 153, 102]
+  },
+  "pink_pearl": {
+    "name": "Pink Pearl",
+    "rgb": [231, 172, 207]
+  },
+  "pink_sherbet": {
+    "name": "Pink Sherbet",
+    "rgb": [247, 143, 167]
+  },
+  "pistachio": {
+    "name": "Pistachio",
+    "rgb": [147, 197, 114]
+  },
+  "platinum": {
+    "name": "Platinum",
+    "rgb": [229, 228, 226]
+  },
+  "plum_traditional": {
+    "name": "Plum (Traditional)",
+    "rgb": [142, 69, 133]
+  },
+  "plum_web": {
+    "name": "Plum (Web)",
+    "rgb": [221, 160, 221]
+  },
+  "portland_orange": {
+    "name": "Portland Orange",
+    "rgb": [255, 90, 54]
+  },
+  "powder_blue_web": {
+    "name": "Powder Blue (Web)",
+    "rgb": [176, 224, 230]
+  },
+  "princeton_orange": {
+    "name": "Princeton Orange",
+    "rgb": [255, 143, 0]
+  },
+  "prune": {
+    "name": "Prune",
+    "rgb": [112, 28, 28]
+  },
+  "prussian_blue": {
+    "name": "Prussian Blue",
+    "rgb": [0, 49, 83]
+  },
+  "psychedelic_purple": {
+    "name": "Psychedelic Purple",
+    "rgb": [223, 0, 255]
+  },
+  "puce": {
+    "name": "Puce",
+    "rgb": [204, 136, 153]
+  },
+  "pumpkin": {
+    "name": "Pumpkin",
+    "rgb": [255, 117, 24]
+  },
+  "purple_heart": {
+    "name": "Purple Heart",
+    "rgb": [105, 53, 156]
+  },
+  "purple_html_css": {
+    "name": "Purple (Html/Css)",
+    "rgb": [128, 0, 128]
+  },
+  "purple_mountain_majesty": {
+    "name": "Purple Mountain Majesty",
+    "rgb": [150, 120, 182]
+  },
+  "purple_munsell": {
+    "name": "Purple (Munsell)",
+    "rgb": [159, 0, 197]
+  },
+  "purple_pizzazz": {
+    "name": "Purple Pizzazz",
+    "rgb": [254, 78, 218]
+  },
+  "purple_taupe": {
+    "name": "Purple Taupe",
+    "rgb": [80, 64, 77]
+  },
+  "purple_x11": {
+    "name": "Purple (X11)",
+    "rgb": [160, 32, 240]
+  },
+  "quartz": {
+    "name": "Quartz",
+    "rgb": [81, 72, 79]
+  },
+  "rackley": {
+    "name": "Rackley",
+    "rgb": [93, 138, 168]
+  },
+  "radical_red": {
+    "name": "Radical Red",
+    "rgb": [255, 53, 94]
+  },
+  "rajah": {
+    "name": "Rajah",
+    "rgb": [251, 171, 96]
+  },
+  "raspberry": {
+    "name": "Raspberry",
+    "rgb": [227, 11, 93]
+  },
+  "raspberry_glace": {
+    "name": "Raspberry Glace",
+    "rgb": [145, 95, 109]
+  },
+  "raspberry_pink": {
+    "name": "Raspberry Pink",
+    "rgb": [226, 80, 152]
+  },
+  "raspberry_rose": {
+    "name": "Raspberry Rose",
+    "rgb": [179, 68, 108]
+  },
+  "raw_umber": {
+    "name": "Raw Umber",
+    "rgb": [130, 102, 68]
+  },
+  "razzle_dazzle_rose": {
+    "name": "Razzle Dazzle Rose",
+    "rgb": [255, 51, 204]
+  },
+  "razzmatazz": {
+    "name": "Razzmatazz",
+    "rgb": [227, 37, 107]
+  },
+  "red": {
+    "name": "Red",
+    "rgb": [255, 0, 0]
+  },
+  "red_brown": {
+    "name": "Red-Brown",
+    "rgb": [165, 42, 42]
+  },
+  "red_devil": {
+    "name": "Red Devil",
+    "rgb": [134, 1, 17]
+  },
+  "red_munsell": {
+    "name": "Red (Munsell)",
+    "rgb": [242, 0, 60]
+  },
+  "red_ncs": {
+    "name": "Red (Ncs)",
+    "rgb": [196, 2, 51]
+  },
+  "red_orange": {
+    "name": "Red-Orange",
+    "rgb": [255, 83, 73]
+  },
+  "red_pigment": {
+    "name": "Red (Pigment)",
+    "rgb": [237, 28, 36]
+  },
+  "red_ryb": {
+    "name": "Red (Ryb)",
+    "rgb": [254, 39, 18]
+  },
+  "red_violet": {
+    "name": "Red-Violet",
+    "rgb": [199, 21, 133]
+  },
+  "redwood": {
+    "name": "Redwood",
+    "rgb": [171, 78, 82]
+  },
+  "regalia": {
+    "name": "Regalia",
+    "rgb": [82, 45, 128]
+  },
+  "resolution_blue": {
+    "name": "Resolution Blue",
+    "rgb": [0, 35, 135]
+  },
+  "rich_black": {
+    "name": "Rich Black",
+    "rgb": [0, 64, 64]
+  },
+  "rich_brilliant_lavender": {
+    "name": "Rich Brilliant Lavender",
+    "rgb": [241, 167, 254]
+  },
+  "rich_carmine": {
+    "name": "Rich Carmine",
+    "rgb": [215, 0, 64]
+  },
+  "rich_electric_blue": {
+    "name": "Rich Electric Blue",
+    "rgb": [8, 146, 208]
+  },
+  "rich_lavender": {
+    "name": "Rich Lavender",
+    "rgb": [167, 107, 207]
+  },
+  "rich_lilac": {
+    "name": "Rich Lilac",
+    "rgb": [182, 102, 210]
+  },
+  "rich_maroon": {
+    "name": "Rich Maroon",
+    "rgb": [176, 48, 96]
+  },
+  "rifle_green": {
+    "name": "Rifle Green",
+    "rgb": [65, 72, 51]
+  },
+  "robin_egg_blue": {
+    "name": "Robin Egg Blue",
+    "rgb": [0, 204, 204]
+  },
+  "rose": {
+    "name": "Rose",
+    "rgb": [255, 0, 127]
+  },
+  "rose_bonbon": {
+    "name": "Rose Bonbon",
+    "rgb": [249, 66, 158]
+  },
+  "rose_ebony": {
+    "name": "Rose Ebony",
+    "rgb": [103, 72, 70]
+  },
+  "rose_gold": {
+    "name": "Rose Gold",
+    "rgb": [183, 110, 121]
+  },
+  "rose_madder": {
+    "name": "Rose Madder",
+    "rgb": [227, 38, 54]
+  },
+  "rose_pink": {
+    "name": "Rose Pink",
+    "rgb": [255, 102, 204]
+  },
+  "rose_quartz": {
+    "name": "Rose Quartz",
+    "rgb": [170, 152, 169]
+  },
+  "rose_taupe": {
+    "name": "Rose Taupe",
+    "rgb": [144, 93, 93]
+  },
+  "rose_vale": {
+    "name": "Rose Vale",
+    "rgb": [171, 78, 82]
+  },
+  "rosewood": {
+    "name": "Rosewood",
+    "rgb": [101, 0, 11]
+  },
+  "rosso_corsa": {
+    "name": "Rosso Corsa",
+    "rgb": [212, 0, 0]
+  },
+  "rosy_brown": {
+    "name": "Rosy Brown",
+    "rgb": [188, 143, 143]
+  },
+  "royal_azure": {
+    "name": "Royal Azure",
+    "rgb": [0, 56, 168]
+  },
+  "royal_blue_traditional": {
+    "name": "Royal Blue (Traditional)",
+    "rgb": [0, 35, 102]
+  },
+  "royal_blue_web": {
+    "name": "Royal Blue (Web)",
+    "rgb": [65, 105, 225]
+  },
+  "royal_fuchsia": {
+    "name": "Royal Fuchsia",
+    "rgb": [202, 44, 146]
+  },
+  "royal_purple": {
+    "name": "Royal Purple",
+    "rgb": [120, 81, 169]
+  },
+  "royal_yellow": {
+    "name": "Royal Yellow",
+    "rgb": [250, 218, 94]
+  },
+  "rubine_red": {
+    "name": "Rubine Red",
+    "rgb": [209, 0, 86]
+  },
+  "ruby": {
+    "name": "Ruby",
+    "rgb": [224, 17, 95]
+  },
+  "ruby_red": {
+    "name": "Ruby Red",
+    "rgb": [155, 17, 30]
+  },
+  "ruddy": {
+    "name": "Ruddy",
+    "rgb": [255, 0, 40]
+  },
+  "ruddy_brown": {
+    "name": "Ruddy Brown",
+    "rgb": [187, 101, 40]
+  },
+  "ruddy_pink": {
+    "name": "Ruddy Pink",
+    "rgb": [225, 142, 150]
+  },
+  "rufous": {
+    "name": "Rufous",
+    "rgb": [168, 28, 7]
+  },
+  "russet": {
+    "name": "Russet",
+    "rgb": [128, 70, 27]
+  },
+  "rust": {
+    "name": "Rust",
+    "rgb": [183, 65, 14]
+  },
+  "rusty_red": {
+    "name": "Rusty Red",
+    "rgb": [218, 44, 67]
+  },
+  "sacramento_state_green": {
+    "name": "Sacramento State Green",
+    "rgb": [0, 86, 63]
+  },
+  "saddle_brown": {
+    "name": "Saddle Brown",
+    "rgb": [139, 69, 19]
+  },
+  "safety_orange_blaze_orange": {
+    "name": "Safety Orange (Blaze Orange)",
+    "rgb": [255, 103, 0]
+  },
+  "saffron": {
+    "name": "Saffron",
+    "rgb": [244, 196, 48]
+  },
+  "salmon": {
+    "name": "Salmon",
+    "rgb": [255, 140, 105]
+  },
+  "salmon_pink": {
+    "name": "Salmon Pink",
+    "rgb": [255, 145, 164]
+  },
+  "sand": {
+    "name": "Sand",
+    "rgb": [194, 178, 128]
+  },
+  "sand_dune": {
+    "name": "Sand Dune",
+    "rgb": [150, 113, 23]
+  },
+  "sandstorm": {
+    "name": "Sandstorm",
+    "rgb": [236, 213, 64]
+  },
+  "sandy_brown": {
+    "name": "Sandy Brown",
+    "rgb": [244, 164, 96]
+  },
+  "sandy_taupe": {
+    "name": "Sandy Taupe",
+    "rgb": [150, 113, 23]
+  },
+  "sangria": {
+    "name": "Sangria",
+    "rgb": [146, 0, 10]
+  },
+  "sap_green": {
+    "name": "Sap Green",
+    "rgb": [80, 125, 42]
+  },
+  "sapphire": {
+    "name": "Sapphire",
+    "rgb": [15, 82, 186]
+  },
+  "sapphire_blue": {
+    "name": "Sapphire Blue",
+    "rgb": [0, 103, 165]
+  },
+  "satin_sheen_gold": {
+    "name": "Satin Sheen Gold",
+    "rgb": [203, 161, 53]
+  },
+  "scarlet": {
+    "name": "Scarlet",
+    "rgb": [255, 36, 0]
+  },
+  "scarlet_crayola": {
+    "name": "Scarlet (Crayola)",
+    "rgb": [253, 14, 53]
+  },
+  "school_bus_yellow": {
+    "name": "School Bus Yellow",
+    "rgb": [255, 216, 0]
+  },
+  "screamin_green": {
+    "name": "Screamin' Green",
+    "rgb": [118, 255, 122]
+  },
+  "sea_blue": {
+    "name": "Sea Blue",
+    "rgb": [0, 105, 148]
+  },
+  "sea_green": {
+    "name": "Sea Green",
+    "rgb": [46, 139, 87]
+  },
+  "seal_brown": {
+    "name": "Seal Brown",
+    "rgb": [50, 20, 20]
+  },
+  "seashell": {
+    "name": "Seashell",
+    "rgb": [255, 245, 238]
+  },
+  "selective_yellow": {
+    "name": "Selective Yellow",
+    "rgb": [255, 186, 0]
+  },
+  "sepia": {
+    "name": "Sepia",
+    "rgb": [112, 66, 20]
+  },
+  "shadow": {
+    "name": "Shadow",
+    "rgb": [138, 121, 93]
+  },
+  "shamrock_green": {
+    "name": "Shamrock Green",
+    "rgb": [0, 158, 96]
+  },
+  "shocking_pink": {
+    "name": "Shocking Pink",
+    "rgb": [252, 15, 192]
+  },
+  "shocking_pink_crayola": {
+    "name": "Shocking Pink (Crayola)",
+    "rgb": [255, 111, 255]
+  },
+  "sienna": {
+    "name": "Sienna",
+    "rgb": [136, 45, 23]
+  },
+  "silver": {
+    "name": "Silver",
+    "rgb": [192, 192, 192]
+  },
+  "sinopia": {
+    "name": "Sinopia",
+    "rgb": [203, 65, 11]
+  },
+  "skobeloff": {
+    "name": "Skobeloff",
+    "rgb": [0, 116, 116]
+  },
+  "sky_blue": {
+    "name": "Sky Blue",
+    "rgb": [135, 206, 235]
+  },
+  "sky_magenta": {
+    "name": "Sky Magenta",
+    "rgb": [207, 113, 175]
+  },
+  "slate_blue": {
+    "name": "Slate Blue",
+    "rgb": [106, 90, 205]
+  },
+  "slate_gray": {
+    "name": "Slate Gray",
+    "rgb": [112, 128, 144]
+  },
+  "smalt_dark_powder_blue": {
+    "name": "Smalt (Dark Powder Blue)",
+    "rgb": [0, 51, 153]
+  },
+  "smokey_topaz": {
+    "name": "Smokey Topaz",
+    "rgb": [147, 61, 65]
+  },
+  "smoky_black": {
+    "name": "Smoky Black",
+    "rgb": [16, 12, 8]
+  },
+  "snow": {
+    "name": "Snow",
+    "rgb": [255, 250, 250]
+  },
+  "spiro_disco_ball": {
+    "name": "Spiro Disco Ball",
+    "rgb": [15, 192, 252]
+  },
+  "spring_bud": {
+    "name": "Spring Bud",
+    "rgb": [167, 252, 0]
+  },
+  "spring_green": {
+    "name": "Spring Green",
+    "rgb": [0, 255, 127]
+  },
+  "st_patrick_s_blue": {
+    "name": "St. Patrick'S Blue",
+    "rgb": [35, 41, 122]
+  },
+  "steel_blue": {
+    "name": "Steel Blue",
+    "rgb": [70, 130, 180]
+  },
+  "stil_de_grain_yellow": {
+    "name": "Stil De Grain Yellow",
+    "rgb": [250, 218, 94]
+  },
+  "stizza": {
+    "name": "Stizza",
+    "rgb": [153, 0, 0]
+  },
+  "stormcloud": {
+    "name": "Stormcloud",
+    "rgb": [79, 102, 106]
+  },
+  "straw": {
+    "name": "Straw",
+    "rgb": [228, 217, 111]
+  },
+  "sunglow": {
+    "name": "Sunglow",
+    "rgb": [255, 204, 51]
+  },
+  "sunset": {
+    "name": "Sunset",
+    "rgb": [250, 214, 165]
+  },
+  "tan": {
+    "name": "Tan",
+    "rgb": [210, 180, 140]
+  },
+  "tangelo": {
+    "name": "Tangelo",
+    "rgb": [249, 77, 0]
+  },
+  "tangerine": {
+    "name": "Tangerine",
+    "rgb": [242, 133, 0]
+  },
+  "tangerine_yellow": {
+    "name": "Tangerine Yellow",
+    "rgb": [255, 204, 0]
+  },
+  "tango_pink": {
+    "name": "Tango Pink",
+    "rgb": [228, 113, 122]
+  },
+  "taupe": {
+    "name": "Taupe",
+    "rgb": [72, 60, 50]
+  },
+  "taupe_gray": {
+    "name": "Taupe Gray",
+    "rgb": [139, 133, 137]
+  },
+  "tea_green": {
+    "name": "Tea Green",
+    "rgb": [208, 240, 192]
+  },
+  "tea_rose_orange": {
+    "name": "Tea Rose (Orange)",
+    "rgb": [248, 131, 121]
+  },
+  "tea_rose_rose": {
+    "name": "Tea Rose (Rose)",
+    "rgb": [244, 194, 194]
+  },
+  "teal": {
+    "name": "Teal",
+    "rgb": [0, 128, 128]
+  },
+  "teal_blue": {
+    "name": "Teal Blue",
+    "rgb": [54, 117, 136]
+  },
+  "teal_green": {
+    "name": "Teal Green",
+    "rgb": [0, 130, 127]
+  },
+  "telemagenta": {
+    "name": "Telemagenta",
+    "rgb": [207, 52, 118]
+  },
+  "tenn_tawny": {
+    "name": "Tenné (Tawny)",
+    "rgb": [205, 87, 0]
+  },
+  "terra_cotta": {
+    "name": "Terra Cotta",
+    "rgb": [226, 114, 91]
+  },
+  "thistle": {
+    "name": "Thistle",
+    "rgb": [216, 191, 216]
+  },
+  "thulian_pink": {
+    "name": "Thulian Pink",
+    "rgb": [222, 111, 161]
+  },
+  "tickle_me_pink": {
+    "name": "Tickle Me Pink",
+    "rgb": [252, 137, 172]
+  },
+  "tiffany_blue": {
+    "name": "Tiffany Blue",
+    "rgb": [10, 186, 181]
+  },
+  "tiger_s_eye": {
+    "name": "Tiger'S Eye",
+    "rgb": [224, 141, 60]
+  },
+  "timberwolf": {
+    "name": "Timberwolf",
+    "rgb": [219, 215, 210]
+  },
+  "titanium_yellow": {
+    "name": "Titanium Yellow",
+    "rgb": [238, 230, 0]
+  },
+  "tomato": {
+    "name": "Tomato",
+    "rgb": [255, 99, 71]
+  },
+  "toolbox": {
+    "name": "Toolbox",
+    "rgb": [116, 108, 192]
+  },
+  "topaz": {
+    "name": "Topaz",
+    "rgb": [255, 200, 124]
+  },
+  "tractor_red": {
+    "name": "Tractor Red",
+    "rgb": [253, 14, 53]
+  },
+  "trolley_grey": {
+    "name": "Trolley Grey",
+    "rgb": [128, 128, 128]
+  },
+  "tropical_rain_forest": {
+    "name": "Tropical Rain Forest",
+    "rgb": [0, 117, 94]
+  },
+  "true_blue": {
+    "name": "True Blue",
+    "rgb": [0, 115, 207]
+  },
+  "tufts_blue": {
+    "name": "Tufts Blue",
+    "rgb": [65, 125, 193]
+  },
+  "tumbleweed": {
+    "name": "Tumbleweed",
+    "rgb": [222, 170, 136]
+  },
+  "turkish_rose": {
+    "name": "Turkish Rose",
+    "rgb": [181, 114, 129]
+  },
+  "turquoise": {
+    "name": "Turquoise",
+    "rgb": [48, 213, 200]
+  },
+  "turquoise_blue": {
+    "name": "Turquoise Blue",
+    "rgb": [0, 255, 239]
+  },
+  "turquoise_green": {
+    "name": "Turquoise Green",
+    "rgb": [160, 214, 180]
+  },
+  "tuscan_red": {
+    "name": "Tuscan Red",
+    "rgb": [124, 72, 72]
+  },
+  "twilight_lavender": {
+    "name": "Twilight Lavender",
+    "rgb": [138, 73, 107]
+  },
+  "tyrian_purple": {
+    "name": "Tyrian Purple",
+    "rgb": [102, 2, 60]
+  },
+  "ua_blue": {
+    "name": "Ua Blue",
+    "rgb": [0, 51, 170]
+  },
+  "ua_red": {
+    "name": "Ua Red",
+    "rgb": [217, 0, 76]
+  },
+  "ube": {
+    "name": "Ube",
+    "rgb": [136, 120, 195]
+  },
+  "ucla_blue": {
+    "name": "Ucla Blue",
+    "rgb": [83, 104, 149]
+  },
+  "ucla_gold": {
+    "name": "Ucla Gold",
+    "rgb": [255, 179, 0]
+  },
+  "ufo_green": {
+    "name": "Ufo Green",
+    "rgb": [60, 208, 112]
+  },
+  "ultra_pink": {
+    "name": "Ultra Pink",
+    "rgb": [255, 111, 255]
+  },
+  "ultramarine": {
+    "name": "Ultramarine",
+    "rgb": [18, 10, 143]
+  },
+  "ultramarine_blue": {
+    "name": "Ultramarine Blue",
+    "rgb": [65, 102, 245]
+  },
+  "umber": {
+    "name": "Umber",
+    "rgb": [99, 81, 71]
+  },
+  "unbleached_silk": {
+    "name": "Unbleached Silk",
+    "rgb": [255, 221, 202]
+  },
+  "united_nations_blue": {
+    "name": "United Nations Blue",
+    "rgb": [91, 146, 229]
+  },
+  "university_of_california_gold": {
+    "name": "University Of California Gold",
+    "rgb": [183, 135, 39]
+  },
+  "unmellow_yellow": {
+    "name": "Unmellow Yellow",
+    "rgb": [255, 255, 102]
+  },
+  "up_forest_green": {
+    "name": "Up Forest Green",
+    "rgb": [1, 68, 33]
+  },
+  "up_maroon": {
+    "name": "Up Maroon",
+    "rgb": [123, 17, 19]
+  },
+  "upsdell_red": {
+    "name": "Upsdell Red",
+    "rgb": [174, 32, 41]
+  },
+  "urobilin": {
+    "name": "Urobilin",
+    "rgb": [225, 173, 33]
+  },
+  "usafa_blue": {
+    "name": "Usafa Blue",
+    "rgb": [0, 79, 152]
+  },
+  "usc_cardinal": {
+    "name": "Usc Cardinal",
+    "rgb": [153, 0, 0]
+  },
+  "usc_gold": {
+    "name": "Usc Gold",
+    "rgb": [255, 204, 0]
+  },
+  "utah_crimson": {
+    "name": "Utah Crimson",
+    "rgb": [211, 0, 63]
+  },
+  "vanilla": {
+    "name": "Vanilla",
+    "rgb": [243, 229, 171]
+  },
+  "vegas_gold": {
+    "name": "Vegas Gold",
+    "rgb": [197, 179, 88]
+  },
+  "venetian_red": {
+    "name": "Venetian Red",
+    "rgb": [200, 8, 21]
+  },
+  "verdigris": {
+    "name": "Verdigris",
+    "rgb": [67, 179, 174]
+  },
+  "vermilion_cinnabar": {
+    "name": "Vermilion (Cinnabar)",
+    "rgb": [227, 66, 52]
+  },
+  "vermilion_plochere": {
+    "name": "Vermilion (Plochere)",
+    "rgb": [217, 96, 59]
+  },
+  "veronica": {
+    "name": "Veronica",
+    "rgb": [160, 32, 240]
+  },
+  "violet": {
+    "name": "Violet",
+    "rgb": [143, 0, 255]
+  },
+  "violet_blue": {
+    "name": "Violet-Blue",
+    "rgb": [50, 74, 178]
+  },
+  "violet_color_wheel": {
+    "name": "Violet (Color Wheel)",
+    "rgb": [127, 0, 255]
+  },
+  "violet_ryb": {
+    "name": "Violet (Ryb)",
+    "rgb": [134, 1, 175]
+  },
+  "violet_web": {
+    "name": "Violet (Web)",
+    "rgb": [238, 130, 238]
+  },
+  "viridian": {
+    "name": "Viridian",
+    "rgb": [64, 130, 109]
+  },
+  "vivid_auburn": {
+    "name": "Vivid Auburn",
+    "rgb": [146, 39, 36]
+  },
+  "vivid_burgundy": {
+    "name": "Vivid Burgundy",
+    "rgb": [159, 29, 53]
+  },
+  "vivid_cerise": {
+    "name": "Vivid Cerise",
+    "rgb": [218, 29, 129]
+  },
+  "vivid_tangerine": {
+    "name": "Vivid Tangerine",
+    "rgb": [255, 160, 137]
+  },
+  "vivid_violet": {
+    "name": "Vivid Violet",
+    "rgb": [159, 0, 255]
+  },
+  "warm_black": {
+    "name": "Warm Black",
+    "rgb": [0, 66, 66]
+  },
+  "waterspout": {
+    "name": "Waterspout",
+    "rgb": [164, 244, 249]
+  },
+  "wenge": {
+    "name": "Wenge",
+    "rgb": [100, 84, 82]
+  },
+  "wheat": {
+    "name": "Wheat",
+    "rgb": [245, 222, 179]
+  },
+  "white": {
+    "name": "White",
+    "rgb": [255, 255, 255]
+  },
+  "white_smoke": {
+    "name": "White Smoke",
+    "rgb": [245, 245, 245]
+  },
+  "wild_blue_yonder": {
+    "name": "Wild Blue Yonder",
+    "rgb": [162, 173, 208]
+  },
+  "wild_strawberry": {
+    "name": "Wild Strawberry",
+    "rgb": [255, 67, 164]
+  },
+  "wild_watermelon": {
+    "name": "Wild Watermelon",
+    "rgb": [252, 108, 133]
+  },
+  "wine": {
+    "name": "Wine",
+    "rgb": [114, 47, 55]
+  },
+  "wine_dregs": {
+    "name": "Wine Dregs",
+    "rgb": [103, 49, 71]
+  },
+  "wisteria": {
+    "name": "Wisteria",
+    "rgb": [201, 160, 220]
+  },
+  "wood_brown": {
+    "name": "Wood Brown",
+    "rgb": [193, 154, 107]
+  },
+  "xanadu": {
+    "name": "Xanadu",
+    "rgb": [115, 134, 120]
+  },
+  "yale_blue": {
+    "name": "Yale Blue",
+    "rgb": [15, 77, 146]
+  },
+  "yellow": {
+    "name": "Yellow",
+    "rgb": [255, 255, 0]
+  },
+  "yellow_green": {
+    "name": "Yellow-Green",
+    "rgb": [154, 205, 50]
+  },
+  "yellow_munsell": {
+    "name": "Yellow (Munsell)",
+    "rgb": [239, 204, 0]
+  },
+  "yellow_ncs": {
+    "name": "Yellow (Ncs)",
+    "rgb": [255, 211, 0]
+  },
+  "yellow_orange": {
+    "name": "Yellow Orange",
+    "rgb": [255, 174, 66]
+  },
+  "yellow_process": {
+    "name": "Yellow (Process)",
+    "rgb": [255, 239, 0]
+  },
+  "yellow_ryb": {
+    "name": "Yellow (Ryb)",
+    "rgb": [254, 254, 51]
+  },
+  "zaffre": {
+    "name": "Zaffre",
+    "rgb": [0, 20, 168]
+  },
+  "zinnwaldite_brown": {
+    "name": "Zinnwaldite Brown",
+    "rgb": [44, 22, 8]
+  }
+};
 App.registerClass("Widget", Widget, "");
 App.registerClass("App", App, "");
 App.registerClass("Label", Label, "");
@@ -5700,6 +9432,605 @@ App.registerClass("TabbedNotebook", TabbedNotebook, "");
 App.registerClass("SpriteWidget", SpriteWidget, "");
 App.registerClass("TileMap", TileMap, "");
 App.registerClass("LayeredTileMap", LayeredTileMap, "");
+class WebGLTileRenderer {
+  /**
+   * 
+   * @param {HTMLCanvasElement|OffscreenCanvas} canvas 
+   */
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.gl = /**@type {WebGLRenderingContext|null}*/
+    canvas.getContext("webgl", { alpha: true });
+    if (this.gl === null) throw Error(`WebGL context could not be retrieved from ${canvas}`);
+    const shaderData = this.initShaders();
+    this.shaderProgram = shaderData.program;
+    this.aPosition = shaderData.aPosition;
+    this.aTexCoord = shaderData.aTexCoord;
+    this.aColor = shaderData.aColor;
+    const gl = this.gl;
+    this.vertexBuffer = gl.createBuffer();
+    gl.disable(gl.DEPTH_TEST);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.BLEND);
+    this.numQuads = 1e3;
+    this.indexBuffer = gl.createBuffer();
+    this.vertexData = new Float32Array(this.numQuads * 6 * (2 + 2 + 4));
+    this.indexData = new Uint16Array(this.numQuads * 6);
+    for (let i = 0, j = 0; i < this.indexData.length; i += 6, j += 4) {
+      this.indexData.set([j, j + 1, j + 2, j + 2, j + 3, j], i);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indexData, gl.STATIC_DRAW);
+    this.textures = /* @__PURE__ */ new Map();
+    this.vertexCount = 0;
+    this.activeTexture = null;
+  }
+  initShaders() {
+    const gl = this.gl;
+    const vertSrc = `
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            attribute vec4 aColor;
+            uniform mat4 uProjectionMatrix;
+            uniform mat4 uModelMatrix;
+            varying vec2 vTexCoord;
+            varying vec4 vColor;
+            void main() {
+                gl_Position = uProjectionMatrix * uModelMatrix * vec4(aPosition, 0.0, 1.0);
+                vTexCoord = aTexCoord;
+                vColor = aColor;
+            }
+        `;
+    const fragSrc = `
+            precision mediump float;
+            varying vec2 vTexCoord;
+            varying vec4 vColor;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord) * vColor;
+            }
+        `;
+    const program = this.compileShaderProgram(vertSrc, fragSrc);
+    const aPosition = gl.getAttribLocation(program, "aPosition");
+    const aTexCoord = gl.getAttribLocation(program, "aTexCoord");
+    const aColor = gl.getAttribLocation(program, "aColor");
+    if (aPosition === void 0) throw Error("Could not bind aPosition");
+    if (aTexCoord === void 0) throw Error("Could not bind aTexCoord");
+    if (aColor === void 0) throw Error("Could not bind aColor");
+    return { program, aPosition, aTexCoord, aColor };
+  }
+  /**
+   * Compiles the vertex and fragement shader source into a webGL program
+   * @param {string} vertSrc vertex shader source
+   * @param {string} fragSrc fragmenet shader source
+   * @returns 
+   */
+  compileShaderProgram(vertSrc, fragSrc) {
+    const gl = this.gl;
+    const vertShader = this.compileShader(gl.VERTEX_SHADER, vertSrc);
+    const fragShader = this.compileShader(gl.FRAGMENT_SHADER, fragSrc);
+    if (vertShader === null) throw Error(`Error in vertShader ${vertShader}`);
+    if (fragShader === null) throw Error(`Error in fragShader ${fragShader}`);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertShader);
+    gl.attachShader(program, fragShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error("Shader link error:", gl.getProgramInfoLog(program));
+    }
+    gl.useProgram(program);
+    return program;
+  }
+  /**
+   * Handles the compilation of a single shader part (VERTEX or FRAGMENT)
+   * @param {number} type Should be one of gl.VERTEX_SHADER or gl.FRAGMENT_SHADER
+   * @param {string} src Source code of the shader
+   * @returns 
+   */
+  compileShader(type, src) {
+    const gl = this.gl;
+    const shader = gl.createShader(type);
+    if (shader === null) throw Error(`Invalid shader type ${type}`);
+    gl.shaderSource(shader, src);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      throw Error(`Shader compile error: ${gl.getShaderInfoLog(shader)}`);
+    }
+    return shader;
+  }
+  /**
+   * Registers the texture with assigned `name` to a specified `image`
+   * @param {string} name 
+   * @param {HTMLImageElement|OffscreenCanvas} image 
+   * @param {number|[number, number]} [tileDim=1] 
+   * @param {WebGLRenderingContextBase['NEAREST']|WebGLRenderingContextBase['LINEAR']|null} [interp=null]
+   */
+  registerTexture(name, image, tileDim = 1, interp = null, padding = 0) {
+    const gl = this.gl;
+    const texture = gl.createTexture();
+    const [tw, th] = tileDim instanceof Array ? tileDim : [tileDim, tileDim];
+    if (interp === null) interp = gl.NEAREST;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    const isPowerOfTwo = (value) => (value & value - 1) === 0;
+    const pot = isPowerOfTwo(image.width) && isPowerOfTwo(image.height);
+    if (pot) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, interp);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, interp);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.textures.set(name, { texture, width: image.width / (tw + padding), height: image.height / (th + padding), fracW: tw / (tw + padding), fracH: th / (th + padding) });
+  }
+  /**
+   * Start rendering configured for a particular tileScale (fix in each direction)
+   * @param {number} tileScale 
+   */
+  start(tileScale) {
+    const gl = this.gl;
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    const uProjectionMatrixLoc = gl.getUniformLocation(this.shaderProgram, "uProjectionMatrix");
+    const projectionMatrix = new Float32Array([
+      2 / this.canvas.width * tileScale,
+      0,
+      0,
+      0,
+      0,
+      -2 / this.canvas.height * tileScale,
+      0,
+      0,
+      // Flip Y so (0,0) is top-left
+      0,
+      0,
+      1,
+      0,
+      -1,
+      1,
+      0,
+      1
+    ]);
+    gl.uniformMatrix4fv(uProjectionMatrixLoc, false, projectionMatrix);
+    this.setRotation(0, 0, 0);
+  }
+  /**
+   * 
+   * @param {number} angle to rotate counter clockwise in radians
+   * @param {number} cx x position of the center 
+   * @param {number} cy y position of the center  
+   * @returns 
+   */
+  getRotationMatrix(angle, cx, cy) {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    return new Float32Array([
+      cosA,
+      sinA,
+      0,
+      0,
+      -sinA,
+      cosA,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      cx,
+      cy,
+      0,
+      1
+    ]);
+  }
+  /**
+   * 
+   * @param {number} angle to rotate counter clockwise in radians
+   * @param {number} cx x position of the center 
+   * @param {number} cy y position of the center  
+   * @returns 
+   */
+  setRotation(angle, cx, cy) {
+    const gl = this.gl;
+    const uModelMatrixLoc = gl.getUniformLocation(this.shaderProgram, "uModelMatrix");
+    const rotationMatrix = this.getRotationMatrix(angle, cx, cy);
+    gl.uniformMatrix4fv(uModelMatrixLoc, false, rotationMatrix);
+  }
+  /**
+   * Draws the texture segment into the `glCanvas`
+   * @param {string} name Name of texture to draw
+   * @param {number} sx source x position (left) in `tileScale` units specified in `start`
+   * @param {number} sy source y position (top) in `tileScale` units specified in `start`
+   * @param {number} sw source width in `tileScale` units specified in `start`
+   * @param {number} sh source height in `tileScale` units specified in `start`
+   * @param {number} dx destination x position (left) in the `tileDim[0]` units registered for the texture
+   * @param {number} dy destination y position (top) in the `tileDim[1]` units registered for the texture
+   * @param {number} dw destination width in the `tileDim[0]` units registered for the texture
+   * @param {number} dh destination height in the `tileDim[1]` units registered for the texture
+   * @param {[number, number, number, number]} tint the rgba values (between 0 and 1) to tint the region with
+   * @returns 
+   */
+  drawTexture(name, sx, sy, sw, sh, dx, dy, dw, dh, tint) {
+    if (!this.textures.has(name)) return;
+    const { texture, width, height, fracW, fracH } = this.textures.get(name);
+    if (this.activeTexture !== texture) {
+      if (this.activeTexture !== null) this.flush();
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+      this.activeTexture = texture;
+    }
+    const x1 = dx;
+    const y1 = dy;
+    const x2 = dx + dw;
+    const y2 = dy + dh;
+    const u1 = sx / width;
+    const v1 = sy / height;
+    const u2 = (sx + sw * fracW) / width;
+    const v22 = (sy + sh * fracH) / height;
+    const color = tint ?? [1, 1, 1, 1];
+    const baseIndex = this.vertexCount * 8;
+    const arr = this.vertexData;
+    arr.set([x1, y1, u1, v1, ...color], baseIndex);
+    arr.set([x2, y1, u2, v1, ...color], baseIndex + 8);
+    arr.set([x2, y2, u2, v22, ...color], baseIndex + 16);
+    arr.set([x1, y2, u1, v22, ...color], baseIndex + 24);
+    this.vertexCount += 4;
+    if (this.vertexCount >= this.numQuads * 4) this.flush();
+  }
+  /**
+   * Draws the texture segment into the `glCanvas` with a tint per vertex
+   * @param {string} name Name of texture to draw
+   * @param {number} sx source x position (left) in `tileScale` units specified in `start`
+   * @param {number} sy source y position (top) in `tileScale` units specified in `start`
+   * @param {number} sw source width in `tileScale` units specified in `start`
+   * @param {number} sh source height in `tileScale` units specified in `start`
+   * @param {number} dx destination x position (left) in the `tileDim[0]` units registered for the texture
+   * @param {number} dy destination y position (top) in the `tileDim[1]` units registered for the texture
+   * @param {number} dw destination width in the `tileDim[0]` units registered for the texture
+   * @param {number} dh destination height in the `tileDim[1]` units registered for the texture
+   * @param {[number, number, number, number][]} tints the rgba values (between 0 and 1) to tint each vertex from top-left clockwise
+   * @returns 
+   */
+  drawTextureTintedPerVertex(name, sx, sy, sw, sh, dx, dy, dw, dh, tints) {
+    if (!this.textures.has(name)) return;
+    const { texture, width, height, fracW, fracH } = this.textures.get(name);
+    if (this.activeTexture !== texture) {
+      if (this.activeTexture !== null) this.flush();
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+      this.activeTexture = texture;
+    }
+    const x1 = dx;
+    const y1 = dy;
+    const x2 = dx + dw;
+    const y2 = dy + dh;
+    const u1 = sx / width;
+    const v1 = sy / height;
+    const u2 = (sx + sw * fracW) / width;
+    const v22 = (sy + sh * fracH) / height;
+    const color = tints;
+    const baseIndex = this.vertexCount * 8;
+    const arr = this.vertexData;
+    arr.set([x1, y1, u1, v1, ...color[0]], baseIndex);
+    arr.set([x2, y1, u2, v1, ...color[1]], baseIndex + 8);
+    arr.set([x2, y2, u2, v22, ...color[2]], baseIndex + 16);
+    arr.set([x1, y2, u1, v22, ...color[3]], baseIndex + 24);
+    this.vertexCount += 4;
+    if (this.vertexCount >= this.numQuads * 4) this.flush();
+  }
+  /**
+   * Called internally or by the user to render out the current set of vertices
+   */
+  flush() {
+    if (this.vertexCount === 0) return;
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * 8));
+    gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 8 * 4, 0);
+    gl.enableVertexAttribArray(this.aPosition);
+    gl.vertexAttribPointer(this.aTexCoord, 2, gl.FLOAT, false, 8 * 4, 2 * 4);
+    gl.enableVertexAttribArray(this.aTexCoord);
+    gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, 8 * 4, 4 * 4);
+    gl.enableVertexAttribArray(this.aColor);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.drawElements(gl.TRIANGLES, this.vertexCount * 6 / 4, gl.UNSIGNED_SHORT, 0);
+    this.vertexCount = 0;
+  }
+  /**
+   * Clears out the client region of the glCanvas to the specified rgba values
+   * @param {number} r 
+   * @param {number} g 
+   * @param {number} b 
+   * @param {number} a 
+   */
+  clear(r = 0, g = 0, b = 0, a = 1) {
+    const gl = this.gl;
+    gl.clearColor(r, g, b, a);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    this.vertexCount = 0;
+  }
+}
+function packSprite$1(x, y, flip = false, angle = 0) {
+  return packSpriteInfo2D(vec2(x, y), flip, angle, 32 * 32, 32);
+}
+function posToIndex(x, y) {
+  return 32 * y + x;
+}
+const MetaLayers = Object.freeze({
+  layout: 0,
+  //Basic type of location
+  seen: 1,
+  //whether the characters have seen that part of the map
+  visible: 2,
+  //whether the characters can currently see that part of the map
+  traversible: 3,
+  //direction of traversibility
+  allowsSight: 4,
+  //direction of sight
+  allowsSound: 5,
+  cover: 6,
+  //direction that cover is provided from
+  moveCost: 7,
+  elevation: 8
+});
+const DecorationTiles = Object.freeze({
+  tree1: posToIndex(4, 5),
+  tree2: posToIndex(5, 5),
+  saplings: posToIndex(6, 5),
+  palm: posToIndex(7, 5),
+  well: posToIndex(11, 6),
+  logPile1: posToIndex(12, 6),
+  logPile2: posToIndex(13, 6),
+  logPile3: posToIndex(14, 6),
+  bed: packSprite$1(14, 3),
+  raft: packSprite$1(15, 4),
+  boat: packSprite$1(14, 4),
+  berries: packSprite$1(5, 4),
+  pickedBerries: packSprite$1(4, 4),
+  sword: packSprite$1(6, 4),
+  bow: packSprite$1(7, 4),
+  goldKey: packSprite$1(10, 5),
+  bag: packSprite$1(9, 7),
+  meat: packSprite$1(7, 8),
+  reservoir: packSprite$1(11, 6),
+  fire1: packSprite$1(9, 8),
+  fire2: packSprite$1(10, 8),
+  table: packSprite$1(12, 5),
+  lava: packSprite$1(3, 8),
+  aimer: packSprite$1(0, 7)
+});
+const spriteSheetIndex = Object.freeze({
+  black: posToIndex(3, 14),
+  ocean: posToIndex(10, 12),
+  rocky: posToIndex(2, 14),
+  grassy: posToIndex(0, 15),
+  sand: posToIndex(0, 14),
+  floor: posToIndex(2, 1),
+  cliffS: posToIndex(5, 14),
+  rockyE: posToIndex(5, 15),
+  rockyN: packSpriteInfo2D(vec2(5, 15), false, 3, 32 * 32, 32),
+  rockyW: packSprite$1(5, 15, true),
+  wallE: packSprite$1(3, 1),
+  wallN: packSprite$1(1, 0),
+  wallS: packSprite$1(1, 0),
+  wallW: packSprite$1(0, 1),
+  wallNE: packSprite$1(3, 0),
+  wallNW: packSprite$1(0, 0),
+  wallSE: packSprite$1(3, 2),
+  wallSW: packSprite$1(0, 2),
+  wallNES: packSprite$1(0, 3),
+  wallNEW: packSprite$1(2, 3),
+  wallNSW: packSprite$1(3, 3),
+  wallESW: packSprite$1(1, 3),
+  doorway: posToIndex(2, 2),
+  doorwayW: posToIndex(16, 5),
+  doorwayE: posToIndex(17, 5),
+  window: posToIndex(1, 2),
+  windowW: posToIndex(15, 5),
+  windowE: posToIndex(14, 5),
+  roof: posToIndex(16, 5),
+  beachN: packSprite$1(1, 12),
+  beachE: packSprite$1(0, 11),
+  beachS: packSprite$1(1, 10),
+  beachW: packSprite$1(2, 11),
+  beachNE: packSprite$1(0, 12),
+  beachSE: packSprite$1(0, 10),
+  beachSW: packSprite$1(2, 10),
+  beachNW: packSprite$1(2, 12),
+  beachNS: packSprite$1(1, 14),
+  beachEW: packSprite$1(1, 14),
+  beachNES: packSprite$1(0, 11),
+  beachNEW: packSprite$1(1, 12),
+  beachNSW: packSprite$1(2, 11),
+  beachESW: packSprite$1(1, 10),
+  river1EW: packSprite$1(8, 14),
+  river2EW: packSprite$1(8, 15),
+  river1NE: packSprite$1(9, 14, false, 3),
+  river2NE: packSprite$1(9, 15, false, 3),
+  river1SE: packSprite$1(9, 14, false, 0),
+  river2SE: packSprite$1(9, 15, false, 0),
+  river1SW: packSprite$1(9, 14, false, 1),
+  river2SW: packSprite$1(9, 15, false, 1),
+  river1NW: packSprite$1(9, 14, false, 2),
+  river2NW: packSprite$1(9, 15, false, 2),
+  river1NS: packSprite$1(10, 14),
+  river2NS: packSprite$1(10, 15),
+  riverE: packSprite$1(11, 14),
+  riverN: packSprite$1(11, 14, false, 3),
+  riverW: packSprite$1(11, 14, false, 2),
+  riverS: packSprite$1(11, 14, false, 1),
+  riverWaterFallS: packSprite$1(12, 15),
+  riverWaterFallE: packSprite$1(11, 15),
+  riverWaterFallW: packSprite$1(11, 15, true),
+  riverWaterFallN: packSprite$1(12, 14)
+});
+const voxelNames = Object.freeze({
+  rocky: 1,
+  rockyLedgeE: 2,
+  rockyLedgeW: 3,
+  rockyLedgeN: 4,
+  grassy: 5,
+  grassyLedgeE: 6,
+  grassyLedgeW: 7,
+  grassyLedgeN: 8,
+  sand: 9,
+  beachFront: 10,
+  floor: 11,
+  path: 12,
+  ocean: 13,
+  pool: 15,
+  wallN: 16,
+  wallE: 17,
+  wallS: 18,
+  wallW: 19,
+  wallNE: 20,
+  wallNW: 21,
+  wallSE: 22,
+  wallSW: 23,
+  wallNES: 24,
+  wallNEW: 25,
+  wallNSW: 26,
+  wallESW: 27,
+  doorwayN: 28,
+  doorwayS: 29,
+  doorwayE: 30,
+  doorwayW: 31,
+  windowN: 32,
+  windowS: 33,
+  windowE: 34,
+  windowW: 35,
+  roof: 36,
+  beachN: 37,
+  beachE: 38,
+  beachS: 39,
+  beachW: 40,
+  beachNE: 41,
+  beachSE: 42,
+  beachSW: 43,
+  beachNW: 44,
+  beachNS: 45,
+  beachEW: 46,
+  beachNES: 47,
+  beachNEW: 48,
+  beachNSW: 49,
+  beachESW: 50,
+  streamN: 51,
+  streamE: 52,
+  streamS: 53,
+  streamW: 54,
+  streamNS: 55,
+  streamEW: 56,
+  streamNE: 57,
+  streamSE: 58,
+  streamNW: 59,
+  streamSW: 60,
+  tree1: 64,
+  tree2: 65,
+  saplings: 66,
+  palm: 67,
+  well: 68,
+  logPile1: 69,
+  logPile2: 70,
+  logPile3: 71,
+  bed: 72,
+  raft: 73,
+  boat: 74,
+  berries: 75,
+  pickedBerries: 76,
+  sword: 77,
+  bow: 78,
+  goldKey: 79,
+  bag: 80,
+  meat: 81,
+  reservoir: 82,
+  fire1: 83,
+  fire2: 84,
+  table: 85,
+  lava: 86
+});
+const voxelIndex = Object.freeze({
+  [voxelNames.rocky]: [spriteSheetIndex.rocky, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.grassy]: [spriteSheetIndex.grassy, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.sand]: [spriteSheetIndex.sand],
+  [voxelNames.beachFront]: [spriteSheetIndex.sand],
+  [voxelNames.floor]: [void 0, void 0, void 0, spriteSheetIndex.floor],
+  [voxelNames.streamN]: [spriteSheetIndex.riverN, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.rockyE],
+  [voxelNames.streamE]: [spriteSheetIndex.riverE, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamS]: [spriteSheetIndex.riverS, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.streamW]: [spriteSheetIndex.riverW, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.streamNS]: [spriteSheetIndex.river1NS, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.rockyE],
+  [voxelNames.streamEW]: [spriteSheetIndex.river1EW, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.rockyN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamNE]: [spriteSheetIndex.river1NE, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamSE]: [spriteSheetIndex.river1SE, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamSW]: [spriteSheetIndex.river1SW, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.streamNW]: [spriteSheetIndex.river1NW, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.rockyE],
+  // [voxelNames.path]:          [0, 0, 0, 0],
+  // [voxelNames.runningWater]:  [0, 0, 0, 0],
+  [voxelNames.ocean]: [spriteSheetIndex.ocean],
+  // [voxelNames.pool]:          [0, 0, 0, 0],
+  [voxelNames.wallN]: [void 0, spriteSheetIndex.wallN, void 0],
+  [voxelNames.wallS]: [void 0, spriteSheetIndex.wallS, void 0],
+  [voxelNames.wallE]: [void 0, void 0, void 0, spriteSheetIndex.wallE],
+  [voxelNames.wallW]: [void 0, void 0, void 0, spriteSheetIndex.wallW],
+  [voxelNames.wallNE]: [void 0, spriteSheetIndex.wallNE, void 0],
+  [voxelNames.wallNW]: [void 0, spriteSheetIndex.wallNW, void 0],
+  [voxelNames.wallSE]: [void 0, spriteSheetIndex.wallSE, void 0],
+  [voxelNames.wallSW]: [void 0, spriteSheetIndex.wallSW, void 0],
+  [voxelNames.wallNES]: [void 0, spriteSheetIndex.wallNES, void 0],
+  [voxelNames.wallNEW]: [void 0, spriteSheetIndex.wallNEW, void 0],
+  [voxelNames.wallNSW]: [void 0, spriteSheetIndex.wallNSW, void 0],
+  [voxelNames.wallESW]: [void 0, spriteSheetIndex.wallESW, void 0],
+  [voxelNames.doorwayN]: [void 0, void 0, spriteSheetIndex.doorway],
+  [voxelNames.doorwayS]: [void 0, spriteSheetIndex.doorway, void 0],
+  [voxelNames.doorwayE]: [void 0, void 0, void 0, spriteSheetIndex.doorwayE],
+  [voxelNames.doorwayW]: [void 0, void 0, void 0, spriteSheetIndex.doorwayW],
+  [voxelNames.windowN]: [void 0, spriteSheetIndex.window, void 0],
+  [voxelNames.windowS]: [void 0, spriteSheetIndex.window, void 0],
+  [voxelNames.windowE]: [void 0, void 0, void 0, spriteSheetIndex.windowE],
+  [voxelNames.windowW]: [void 0, void 0, void 0, spriteSheetIndex.windowW],
+  [voxelNames.roof]: [void 0, void 0, void 0, spriteSheetIndex.roof],
+  [voxelNames.beachN]: [spriteSheetIndex.beachN],
+  [voxelNames.beachE]: [spriteSheetIndex.beachE],
+  [voxelNames.beachS]: [spriteSheetIndex.beachS],
+  [voxelNames.beachW]: [spriteSheetIndex.beachW],
+  [voxelNames.beachNE]: [spriteSheetIndex.beachNE],
+  [voxelNames.beachSE]: [spriteSheetIndex.beachSE],
+  [voxelNames.beachSW]: [spriteSheetIndex.beachSW],
+  [voxelNames.beachNW]: [spriteSheetIndex.beachNW],
+  [voxelNames.beachNS]: [spriteSheetIndex.beachNS],
+  [voxelNames.beachEW]: [spriteSheetIndex.beachEW],
+  [voxelNames.beachNES]: [spriteSheetIndex.beachNES],
+  [voxelNames.beachNEW]: [spriteSheetIndex.beachNEW],
+  [voxelNames.beachNSW]: [spriteSheetIndex.beachNSW],
+  [voxelNames.beachESW]: [spriteSheetIndex.beachESW],
+  [voxelNames.tree1]: [void 0, void 0, void 0, DecorationTiles.tree1],
+  [voxelNames.tree2]: [void 0, void 0, void 0, DecorationTiles.tree2],
+  [voxelNames.saplings]: [void 0, void 0, void 0, DecorationTiles.saplings],
+  [voxelNames.palm]: [void 0, void 0, void 0, DecorationTiles.palm],
+  [voxelNames.well]: [void 0, void 0, void 0, DecorationTiles.well],
+  [voxelNames.logPile1]: [void 0, void 0, void 0, DecorationTiles.logPile1],
+  [voxelNames.logPile2]: [void 0, void 0, void 0, DecorationTiles.logPile2],
+  [voxelNames.logPile3]: [void 0, void 0, void 0, DecorationTiles.logPile3],
+  [voxelNames.bed]: [void 0, void 0, void 0, DecorationTiles.bed],
+  [voxelNames.raft]: [void 0, void 0, void 0, DecorationTiles.raft],
+  [voxelNames.boat]: [void 0, void 0, void 0, DecorationTiles.boat],
+  [voxelNames.berries]: [void 0, void 0, void 0, DecorationTiles.berries],
+  [voxelNames.pickedBerries]: [void 0, void 0, void 0, DecorationTiles.pickedBerries],
+  [voxelNames.sword]: [void 0, void 0, void 0, DecorationTiles.sword],
+  [voxelNames.bow]: [void 0, void 0, void 0, DecorationTiles.bow],
+  [voxelNames.goldKey]: [void 0, void 0, void 0, DecorationTiles.goldKey],
+  [voxelNames.bag]: [void 0, void 0, void 0, DecorationTiles.bag],
+  [voxelNames.meat]: [void 0, void 0, void 0, DecorationTiles.meat],
+  [voxelNames.reservoir]: [void 0, void 0, void 0, DecorationTiles.reservoir],
+  [voxelNames.fire1]: [void 0, void 0, void 0, DecorationTiles.fire1],
+  [voxelNames.fire2]: [void 0, void 0, void 0, DecorationTiles.fire2],
+  [voxelNames.table]: [void 0, void 0, void 0, DecorationTiles.table],
+  [voxelNames.lava]: [void 0, void 0, void 0, DecorationTiles.lava]
+});
 const Facing = {
   north: 0,
   east: 1,
@@ -5748,119 +10079,301 @@ class Entity extends SpriteWidget {
     return false;
   }
 }
-const packSprite$1 = (x, y, flip) => packSpriteInfo2D(vec2(x, y), flip, 0, 32 * 32, 32);
+class StaticEntity {
+  traversible = 15;
+  allowsSight = 15;
+  name = "";
+  /**@type {number} */
+  voxelIndex = voxelNames.tree1;
+  /**
+   * 
+   * @param {import("eskv/lib/modules/geometry.js").VecLike} pos 
+   * @param {string} [name=''] 
+   * @param {number|null} [voxelIndex=null] 
+   */
+  constructor(pos, name = "", voxelIndex2 = null) {
+    this.pos = new Vec2(pos);
+    if (name != "") this.name = name;
+    if (voxelIndex2 !== null) this.voxelIndex = voxelIndex2;
+  }
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (character instanceof PlayerCharacter) {
+      map.popMessage(this.name);
+      return true;
+    }
+    return false;
+  }
+}
+class Berry extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.berries
+  );
+  name = "berries";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    if (this.voxelIndex === voxelNames.berries) {
+      if (character.hunger < 5) {
+        character.hunger = character.hunger + 1;
+      }
+      this.voxelIndex = voxelNames.pickedBerries;
+      map.updateTileInfo(this.pos);
+      map.popMessage("Ate some berries");
+      return true;
+    } else {
+      map.popMessage("No berries left");
+      return false;
+    }
+  }
+}
+class Well extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.well
+  );
+  name = "well";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    if (character.thirst < character.maxThirst) {
+      character.thirst = character.maxThirst;
+      map.popMessage("Drank water");
+      return true;
+    }
+    map.popMessage("Not thirsty");
+    return false;
+  }
+}
+class Bed extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.bed
+  );
+  name = "bed";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    if (map.turn >= map.daytimeLength) {
+      map.popMessage("Night night");
+      map.endDay();
+      return true;
+    }
+    map.popMessage("Better after dark");
+    return false;
+  }
+}
+class Boat extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.boat
+  );
+  name = "boat";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    map.popMessage("Thanks for playing my 7DRL entry. Enjoy the trip home.\n\n --Spillz", 0);
+    App.get().gameOver = true;
+    return true;
+  }
+}
+class Lava extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.lava
+  );
+  name = "Lave";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    map.popMessage("You touched lava and now you are dead.", 0);
+    character.health = 0;
+    character.state = "dead";
+    return true;
+  }
+}
+class ActionItem extends BoxLayout {
+  /** @type {'vertical'|'horizontal'} */
+  orientation = "vertical";
+  keyControl = "";
+  constructor(props = {}) {
+    super();
+    this.hints = { h: "5" };
+    this.sprite = new SpriteWidget({ spriteSheet: App.resources["sprites"] });
+    this.label = new Label({ hints: { h: "1" } });
+    this.children = [
+      this.sprite,
+      this.label
+    ];
+    if (props) this.updateProperties(props);
+  }
+  /**
+   * To perform an action as the player, first it must be requested to provide
+   * the UI with information that maybe needed (e.g., what the target of the action
+   * will be)
+   * @param {Character} actor 
+   * @param {GameMap} map 
+   * @param {ActionResponseData} response 
+   * @return {ActionResponseData} 
+   */
+  request(actor, map, response) {
+    return { result: "notAvailable" };
+  }
+  get name() {
+    return this.label.text;
+  }
+  set name(value) {
+    this.label.text = value;
+  }
+}
+function packSprite(x, y, flip, angle = 0) {
+  return packSpriteInfo2D(vec2(x, y), flip, angle, 32 * 32, 32);
+}
 const characterAnimations = {
   randy: {
     standing: [
-      laf([packSprite$1(0, 16, false)], [[0, 0]])
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
     ],
     walkingS: [
-      laf([packSprite$1(0, 16, false)], [[0, 0]]),
-      laf([packSprite$1(1, 16, false)], [[0, 0]]),
-      laf([packSprite$1(0, 16, false)], [[0, 0]]),
-      laf([packSprite$1(1, 16, true)], [[0, 0]]),
-      laf([packSprite$1(0, 16, false)], [[0, 0]]),
-      laf([packSprite$1(0, 16, false)], [[0, 0]])
+      laf([packSprite(0, 16, false)], [[0, -0.25]]),
+      laf([packSprite(1, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]]),
+      laf([packSprite(1, 16, true)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
     ],
     walkingN: [
-      laf([packSprite$1(2, 16, false)], [[0, 0]]),
-      laf([packSprite$1(3, 16, false)], [[0, 0]]),
-      laf([packSprite$1(2, 16, false)], [[0, 0]]),
-      laf([packSprite$1(3, 16, true)], [[0, 0]]),
-      laf([packSprite$1(2, 16, false)], [[0, 0]]),
-      laf([packSprite$1(4, 16, false)], [[0, 0]]),
-      laf([packSprite$1(0, 16, false)], [[0, 0]])
+      laf([packSprite(2, 16, false)], [[0, -0.25]]),
+      laf([packSprite(3, 16, false)], [[0, -0.25]]),
+      laf([packSprite(2, 16, false)], [[0, -0.25]]),
+      laf([packSprite(3, 16, true)], [[0, -0.25]]),
+      laf([packSprite(2, 16, false)], [[0, -0.25]]),
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
     ],
     walkingE: [
-      laf([packSprite$1(4, 16, false)], [[0, 0]]),
-      laf([packSprite$1(5, 16, false)], [[0, 0]]),
-      laf([packSprite$1(4, 16, false)], [[0, 0]]),
-      laf([packSprite$1(5, 16, false)], [[0, 0]]),
-      laf([packSprite$1(4, 16, false)], [[0, 0]]),
-      laf([packSprite$1(0, 16, false)], [[0, 0]])
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(5, 16, false)], [[0, -0.25]]),
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(5, 16, false)], [[0, -0.25]]),
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
     ],
     walkingW: [
-      laf([packSprite$1(4, 16, true)], [[0, 0]]),
-      laf([packSprite$1(5, 16, true)], [[0, 0]]),
-      laf([packSprite$1(4, 16, true)], [[0, 0]]),
-      laf([packSprite$1(5, 16, true)], [[0, 0]]),
-      laf([packSprite$1(4, 16, true)], [[0, 0]]),
-      laf([packSprite$1(0, 16, false)], [[0, 0]])
+      laf([packSprite(4, 16, true)], [[0, -0.25]]),
+      laf([packSprite(5, 16, true)], [[0, -0.25]]),
+      laf([packSprite(4, 16, true)], [[0, -0.25]]),
+      laf([packSprite(5, 16, true)], [[0, -0.25]]),
+      laf([packSprite(4, 16, true)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
     ],
     dead: [
-      laf([packSprite$1(6, 16, false)], [[0, 0]])
+      laf([packSprite(6, 16, false)], [[0, -0.25]])
+    ],
+    sleeping: [
+      laf([packSprite(6, 16, false)], [[0, -0.25]])
     ]
   },
   dog: {
     standing: [
-      laf([packSprite$1(0, 19, false)], [[0, 0]])
+      laf([packSprite(0, 19, false)], [[0, 0]])
     ],
     walkingS: [
-      laf([packSprite$1(0, 19, false)], [[0, 0]]),
-      laf([packSprite$1(2, 19, false)], [[0, 0]]),
-      laf([packSprite$1(2, 19, false)], [[0, 0]]),
-      laf([packSprite$1(2, 19, false)], [[0, 0]]),
-      laf([packSprite$1(0, 19, false)], [[0, 0]])
+      laf([packSprite(0, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(0, 19, false)], [[0, 0]])
     ],
     walkingN: [
-      laf([packSprite$1(0, 19, true)], [[0, 0]]),
-      laf([packSprite$1(2, 19, true)], [[0, 0]]),
-      laf([packSprite$1(2, 19, true)], [[0, 0]]),
-      laf([packSprite$1(2, 19, true)], [[0, 0]]),
-      laf([packSprite$1(0, 19, true)], [[0, 0]])
+      laf([packSprite(0, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(0, 19, true)], [[0, 0]])
     ],
     walkingE: [
-      laf([packSprite$1(0, 19, false)], [[0, 0]]),
-      laf([packSprite$1(2, 19, false)], [[0, 0]]),
-      laf([packSprite$1(2, 19, false)], [[0, 0]]),
-      laf([packSprite$1(2, 19, false)], [[0, 0]]),
-      laf([packSprite$1(0, 19, false)], [[0, 0]])
+      laf([packSprite(0, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(0, 19, false)], [[0, 0]])
     ],
     walkingW: [
-      laf([packSprite$1(0, 19, true)], [[0, 0]]),
-      laf([packSprite$1(2, 19, true)], [[0, 0]]),
-      laf([packSprite$1(2, 19, true)], [[0, 0]]),
-      laf([packSprite$1(2, 19, true)], [[0, 0]]),
-      laf([packSprite$1(0, 19, true)], [[0, 0]])
+      laf([packSprite(0, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(0, 19, true)], [[0, 0]])
     ],
     dead: [
-      laf([packSprite$1(7, 8, false)], [[0, 0]])
+      laf([packSprite(7, 8, false)], [[0, 0]])
     ]
   },
   mouse: {
     standing: [
-      laf([packSprite$1(0, 17, false)], [[0, 0]])
+      laf([packSprite(0, 17, false)], [[0, 0]])
     ],
     walkingS: [
-      laf([packSprite$1(0, 17, false)], [[0, 0]]),
-      laf([packSprite$1(1, 17, false)], [[0, 0]]),
-      laf([packSprite$1(1, 17, false)], [[0, 0]]),
-      laf([packSprite$1(1, 17, false)], [[0, 0]]),
-      laf([packSprite$1(0, 17, false)], [[0, 0]])
+      laf([packSprite(0, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(0, 17, false)], [[0, 0]])
     ],
     walkingN: [
-      laf([packSprite$1(0, 17, true)], [[0, 0]]),
-      laf([packSprite$1(1, 17, true)], [[0, 0]]),
-      laf([packSprite$1(1, 17, true)], [[0, 0]]),
-      laf([packSprite$1(1, 17, true)], [[0, 0]]),
-      laf([packSprite$1(0, 17, true)], [[0, 0]])
+      laf([packSprite(0, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(0, 17, true)], [[0, 0]])
     ],
     walkingE: [
-      laf([packSprite$1(0, 17, false)], [[0, 0]]),
-      laf([packSprite$1(1, 17, false)], [[0, 0]]),
-      laf([packSprite$1(1, 17, false)], [[0, 0]]),
-      laf([packSprite$1(1, 17, false)], [[0, 0]]),
-      laf([packSprite$1(0, 17, false)], [[0, 0]])
+      laf([packSprite(0, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(0, 17, false)], [[0, 0]])
     ],
     walkingW: [
-      laf([packSprite$1(0, 17, true)], [[0, 0]]),
-      laf([packSprite$1(1, 17, true)], [[0, 0]]),
-      laf([packSprite$1(1, 17, true)], [[0, 0]]),
-      laf([packSprite$1(1, 17, true)], [[0, 0]]),
-      laf([packSprite$1(0, 17, true)], [[0, 0]])
+      laf([packSprite(0, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(0, 17, true)], [[0, 0]])
     ],
     dead: [
-      laf([packSprite$1(7, 8, false)], [[0, 0]])
+      laf([packSprite(7, 8, false)], [[0, 0]])
     ]
   }
 };
@@ -5935,6 +10448,8 @@ class Character extends Entity {
   animationState = "standing";
   /**@type {{[id:string]: LayeredAnimationFrame[]|number[]}|null} */
   animationGroup = null;
+  elevation = 0;
+  visionRange = 10;
   /**Grid location of the character on the map */
   gpos = vec2(0, 0);
   /**@type {eskv.Vec2[]} Array of waypoints that character will move along in patrol mode*/
@@ -5961,6 +10476,15 @@ class Character extends Entity {
     this.w = 1;
     this.h = 1;
     if (props) this.updateProperties(props);
+  }
+  on_state(e, o, v) {
+    if (v === "dead") {
+      this.x = this.gpos[0];
+      this.y = this.gpos[1] - this.elevation;
+      this._animation = null;
+      this.animationState = "dead";
+      return true;
+    }
   }
   on_actionInventory(e, o, v) {
     if (this.actionInventory) {
@@ -6017,26 +10541,27 @@ class Character extends Entity {
    * 
    * @param {GameMap} map 
    */
-  setupForLevelStart(map, rng) {
+  setupForGameStart(map, rng) {
     this._coverPositions = /* @__PURE__ */ new Set();
     this._visibleLayer = new Grid2D([map.w, map.h]).fill(0);
     let i = 0;
     let a = vec2(1, 1);
     let b = vec2(1, 1);
+    let c = vec2(1, 1);
+    const layout = map.metaTileMap.layer[MetaLayers.layout];
+    const startTiles = shuffle([...layout.iterTypes([LayoutTiles.rocky, LayoutTiles.sand, LayoutTiles.grassy], map.rect)]);
     while (i < 1e3) {
-      i++;
-      a = v2(rng.getRandomPos(map.w, map.h));
-      if (map.metaTileMap.layer[MetaLayers.layout].get(a) === LayoutTiles.floor) break;
+      a = v2(startTiles[i]);
+      b = v2(startTiles[i + 1]);
+      c = v2(startTiles[i + 2]);
+      if (a.dist(b) > 10 && b.dist(c) > 10 && a.dist(c) > 10) break;
+      i += 3;
     }
-    i = 0;
-    while (i < 1e3) {
-      i++;
-      b = v2(rng.getRandomPos(map.w, map.h));
-      if (map.metaTileMap.layer[MetaLayers.layout].get(b) === LayoutTiles.floor && b.dist(a) > 15) break;
-    }
-    this.patrolRoute = [a, b];
+    this.patrolRoute = [a, b, c];
     this.gpos = v2(b);
     [this.x, this.y] = this.gpos;
+    this.elevation = map.metaTileMap.getFromLayer(MetaLayers.elevation, this.gpos);
+    this.y -= this.elevation;
     this.animationGroup = this.id[0] === "d" ? characterAnimations.dog : characterAnimations.mouse;
     this.animationState = "standing";
     this.flipX = this.heading === 3 || this.heading === 0;
@@ -6045,6 +10570,7 @@ class Character extends Entity {
    * @param {GameMap} mmap
    */
   rest(mmap) {
+    if (this.state === "dead") return;
     this.actionsThisTurn--;
     if (this.activeCharacter) {
       this.updateFoV(mmap);
@@ -6057,40 +10583,38 @@ class Character extends Entity {
    * @param {GameMap} mmap
    */
   move(dir, mmap) {
+    if (this.state === "dead") return;
     const npos = this.gpos.add(FacingVec[dir]);
     const tmap = mmap.metaTileMap;
     const traverse = tmap.getFromLayer(MetaLayers.traversible, npos);
     this.heading = dir;
     if ((traverse & binaryFacing[dir]) === 0) {
-      for (let e of mmap.entities.children) {
-        if (e instanceof Entity && e.pos.equals(npos)) {
-          e.interact(mmap, this);
-          this.actionsThisTurn--;
-          break;
-        }
-      }
-      if (this instanceof PlayerCharacter) {
-        if (mmap.metaTileMap.layer[MetaLayers.layout].get(npos) === LayoutTiles.window) {
-          mmap.metaTileMap.layer[MetaLayers.layout].set(npos, LayoutTiles.brokenWindow);
-          mmap.updateTileInfo(npos);
-        }
+      const e = mmap.entities.get(mmap.posToIndex(npos));
+      if (e instanceof StaticEntity && e.pos.equals(npos) && this.elevation === mmap.metaTileMap.getFromLayer(MetaLayers.elevation, npos)) {
+        if (e.interact(mmap, this)) this.actionsThisTurn--;
       }
     } else if (mmap.characters.reduce((accum, e) => accum || e.gpos.equals(npos) && e.state !== "dead", false)) {
       this.movementBlockedCount++;
+      if (this.activeCharacter) mmap.popMessage('"One day you might eat me. Not today."');
     } else {
-      this.pos = v2(this.gpos);
-      this.gpos = npos;
-      const anim = new WidgetAnimation();
-      anim.add({ x: this.gpos[0], y: this.gpos[1] }, 300);
-      anim.start(this);
-      if (this.animationGroup !== null) {
-        const walking = { 0: "walkingN", 1: "walkingE", 2: "walkingS", 3: "walkingW" };
-        this.animationState = walking[this.heading];
-        this.flipX = false;
-        this.timePerFrame = 60;
+      const newElevation = mmap.metaTileMap.getFromLayer(MetaLayers.elevation, npos);
+      if (this.elevation >= newElevation - 1) {
+        this.pos = v2(this.gpos);
+        this.y -= this.elevation;
+        this.gpos = npos;
+        this.elevation = newElevation;
+        const anim = new WidgetAnimation();
+        anim.add({ x: this.gpos[0], y: this.gpos[1] - this.elevation }, 300);
+        anim.start(this);
+        if (this.animationGroup !== null) {
+          const walking = { 0: "walkingN", 1: "walkingE", 2: "walkingS", 3: "walkingW" };
+          this.animationState = walking[this.heading];
+          this.flipX = false;
+          this.timePerFrame = 60;
+        }
+        this.actionsThisTurn--;
+        this.movementBlockedCount = Math.max(this.movementBlockedCount - 1, 0);
       }
-      this.actionsThisTurn--;
-      this.movementBlockedCount = Math.max(this.movementBlockedCount - 1, 0);
     }
     if (this.activeCharacter) {
       this.updateFoV(mmap);
@@ -6109,7 +10633,6 @@ class Character extends Entity {
   takeDamage(damageType) {
     if (damageType === "piercing") {
       this.state = "dead";
-      this.animationState = "dead";
     }
   }
   /**
@@ -6132,9 +10655,12 @@ class Character extends Entity {
     this._coverPositions.clear();
     this._visibleLayer.fill(0);
     mmap.activeLayer = MetaLayers.allowsSight;
+    const elev = this.elevation;
+    const elevMap = mmap.layer[MetaLayers.elevation];
     const cpos = v2(this.gpos);
-    for (let pBounds of mmap.data.iterRectBoundary(new Rect([...this.gpos, 20, 20]).translate([-10, -10]).translate(FacingVec[this.heading].scale(3)))) {
-      const dest = v2(pBounds);
+    for (let pBounds of mmap.data.iterInRange(this.gpos, this.visionRange)) {
+      const pBounds0 = v2(pBounds);
+      const dest = v2(pBounds0);
       let prevPos = v2(this.gpos);
       let coversNext = false;
       let dir = dest.sub(cpos).scale(1 / dest.dist(cpos));
@@ -6151,6 +10677,8 @@ class Character extends Entity {
         else if (addy < 0) p1[1] -= 1;
         let sight0 = mmap.get(prevPos);
         let sight1 = mmap.get(p0);
+        sight0 &= elevMap.get(prevPos) <= elev ? 15 : 0;
+        sight1 &= elevMap.get(p0) <= elev ? 15 : 0;
         let canContinue = false;
         if (cpos.equals(p)) canContinue = true;
         else if (dir[1] < 0 && dir[0] === 0 && sight0 & 1 && sight1 & 4) canContinue = true;
@@ -6182,7 +10710,7 @@ class Character extends Entity {
         prevPos = v2(p0);
       }
     }
-    for (let ent of map.entities.children) {
+    for (let ent of map.entities) {
       if (ent instanceof Entity) {
         ent.visible = this._visibleLayer.get(ent.pos) > 0;
       }
@@ -6200,6 +10728,7 @@ class Character extends Entity {
     );
     if (camera) {
       const target = this.gpos.add(FacingVec[this.heading].scale(5));
+      target[1] -= this.elevation;
       const dist2 = target.dist(this.gpos);
       let X = Math.min(Math.max(target[0] + 0.5 - camera.w / camera.zoom / 2, 0), mmap.w);
       let Y = Math.min(Math.max(target[1] + 0.5 - camera.h / camera.zoom / 2, 0), mmap.h);
@@ -6250,14 +10779,24 @@ class Character extends Entity {
         const src = this.gpos;
         const dest = this.patrolRoute[this.patrolTarget];
         const moveCostGrid = new Grid2D([mmap.w, mmap.h]);
+        const elevMap = mmap.metaTileMap.layer[MetaLayers.elevation];
         mmap.metaTileMap.layer[MetaLayers.layout].forEach((v, i) => {
-          moveCostGrid[i] = v === LayoutTiles.wall || v === LayoutTiles.window ? Infinity : 1;
+          let mc = v === LayoutTiles.building || v === LayoutTiles.window ? Infinity : 1;
+          mc = mc + (this.elevation + 1 < elevMap[i] ? Infinity : 0);
+          moveCostGrid[i] = mc;
         });
+        for (let e of mmap.entities.values()) {
+          moveCostGrid.set(e.pos, e.traversible === 0 ? Infinity : 3 + moveCostGrid.get(e.pos));
+        }
         for (let e of mmap.characters) {
           if (e !== this) moveCostGrid.set(e.gpos, moveCostGrid.get(e.gpos) + (e.movementBlockedCount <= this.movementBlockedCount ? 4 + this.movementBlockedCount * 2 : 4));
         }
+        if (this.penalizedPos !== void 0) {
+          moveCostGrid.set(this.penalizedPos, moveCostGrid.get(this.penalizedPos) + 2);
+        }
         const route = costedBFSPath(moveCostGrid, src, dest);
         if (route.length > 0) {
+          this.penalizedPos = new Vec2(this.gpos);
           this.move(facingFromVec(route[0].sub(this.gpos)), mmap);
           this.history.push([new ActionItem(), {}]);
         }
@@ -6277,23 +10816,79 @@ class Character extends Entity {
   }
 }
 class PlayerCharacter extends Character {
+  homePos = new Vec2([40, 40]);
   constructor(props = {}) {
     super();
     this.spriteSheet = App.resources["sprites"];
     this.frames = [259];
+    this.inventory = {};
+    this.health = 5;
+    this.maxHealth = 5;
+    this.hunger = 5;
+    this.thirst = 1;
+    this.maxThirst = 1;
+    this.visibleToPlayer = true;
     if (props) this.updateProperties(props);
   }
   /**
    * 
    * @param {GameMap} map 
    */
-  setupForLevelStart(map) {
+  endTurn(map) {
+    if (map.turn % 100 === 45 && this.thirst === 0) {
+      map.popMessage("You are thirsty", 0);
+    }
+    if (map.turn % 50 === 0) {
+      if (this.hunger === 0) {
+        if (this.health === 1) {
+          map.popMessage("You are starving and weak", 0);
+        } else {
+          this.health = this.health - 1;
+          map.popMessage("You weaken from hunger");
+        }
+      } else {
+        this.hunger = this.hunger - 1;
+        if (this.hunger <= 2) {
+          map.popMessage("You should eat soon");
+        }
+      }
+    }
+    if (this.health < 1) {
+      this.state = "dead";
+    }
+    if (this.state === "dead") {
+      this.gameOver = true;
+      setTimeout(() => {
+        map.popMessage("Game over. Press R to restart.");
+      }, 3e3);
+    }
+  }
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {eskv.rand.PRNG} rng 
+   */
+  setupForGameStart(map, rng) {
     this._coverPositions = /* @__PURE__ */ new Set();
+    this.state = "sleeping";
     this.animationGroup = characterAnimations[this.id];
-    this.animationState = "standing";
+    this.animationState = "sleeping";
+    this.health = 5;
+    this.maxHealth = 5;
+    this.hunger = 5;
+    this.thirst = 1;
     this.flipX = this.heading === 3 || this.heading === 0;
-    this.gpos = vec2(map.tileMap.tileDim[0] / 2, map.tileMap.tileDim[1] / 2);
-    this.pos = v2(this.gpos);
+    const layer = map.metaTileMap.layer[MetaLayers.layout];
+    const oceanPos = shuffle([...layer.iterTypes([LayoutTiles.ocean], map.rect)]);
+    for (let p of oceanPos) {
+      if (layer.hasAdjacent(p, [LayoutTiles.sand])) {
+        this.gpos = new Vec2(p);
+        break;
+      }
+    }
+    this.homePos = new Vec2([...map.entities.values()].find((ent) => ent instanceof Bed).pos);
+    this.elevation = map.metaTileMap.getFromLayer(MetaLayers.elevation, this.gpos);
+    this.pos = v2(this.gpos).add([0, -this.elevation]);
     this.actionsThisTurn = 1;
     if (this.activeCharacter) {
       this._visibleLayer = map.metaTileMap._layerData[MetaLayers.visible];
@@ -6325,488 +10920,1035 @@ class PlayerCharacter extends Character {
       return a.keyControl === key;
     });
   }
-}
-class ActionItem extends BoxLayout {
-  /** @type {'vertical'|'horizontal'} */
-  orientation = "vertical";
-  keyControl = "";
-  constructor(props = {}) {
-    super();
-    this.hints = { h: "5" };
-    this.sprite = new SpriteWidget({ spriteSheet: App.resources["sprites"] });
-    this.label = new Label({ hints: { h: "1" } });
-    this.children = [
-      this.sprite,
-      this.label
-    ];
-    if (props) this.updateProperties(props);
+  /**@param {GameMap} mmap */
+  moveHome(mmap) {
+    this.gpos = v2(this.homePos);
+    this.elevation = mmap.metaTileMap.getFromLayer(MetaLayers.elevation, this.gpos);
+    this.state = "sleeping";
+    this.animationState = "sleeping";
+    this.x = this.gpos[0];
+    this.y = this.gpos[1] - this.elevation;
+    this._animation = null;
+    if (this.animationGroup !== null) {
+      this.animationState = "sleeping";
+      this.flipX = false;
+      this.timePerFrame = 60;
+    }
+    this.actionsThisTurn = 1;
+    this.movementBlockedCount = Math.max(this.movementBlockedCount - 1, 0);
   }
+}
+class CanvasSpriteRenderer {
   /**
-   * To perform an action as the player, first it must be requested to provide
-   * the UI with information that maybe needed (e.g., what the target of the action
-   * will be)
-   * @param {Character} actor 
-   * @param {GameMap} map 
-   * @param {ActionResponseData} response 
-   * @return {ActionResponseData} 
+   * 
+   * @param {HTMLCanvasElement|OffscreenCanvas} canvas 
+   * @param {SpriteSheet} spriteSheet 
    */
-  request(actor, map, response) {
-    return { result: "notAvailable" };
-  }
-  get name() {
-    return this.label.text;
-  }
-  set name(value) {
-    this.label.text = value;
-  }
-}
-class Rifle extends ActionItem {
-  keyControl = "f";
-  constructor() {
-    super();
-    this.label.text = "Rifle";
-    this.sprite.frames = [736];
-    this.ammo = 200;
-    this.mode = "single";
-  }
-  /**@type {ActionItem['request']} */
-  request(actor, map, response) {
-    if (response.targetCharacter instanceof Character && response.targetCharacter !== actor) {
-      if (this.fire(actor, map, response.targetCharacter)) {
-        return { result: "complete", message: "Target hit" };
-      }
-      return { result: "complete", message: "Target missed" };
-    }
-    if (this.ammo > 0) {
-      const charsInRange = [];
-      for (let c of map.characters) {
-        if (c !== actor && actor.canSee(c, map)) charsInRange.push(c);
-      }
-      if (charsInRange.length > 0) {
-        return { message: "Select target", result: "infoNeeded", validTargetCharacters: charsInRange };
-      } else {
-        return { message: "No visible target", result: "notAvailable" };
-      }
-    } else {
-      return { message: "Out of ammo", result: "notAvailable" };
-    }
+  constructor(canvas, spriteSheet) {
+    this.spriteSheet = spriteSheet;
+    this.canvas = canvas;
+    this.context = canvas.getContext("2d", { alpha: true });
   }
   /**
    * 
-   * @param {Character} actor 
-   * @param {GameMap} map
-   * @param {Character} target 
+   * @param {number|null} tileDim 
    */
-  fire(actor, map, target) {
-    this.ammo -= this.mode === "single" ? 1 : 5;
-    const char = target;
-    const hit = this.mode === "single" ? true : map.rng.random() > 0.5;
-    if (hit) {
-      char.takeDamage("piercing");
-      return true;
+  start(tileDim = null) {
+    this.context.resetTransform();
+    if (tileDim === null) {
+      tileDim = this.spriteSheet.spriteSize;
     }
-    return false;
+    if (this.context !== null) {
+      this.context.scale(tileDim, tileDim);
+    }
+  }
+  clear() {
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+  flush() {
+  }
+  /**
+   * @param {[number, number, number, number]} rgba 
+   */
+  set tint(rgba) {
+    let [r, g, b, a] = rgba;
+    this.context.fillStyle = `rgb(${r * 255},${g * 255},${b * 255})`;
+    this.context.globalAlpha = a;
+  }
+  get tint() {
+    if (typeof this.context.fillStyle === "string") {
+      const col = Color.fromString(this.context.fillStyle);
+      let [r, g, b, a] = col;
+      a = this.context.globalAlpha;
+      return [r / 255, g / 255, b / 255, a];
+    }
+    return [1, 1, 1, 1];
+  }
+  /**
+   * Draw an indexed tilemap reference to a specified x,y position on the canvas
+   * @param {number} ind  
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} dx 
+   * @param {number} dy 
+   */
+  drawIndexed(ind, x, y, extraAngle = 0, flipX = false, dx = 0, dy = 0) {
+    const ss = this.spriteSheet;
+    const ctx = this.context;
+    if (ind < -1) {
+      ind = ss.animations.get(ind)?.tileValue ?? -1;
+    }
+    if (ind >= 0) {
+      let [flipped, angle, indY, indX] = unpackSpriteInfo(ind, ss.len, ss.sw);
+      flipped = flipped && !flipX || !flipped && flipX;
+      angle = (angle + extraAngle) % 4;
+      if (!flipped && angle === 0) {
+        ss.draw(ctx, [indX, indY], x + dx, y + dy);
+      } else {
+        ss.drawRotated(ctx, [indX, indY], x + 0.5, y + 0.5, angle * 90, flipped, [0.5 - dx, 0.5 - dy]);
+      }
+    }
   }
 }
-const MetaLayers = {
-  layout: 0,
-  //Basic type of location
-  seen: 1,
-  //whether the characters have seen that part of the map
-  visible: 2,
-  //whether the characters can currently see that part of the map
-  traversible: 3,
-  //direction of traversibility
-  allowsSight: 4,
-  //direction of sight
-  cover: 6
-};
-const LayoutTiles = {
+class WebGLSpriteRenderer extends WebGLTileRenderer {
+  /**@type {[number, number, number, number]} */
+  tint = [1, 1, 1, 1];
+  /**
+   * 
+   * @param {HTMLCanvasElement|OffscreenCanvas} canvas 
+   * @param {SpriteSheet} spriteSheet 
+   */
+  constructor(canvas, spriteSheet) {
+    super(canvas);
+    this.spriteSheet = spriteSheet;
+    if (spriteSheet.sheet !== null) {
+      this.registerTexture("main", spriteSheet.canvas, spriteSheet.spriteSize, null, spriteSheet.padding);
+    }
+  }
+  start(tileDim = null) {
+    if (tileDim === null) tileDim = this.spriteSheet.spriteSize;
+    super.start(tileDim);
+  }
+  /**
+   * Draw an indexed tilemap reference to a specified x,y position on the canvas
+   * @param {number} ind  
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} dx 
+   * @param {number} dy 
+   */
+  drawIndexed(ind, x, y, extraAngle = 0, flipX = false, dx = 0, dy = 0) {
+    const ss = this.spriteSheet;
+    if (ind < -1) {
+      ind = ss.animations.get(ind)?.tileValue ?? -1;
+    }
+    if (ind >= 0) {
+      let [flipped, angle, indY, indX] = unpackSpriteInfo(ind, ss.len, ss.sw);
+      flipped = flipped && !flipX || !flipped && flipX;
+      angle = (angle + extraAngle) % 4;
+      if (!flipped && angle === 0) {
+        this.drawTexture("main", indX, indY, 1, 1, x + dx, y + dy, 1, 1, this.tint);
+      } else {
+        if (flipped) {
+          if (angle !== 0) {
+            this.flush();
+            this.setRotation(angle / 2 * Math.PI, x + dx + 0.5, y + dy + 0.5);
+            this.drawTexture("main", indX, indY, 1, 1, 0.5, -0.5, -1, 1, this.tint);
+            this.flush();
+            this.setRotation(0, 0, 0);
+          } else {
+            this.drawTexture("main", indX, indY, 1, 1, x + 1 + dx, y + dy, -1, 1, this.tint);
+          }
+        } else {
+          this.flush();
+          this.setRotation(angle / 2 * Math.PI, x + dx + 0.5, y + dy + 0.5);
+          this.drawTexture("main", indX, indY, 1, 1, -0.5, -0.5, 1, 1, this.tint);
+          this.flush();
+          this.setRotation(0, 0, 0);
+        }
+      }
+    }
+  }
+}
+class VoxelTileMap extends LayeredTileMap {
+  /**@type {'webGL'|'canvas2D'} */
+  mode = "webGL";
+  /**@type {Object<number, number[]>}*/
+  voxelIndex = {};
+  // Mapping voxel types to their top/front sprite indices
+  /**@type {OffscreenCanvas|null} */
+  _oCanvas = null;
+  /**@type {WebGLSpriteRenderer|CanvasSpriteRenderer|null} */
+  _renderer = null;
+  _maxElevation = new Grid2D();
+  drawAlayer = true;
+  constructor(props = {}) {
+    super();
+    this.useCache = false;
+    this.updateProperties(props);
+    this.reconfigure();
+  }
+  /**@type {import('eskv/lib/modules/widgets').EventCallbackNullable} */
+  on_spriteSheet(evt, obj, val) {
+    this.reconfigure();
+  }
+  /**@type {import('eskv/lib/modules/widgets').EventCallbackNullable} */
+  on_tileDim(evt, obj, val) {
+    if (!("_layerData" in this)) return;
+    for (let l of this._layerData) {
+      this._data = l;
+      this.resizeData();
+    }
+    if (this.activeLayer >= 0) this._data = this._layerData[this.activeLayer];
+    this.reconfigure();
+  }
+  reconfigure() {
+    if (!("_maxElevation" in this)) return;
+    this.w = this.tileDim[0];
+    this.h = this.tileDim[1];
+    this._cacheTileDim = new Vec2(this.tileDim);
+    this._maxElevation.tileDim = new Vec2([this.tileDim[0], this.tileDim[1]]);
+    if (this.spriteSheet !== null) {
+      this._oCanvas = new OffscreenCanvas(this.tileDim[0] * this.spriteSheet.spriteSize, this.tileDim[1] * this.spriteSheet.spriteSize);
+      if (this.mode === "webGL") {
+        this._renderer = new WebGLSpriteRenderer(this._oCanvas, this.spriteSheet);
+      } else {
+        this._renderer = new CanvasSpriteRenderer(this._oCanvas, this.spriteSheet);
+      }
+    }
+  }
+  _draw(app, ctx) {
+    this.draw(app, ctx);
+  }
+  /**@type {Widget['draw']} */
+  draw(app, ctx) {
+    if (this.spriteSheet === null) return;
+    if (this._renderer === null) return;
+    let [x0, y0] = [0, 0];
+    let [x1, y1] = this.tileDim;
+    if (this.clipRegion) {
+      [x0, y0] = this.clipRegion.pos;
+      [x1, y1] = this.clipRegion.pos.add(this.clipRegion.size).add([1, 8]);
+      x0 = Math.floor(Math.min(Math.max(x0, 0), this.tileDim[0]));
+      x1 = Math.floor(Math.min(Math.max(x1, 0), this.tileDim[0]));
+      y0 = Math.floor(Math.min(Math.max(y0, 0), this.tileDim[1]));
+      y1 = Math.floor(Math.min(Math.max(y1, 0), this.tileDim[1]));
+    }
+    this._renderer.clear();
+    this._renderer.start();
+    const origTint = this._renderer.tint;
+    const darkPositions = /* @__PURE__ */ new Map();
+    const ledgePositions = [];
+    for (let y = y0; y < y1; y++) {
+      for (let z = 0; z < this.numLayers; z++) {
+        for (let x = x0; x < x1; x++) {
+          if (this._vLayer) {
+            if (this._vLayer.get([x, y]) === 0) continue;
+          }
+          const elev = this._maxElevation.get([x, y]);
+          const elevF = this._maxElevation.get([x, y + 1]);
+          this._renderer.tint = [1, 1, 1, 1];
+          let voxelType = this.getFromLayer(z, [x, y]);
+          if (voxelType > 0) {
+            if (this._aLayer) {
+              const player = this.children[this.children.length - 1];
+              if (z > 0 && this._maxElevation.get([x, y]) >= z && this._aLayer.get([x, y]) === 1) {
+                for (let z0 = z - 1; z0 >= 0; z0--) {
+                  if (z > 1 || player.gpos[0] === x && player.gpos[1] - z0 === y - z) {
+                    if (this._aLayer.get([x, y - z + z0]) === 1 && this._maxElevation.get([x, y - z + z0]) === z0) {
+                      this._renderer.tint = [1, 1, 1, 0.5];
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            const td0 = this.tileDim[0];
+            if (this._aLayer !== null && this._aLayer.get([x, y]) === 0 && this._vLayer !== null) {
+              let [top, front, back, bottom, leftLedge, backLedge, rightLedge] = this.voxelIndex[voxelType] || [void 0];
+              let viz = this._vLayer.get([x, y]) === 1;
+              let vizF = this._vLayer.get([x, y + 1]) === 1;
+              let vizB = this._vLayer.get([x, y - 1]) === 1;
+              let vizR = this._vLayer.get([x + 1, y]) === 1;
+              let vizL = this._vLayer.get([x - 1, y]) === 1;
+              if (bottom !== void 0 && front === void 0 && z >= elev && vizF) {
+                this._renderer.drawIndexed(bottom, x, y - z + 1);
+                if (z === elev) darkPositions.set((y - z + 1) * td0 + x, [x, y - z + 1]);
+              }
+              if (back !== void 0 && top === void 0 && z > 0 && viz) {
+                this._renderer.drawIndexed(back, x, y - z);
+                if (z === elev) darkPositions.set((y - z) * td0 + x, [x, y - z]);
+              }
+              if (front !== void 0 && z > 0 && vizF && elevF < z) {
+                this._renderer.drawIndexed(front, x, y - z + 1);
+                if (z === elev) darkPositions.set((y - z + 1) * td0 + x, [x, y - z + 1]);
+              }
+              if (top !== void 0 && z >= elev) {
+                if (viz) {
+                  this._renderer.drawIndexed(top, x, y - z);
+                  if (z === elev) darkPositions.set((y - z) * td0 + x, [x, y - z]);
+                }
+                if (vizL && leftLedge !== void 0 && this._maxElevation.get([x - 1, y]) < z) {
+                  ledgePositions.push([leftLedge, x - 1, y - z, this._renderer.tint]);
+                  if (z === elev) darkPositions.set((y - z) * td0 + x - 1, [x - 1, y - z]);
+                }
+                if (vizR && rightLedge !== void 0 && this._maxElevation.get([x + 1, y]) < z) {
+                  ledgePositions.push([rightLedge, x + 1, y - z, this._renderer.tint]);
+                  if (z === elev) darkPositions.set((y - z) * td0 + x + 1, [x + 1, y - z]);
+                }
+                if (vizB && backLedge !== void 0 && this._maxElevation.get([x, y - 1]) < z) {
+                  ledgePositions.push([backLedge, x, y - z - 1, this._renderer.tint]);
+                  if (z === elev) darkPositions.set((y - z - 1) * td0 + x, [x, y - z - 1]);
+                }
+              }
+            } else if (this._vLayer !== null) {
+              let [top, front, back, bottom, leftLedge, backLedge, rightLedge] = this.voxelIndex[voxelType] || [void 0];
+              let viz = this._vLayer.get([x, y]) === 1;
+              let vizF = this._vLayer.get([x, y + 1]) === 1;
+              let vizB = this._vLayer.get([x, y - 1]) === 1;
+              let vizR = this._vLayer.get([x + 1, y]) === 1;
+              let vizL = this._vLayer.get([x - 1, y]) === 1;
+              if (bottom !== void 0 && front === void 0 && z >= elev && vizF) {
+                this._renderer.drawIndexed(bottom, x, y - z + 1);
+              }
+              if (back !== void 0 && top === void 0 && z > 0 && viz) {
+                this._renderer.drawIndexed(back, x, y - z);
+              }
+              if (front !== void 0 && z > 0 && vizF && elevF < z) {
+                this._renderer.drawIndexed(front, x, y - z + 1);
+              }
+              if (top !== void 0 && z >= elev && viz) {
+                this._renderer.drawIndexed(top, x, y - z);
+                if (vizL && leftLedge !== void 0 && this._maxElevation.get([x - 1, y]) < z) {
+                  ledgePositions.push([leftLedge, x - 1, y - z, this._renderer.tint]);
+                }
+                if (vizR && rightLedge !== void 0 && this._maxElevation.get([x + 1, y]) < z) {
+                  ledgePositions.push([rightLedge, x + 1, y - z, this._renderer.tint]);
+                }
+                if (vizB && backLedge !== void 0 && this._maxElevation.get([x, y - 1]) < z) {
+                  ledgePositions.push([backLedge, x, y - z - 1, this._renderer.tint]);
+                }
+              }
+            }
+          }
+          for (
+            let c of
+            /**@type {Character[]}*/
+            this.children
+          ) {
+            if (z === c.elevation && c.visibleToPlayer) {
+              if (c.frame instanceof LayeredAnimationFrame) {
+                for (let [f, dx, dy] of c.frame.iter()) {
+                  this._renderer.drawIndexed(f, c.x, c.y, c.facing, c.flipX, dx, dy);
+                }
+              } else {
+                this._renderer.drawIndexed(c.frame, c.x, c.y, c.facing, c.flipX);
+              }
+            }
+          }
+        }
+      }
+      if (ledgePositions.length > 0) {
+        for (let [ind, x, y2, tint] of ledgePositions) {
+          this._renderer.tint = tint;
+          this._renderer.drawIndexed(ind, x, y2);
+        }
+        this._renderer.tint = origTint;
+        ledgePositions.length = 0;
+      }
+      if (this.drawAlayer) {
+        if (darkPositions.size > 0) {
+          this._renderer.tint = [1, 1, 1, this.alphaValue];
+          for (let pos of darkPositions.values()) {
+            this._renderer.drawIndexed(spriteSheetIndex.black, pos[0], pos[1]);
+          }
+          this._renderer.tint = origTint;
+          darkPositions.clear();
+        }
+      }
+    }
+    this._renderer.flush();
+    const s = this.spriteSheet.spriteSize;
+    ctx.fillStyle = this.bgColor !== null ? this.bgColor : "rgba(0,0,0,1)";
+    ctx.fillRect(this.x + x0, this.y + y0, x1 - x0, y1 - y0);
+    ctx.drawImage(
+      this._oCanvas,
+      s * x0,
+      s * y0,
+      s * (x1 - x0),
+      s * (y1 - y0),
+      this.x + x0,
+      this.y + y0,
+      x1 - x0,
+      y1 - y0
+    );
+  }
+}
+function landArea(grid) {
+  return grid.reduce((a, x) => a + (x !== LayoutTiles.ocean ? 1 : 0), 0);
+}
+function countLandNeighbors(grid, pos) {
+  return [...grid.iterAdjacent(pos)].reduce((a, p) => a + (grid.get(p) !== LayoutTiles.ocean ? 1 : 0), 0);
+}
+function islandGen(mapGrid, elevGrid) {
+  let grid = mapGrid.clone();
+  const [gridSizeX, gridSizeY] = grid.tileDim;
+  const baseRadius = 10;
+  const iterations = 5;
+  let [centerX, centerY] = grid.tileDim.scale(0.5).floor();
+  grid = grid.fill(LayoutTiles.ocean);
+  elevGrid.tileDim = new Vec2(grid.tileDim);
+  elevGrid.fill(0);
+  let radius = baseRadius;
+  let hill = 0;
+  while (landArea(grid) < 0.5 * gridSizeX * gridSizeY) {
+    const dist2 = radius + Math.floor(0.5 * radius * Math.random());
+    const angle = Math.random() * 2 * Math.PI;
+    centerX += Math.sin(angle) * dist2;
+    centerY += Math.cos(angle) * dist2;
+    centerX = Math.floor(clamp(centerX, 5 + radius, gridSizeX - 5 - radius));
+    centerY = Math.floor(clamp(centerY, 5 + radius, gridSizeY - 5 - radius));
+    console.log(`hill ${hill}`, [centerX, centerY], radius, dist2, angle * 180 / Math.PI);
+    for (let pos of grid.iterInRange([centerX, centerY], radius)) {
+      grid.set(pos, LayoutTiles.rocky);
+      const elev = elevGrid.get(pos);
+      elevGrid.set(pos, Math.max(elev, 5 - Math.ceil(new Vec2(pos).dist([centerX, centerY]) * 5 / radius)));
+    }
+    radius += Math.ceil(-2 + Math.random() * 5 + 0.05 * (baseRadius - radius));
+    hill++;
+  }
+  for (let i = 0; i < iterations; i++) {
+    let newGrid = grid.clone();
+    for (let pos of grid.iterRect(new Rect([1, 1, gridSizeX - 2, gridSizeY - 2]))) {
+      let landNeighbors = countLandNeighbors(grid, pos);
+      if (grid.get(pos) !== LayoutTiles.ocean) {
+        if (landNeighbors < 1 || Math.random() < 0.33 && landNeighbors === 1) {
+          newGrid.set(pos, LayoutTiles.ocean);
+        }
+      } else {
+        if (landNeighbors >= 1 && Math.random() > 0.5) {
+          newGrid.set(pos, LayoutTiles.rocky);
+        }
+      }
+    }
+    grid = newGrid;
+  }
+  for (let iterations2 of [0, 1, 2]) {
+    let newGrid = grid.clone();
+    for (let pos of grid.iterRect(new Rect([1, 1, gridSizeX - 2, gridSizeY - 2]))) {
+      let posv = new Vec2(pos);
+      let landNeighbors = countLandNeighbors(grid, posv);
+      if (grid.get(posv) !== LayoutTiles.ocean && landNeighbors <= 1) {
+        newGrid.set(posv, LayoutTiles.ocean);
+      } else if (grid.get(posv) !== LayoutTiles.ocean && landNeighbors >= 3) {
+        newGrid.set(posv, LayoutTiles.rocky);
+      }
+    }
+    grid = newGrid;
+  }
+  for (let iterations2 of [0]) {
+    let newGrid = grid.clone();
+    for (let pos of [...grid.iterAll()].filter((p) => grid.get(p) === LayoutTiles.rocky)) {
+      const elev = elevGrid.get(pos);
+      if (elev > 2) continue;
+      const count = [...elevGrid.iterAdjacent(pos)].reduce((a, p) => a + (elevGrid.get(p) === elev ? 1 : 0), 0);
+      if (count === 4) {
+        newGrid.set(pos, elev === 0 ? LayoutTiles.sand : LayoutTiles.grassy);
+      }
+    }
+    grid = newGrid;
+  }
+  grid.clone();
+  const shoreline = [...grid.iterAll()].filter((pos) => grid.get(pos) !== LayoutTiles.ocean && grid.hasAdjacent(pos, [LayoutTiles.ocean]));
+  for (let spos of shoreline) {
+    let numS = 0, denom = 0;
+    for (let p of grid.iterInRange(spos, 4)) {
+      denom++;
+      numS += grid.get(p) !== LayoutTiles.ocean ? 1 : 0;
+    }
+    if (numS / denom > 0.4) grid.set(spos, LayoutTiles.sand);
+  }
+  for (let pos of grid.iterAll()) {
+    mapGrid.set(pos, grid.get(pos));
+  }
+}
+class DailyEvent {
+  title = "Test";
+  introText = "blah";
+  outroText = "blah";
+  /**
+   * 
+   * @param {GameMap} gmap 
+   */
+  startEvent(gmap) {
+  }
+  /**
+   * 
+   * @param {GameMap} gmap 
+   */
+  endEvent(gmap) {
+  }
+  /**
+   * 
+   * @param {GameMap} gmap 
+   */
+  onTurn(gmap) {
+  }
+  /**
+   * @param {GameMap} gmap
+   */
+  onDayEnd(gmap) {
+    return true;
+  }
+}
+class Berries extends DailyEvent {
+  onTurn(gmap) {
+    if (gmap.turn === 5) {
+      for (let e of gmap.entities.values()) {
+        if (e instanceof Berry) {
+          e.voxelIndex = voxelNames.berries;
+          gmap.updateTileInfo(e.pos);
+        }
+      }
+      gmap.popMessage("More berries have ripened", 5e3);
+    }
+  }
+}
+class End7DRL extends DailyEvent {
+  title = "A boat!";
+  introText = "I see something on the horizon";
+  outroText = "Thanks for playing my 7DRL. This was just a small glimpse of a larger Roguelike adventure on the island that I have planned. Check back for updates.\n\n--Spillz";
+  onTurn(gmap) {
+    if (gmap.turn === 0) gmap.popMessage("You made it to the end of our adventure.", 5e3);
+    if (gmap.turn === 5) gmap.popMessage("I have much more planned.", 5e3);
+    if (gmap.turn === 10) {
+      gmap.popMessage("Like the volcano now in the middle of the island!", 5e3);
+      launchVolcano(gmap);
+    }
+    if (gmap.turn === 15) {
+      gmap.popMessage("Lucky for you, I've put a boat out in the sea.", 5e3);
+      launchBoat(gmap);
+    }
+    if (gmap.turn === 50) {
+      gmap.popMessage("Find the boat.", 5e3);
+      launchBoat(gmap);
+    }
+  }
+}
+class NullDay extends DailyEvent {
+  title = "A quiet day";
+  introText = "";
+  outroText = "";
+  /**@type {DailyEvent['startEvent']} */
+  startEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  endEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  onTurn(gmap) {
+  }
+}
+class ShipWrecked extends DailyEvent {
+  title = "Shipwrecked!";
+  introText = "How did I get here?";
+  outroText = "I will rest here for the night.";
+  /**@type {DailyEvent['startEvent']} */
+  startEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  endEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  onTurn(gmap) {
+    if (gmap.turn === 1) gmap.popMessage("W/A/S/D keys to move", 0);
+    if (gmap.turn === 5) gmap.popMessage("Space bar to wait", 0);
+    if (gmap.turn === 10) gmap.popMessage("Bump objects to interact", 0);
+    if (gmap.turn === 15) gmap.popMessage("Keep an eye on your health, thirst and hunger -- higher is better", 0);
+    if (gmap.turn === 20) gmap.popMessage("Find some water and shelter", 0);
+    if (gmap.turn === 25) gmap.popMessage("Explore the island", 0);
+    if (gmap.turn === 30) gmap.popMessage("Try to survive a few days and hope for rescue", 5e3);
+  }
+}
+const LayoutTiles = Object.freeze({
   rocky: 0,
   grassy: 1,
   sand: 2,
   beachFront: 3,
   floor: 4,
+  path: 5,
+  stream: 6,
   ocean: 7,
-  wall: 9,
+  pool: 8,
+  building: 9,
   doorway: 10,
   window: 11,
-  cliffFace: 13,
-  cliffLeft: 14,
-  cliffRight: 15,
-  cliffNorth: 16
-};
-function posToIndex(pos) {
-  return 32 * pos[1] + pos[0];
-}
-const packSprite = (x, y, flip) => packSpriteInfo2D(vec2(x, y), flip, 0, 32 * 32, 32);
-const DecorationTiles = {
-  tree1: posToIndex([4, 5]),
-  tree2: posToIndex([5, 5]),
-  saplings: posToIndex([6, 5]),
-  palm: posToIndex([7, 5])
-};
-const IslandTileIndexes = {
-  [LayoutTiles.ocean]: posToIndex([10, 12]),
-  [LayoutTiles.rocky]: posToIndex([2, 14]),
-  [LayoutTiles.grassy]: posToIndex([0, 15]),
-  [LayoutTiles.sand]: posToIndex([0, 14]),
-  [LayoutTiles.floor]: posToIndex([2, 14]),
-  [LayoutTiles.doorway]: posToIndex([2, 14]),
-  [LayoutTiles.window]: posToIndex([2, 14]),
-  [LayoutTiles.cliffFace]: posToIndex([5, 14]),
-  [LayoutTiles.cliffRight]: posToIndex([5, 15]),
-  [LayoutTiles.cliffNorth]: packSpriteInfo2D(vec2(5, 15), false, 3, 32 * 32, 32),
-  [LayoutTiles.cliffLeft]: packSprite(5, 15, true)
-};
-const wallSet1 = {
-  1: packSprite(3, 1, false),
-  2: packSprite(1, 0, false),
-  4: packSprite(1, 0, false),
-  8: packSprite(0, 1, false),
-  5: packSprite(3, 1, false),
-  10: packSprite(1, 0, false),
-  3: packSprite(0, 3, false),
-  6: packSprite(0, 0, false),
-  12: packSprite(3, 0, false),
-  9: packSprite(1, 0, false),
-  7: packSprite(0, 4, false),
-  11: packSprite(0, 0, false),
-  13: packSprite(3, 0, false),
-  14: packSprite(0, 0, false),
-  15: packSprite(8, 2, false)
-};
-const IslandAutotiles = {
+  hallway: 12
+});
+const LayoutToVoxel = Object.freeze({
+  [LayoutTiles.rocky]: voxelNames.rocky,
+  [LayoutTiles.grassy]: voxelNames.grassy,
+  [LayoutTiles.sand]: voxelNames.sand,
+  // [LayoutTiles.beachFront]:   voxelNames.beachFront,
+  [LayoutTiles.floor]: voxelNames.floor,
+  [LayoutTiles.path]: voxelNames.path,
+  // [LayoutTiles.ocean]:        voxelNames.ocean,
+  [LayoutTiles.pool]: voxelNames.pool
+  // [LayoutTiles.building]:     voxelNames.building,
+  // [LayoutTiles.doorway]:      voxelNames.doorway,
+  // [LayoutTiles.window]:       voxelNames.window,
+  // [LayoutTiles.hallway]:      voxelNames.hallway,
+});
+const IslandAutotiles = Object.freeze({
   wall: new AutoTiler(
     "islandWalls",
-    [LayoutTiles.wall],
-    [LayoutTiles.wall, LayoutTiles.doorway, LayoutTiles.window],
-    wallSet1
+    [LayoutTiles.building],
+    [LayoutTiles.building, LayoutTiles.doorway, LayoutTiles.window],
+    {
+      1: voxelNames.wallS,
+      2: voxelNames.wallN,
+      4: voxelNames.wallS,
+      8: voxelNames.wallS,
+      5: voxelNames.wallN,
+      10: voxelNames.wallS,
+      3: voxelNames.wallSW,
+      6: voxelNames.wallNW,
+      12: voxelNames.wallNE,
+      9: voxelNames.wallSE,
+      7: voxelNames.wallW,
+      11: voxelNames.wallS,
+      13: voxelNames.wallE,
+      14: voxelNames.wallN
+    }
+  ),
+  wallExt: new AutoTiler(
+    "islandWallCorner",
+    [LayoutTiles.building],
+    [LayoutTiles.building, LayoutTiles.doorway, LayoutTiles.window],
+    {
+      239: voxelNames.wallNES,
+      223: voxelNames.wallNEW,
+      191: voxelNames.wallNSW,
+      127: voxelNames.wallESW
+    },
+    8
+  ),
+  door: new AutoTiler(
+    "islandDoors",
+    [LayoutTiles.doorway],
+    [LayoutTiles.building],
+    {
+      14: voxelNames.doorwayN,
+      13: voxelNames.doorwayE,
+      11: voxelNames.doorwayS,
+      7: voxelNames.doorwayW
+    }
+  ),
+  window: new AutoTiler(
+    "islandWindow",
+    [LayoutTiles.window],
+    [LayoutTiles.building],
+    {
+      14: voxelNames.windowN,
+      13: voxelNames.windowE,
+      11: voxelNames.windowS,
+      7: voxelNames.windowW
+    }
   ),
   beachFront: new AutoTiler(
     "islandBeachFront",
-    [LayoutTiles.beachFront],
-    [LayoutTiles.ocean, LayoutTiles.beachFront],
+    [LayoutTiles.ocean],
+    [LayoutTiles.sand],
     {
-      1: packSprite(1, 12, false),
-      2: packSprite(0, 11, false),
-      4: packSprite(1, 10, false),
-      8: packSprite(2, 11, false),
-      3: packSprite(0, 12, false),
-      6: packSprite(0, 10, false),
-      12: packSprite(2, 10, false),
-      9: packSprite(2, 12, false),
-      5: packSprite(1, 14, false),
-      10: packSprite(1, 14, false),
-      7: packSprite(1, 14, false),
-      11: packSprite(1, 14, false),
-      13: packSprite(1, 14, false),
-      14: packSprite(1, 14, false)
+      14: voxelNames.beachN,
+      13: voxelNames.beachE,
+      11: voxelNames.beachS,
+      7: voxelNames.beachW,
+      12: voxelNames.beachNE,
+      9: voxelNames.beachSE,
+      3: voxelNames.beachSW,
+      6: voxelNames.beachNW,
+      10: voxelNames.ocean,
+      5: voxelNames.ocean,
+      8: voxelNames.beachNES,
+      4: voxelNames.beachNEW,
+      2: voxelNames.beachNSW,
+      1: voxelNames.beachESW
+    },
+    4,
+    voxelNames.ocean
+  ),
+  stream: new AutoTiler(
+    "stream",
+    [LayoutTiles.stream],
+    [LayoutTiles.stream, LayoutTiles.ocean],
+    {
+      1: voxelNames.streamN,
+      2: voxelNames.streamE,
+      4: voxelNames.streamS,
+      8: voxelNames.streamW,
+      5: voxelNames.streamNS,
+      10: voxelNames.streamEW,
+      3: voxelNames.streamNE,
+      6: voxelNames.streamSE,
+      12: voxelNames.streamSW,
+      9: voxelNames.streamNW
     }
   )
-};
-function placeWalledRect(map, rect) {
-  const w = rect.w;
-  const h = rect.h;
-  const p = rect.pos;
-  for (let pos of map.data.iterBetween(p, p.add([w, 0]))) map.set(pos, LayoutTiles.wall);
-  for (let pos of map.data.iterBetween(p, p.add([0, h]))) map.set(pos, LayoutTiles.wall);
-  for (let pos of map.data.iterBetween(p.add([0, h]), p.add([w, h]))) map.set(pos, LayoutTiles.wall);
-  for (let pos of map.data.iterBetween(p.add([w, 0]), p.add([w, h]))) map.set(pos, LayoutTiles.wall);
-}
-function placeValidOpening(map, pos, doors, windows) {
-  const p0 = pos.add(FacingVec[0]);
-  const p1 = pos.add(FacingVec[1]);
-  const p2 = pos.add(FacingVec[2]);
-  const p3 = pos.add(FacingVec[3]);
-  const mp0 = map.get(p0);
-  const mp1 = map.get(p1);
-  const mp2 = map.get(p2);
-  const mp3 = map.get(p3);
-  if (mp0 === LayoutTiles.wall && mp2 === LayoutTiles.wall) {
-    if (mp1 !== LayoutTiles.wall && mp3 == LayoutTiles.rocky || mp3 !== LayoutTiles.wall && mp1 == LayoutTiles.rocky) {
-      map.set(pos, LayoutTiles.window);
-      windows.push(pos);
-      return true;
-    } else if (mp1 !== LayoutTiles.wall && mp3 !== LayoutTiles.wall) {
-      map.set(pos, LayoutTiles.doorway);
-      doors.push([pos, 1]);
-      return true;
-    }
-  }
-  if (mp1 === LayoutTiles.wall && mp3 === LayoutTiles.wall) {
-    if (mp0 !== LayoutTiles.wall && mp2 == LayoutTiles.rocky || mp2 !== LayoutTiles.wall && mp0 == LayoutTiles.rocky) {
-      map.set(pos, LayoutTiles.window);
-      windows.push(pos);
-      return true;
-    } else if (mp0 !== LayoutTiles.wall && mp2 !== LayoutTiles.wall) {
-      map.set(pos, LayoutTiles.doorway);
-      doors.push([pos, 0]);
-      return true;
-    }
-  }
-  return false;
-}
-function placeRoom(map, rect) {
-  for (let p of map.data.iterRect([rect[0] + 1, rect[1] + 1, rect[2] - 1, rect[3] - 1])) {
-    map.set(p, LayoutTiles.floor);
-  }
-  placeWalledRect(map, rect);
-}
-function placeRoomOpenings(map, rect, doors, windows, rng) {
-  if (!map.data.hasTypesBetween([rect[0], rect[1]], [rect[0] + rect[2], rect[1]], [LayoutTiles.doorway, LayoutTiles.floor])) {
-    const doorPosX1 = rect[0] + 1 + rng.getRandomInt(rect[2] - 2);
-    let x = doorPosX1;
-    while (!placeValidOpening(map, new Vec2([x, rect[1]]), doors, windows)) {
-      x++;
-      if (x >= rect.right) x = rect[0] + 1;
-      if (x === doorPosX1) break;
-    }
-  }
-  if (!map.data.hasTypesBetween([rect[0], rect[1] + rect[3]], [rect[0] + rect[2], rect[1] + rect[3]], [LayoutTiles.doorway, LayoutTiles.floor])) {
-    const doorPosX2 = rect[0] + 1 + rng.getRandomInt(rect[2] - 2);
-    let x = doorPosX2;
-    while (!placeValidOpening(map, new Vec2([x, rect[1] + rect[3]]), doors, windows)) {
-      x++;
-      if (x >= rect.right) x = rect[0] + 1;
-      if (x === doorPosX2) break;
-    }
-  }
-  if (!map.data.hasTypesBetween([rect[0], rect[1]], [rect[0], rect[1] + rect[3]], [LayoutTiles.doorway, LayoutTiles.floor])) {
-    const doorPosY1 = rect[1] + 1 + rng.getRandomInt(rect[3] - 2);
-    let y = doorPosY1;
-    while (!placeValidOpening(map, new Vec2([rect[0], y]), doors, windows)) {
-      y++;
-      if (y >= rect.bottom) y = rect[1] + 1;
-      if (y === doorPosY1) break;
-    }
-  }
-  if (!map.data.hasTypesBetween([rect[0] + rect[2], rect[1]], [rect[0] + rect[2], rect[1] + rect[3]], [LayoutTiles.doorway, LayoutTiles.floor])) {
-    let doorPosY2 = rect[1] + 1 + rng.getRandomInt(rect[3] - 2);
-    let y = doorPosY2;
-    while (!placeValidOpening(map, new Vec2([rect[0] + rect[2], doorPosY2]), doors, windows)) {
-      y++;
-      if (y >= rect.bottom) y = rect[1] + 1;
-      if (y === doorPosY2) break;
-    }
-  }
-}
+});
 function generateIslandMap(map, rng) {
   map.w = 80;
   map.h = 80;
-  const [w, h] = [map.w, map.h];
+  [map.w, map.h];
   const tdim = new Vec2([map.w, map.h]);
   const tmap = map.tileMap;
   tmap.useCache = true;
-  tmap.numLayers = 3;
+  tmap.numLayers = 8;
   tmap.tileDim = tdim;
   tmap.activeLayer = 0;
+  for (let l of tmap.layer) {
+    l.fill(0);
+  }
   const mmap = map.metaTileMap;
   mmap.defaultValue = 0;
-  mmap.numLayers = 8;
+  mmap.numLayers = 9;
   mmap.tileDim = tdim;
-  mmap.activeLayer = 0;
-  for (const p of mmap.data.iterAll()) {
-    mmap.set(p, LayoutTiles.ocean);
+  mmap.activeLayer = MetaLayers.layout;
+  for (let m of mmap.layer) {
+    m.fill(0);
   }
+  const islandLayout = mmap.layer[MetaLayers.layout];
+  const islandElevation = mmap.layer[MetaLayers.elevation];
+  islandGen(islandLayout, islandElevation);
   const center = vec2(...getRandomPos(map.w / 5, map.h / 5)).add([map.w / 2 - map.w / 10, map.h / 2 - map.h / 10]);
   center[0] = Math.floor(center[0]);
   center[1] = Math.floor(center[1]);
-  const radius = Math.floor(Math.min(map.w - map.w / 5, map.h - map.h / 5) / 2);
-  for (let p of mmap.data.iterInRange(center, radius)) {
-    mmap.set(p, LayoutTiles.sand);
-  }
-  for (let p of mmap.data.iterInRange(center, radius - 5)) {
-    mmap.set(p, LayoutTiles.grassy);
-  }
-  for (let p of mmap.data.iterInRange(center, radius - 10)) {
-    mmap.set(p, LayoutTiles.rocky);
-  }
-  const doors = [];
-  const windows = [];
-  const rect = new Rect([...center.add([0, 10]), 10, 5]);
-  placeRoom(mmap, rect);
-  placeRoomOpenings(mmap, rect, doors, windows, rng);
-  const rect2 = new Rect([...center.add([0, -20]), 8, 8]);
-  for (let p of mmap.data.iterRect(rect2)) {
-    mmap.set(p, LayoutTiles.rocky);
-  }
-  const rect3 = new Rect([...center.add([0, -12]), 8, 1]);
-  for (let p of mmap.data.iterRect(rect3)) {
-    mmap.set(p, LayoutTiles.cliffFace);
-  }
-  const rect4 = new Rect([...center.add([-1, -20]), 1, 8]);
-  for (let p of mmap.data.iterRect(rect4)) {
-    mmap.set(p, LayoutTiles.cliffLeft);
-  }
-  const rect5 = new Rect([...center.add([8, -20]), 1, 8]);
-  for (let p of mmap.data.iterRect(rect5)) {
-    mmap.set(p, LayoutTiles.cliffRight);
-  }
-  const rect6 = new Rect([...center.add([0, -21]), 8, 1]);
-  for (let p of mmap.data.iterRect(rect6)) {
-    mmap.set(p, LayoutTiles.cliffNorth);
-  }
-  const trees = [];
-  for (let pos of mmap.data.iterAll()) {
-    const index = mmap.get(pos);
-    if (index === LayoutTiles.rocky) {
-      if (rng.random() > 0.95) {
-        trees.push(pos);
+  const riverHeads = shuffle([...islandLayout.iterAll()].filter((p) => islandLayout.get(p) === LayoutTiles.rocky && islandElevation.get(p) >= 4));
+  let riverCount = 0;
+  let activeHead = 0;
+  let activeP = new Vec2(riverHeads[activeHead]);
+  let riverTiles = [activeP];
+  const riverSet = /* @__PURE__ */ new Set();
+  riverSet.add(map.posToIndex(activeP));
+  while (activeHead < riverHeads.length && riverCount < 3) {
+    let trapped = 0;
+    const adjs = shuffle([...islandLayout.iterAdjacent(activeP)]);
+    for (let pn of adjs) {
+      const pni = map.posToIndex(pn);
+      const type = islandLayout.get(pn);
+      if (!riverSet.has(pni) && islandElevation.get(pn) <= islandElevation.get(activeP) && (type === LayoutTiles.sand || type === LayoutTiles.rocky || type === LayoutTiles.grassy) && [...islandLayout.iterAdjacent(pn)].reduce((sum, c) => sum + (riverSet.has(map.posToIndex(c)) ? 1 : 0), 0) <= 1) {
+        activeP = pn;
+        riverSet.add(pni);
+        riverTiles.push(pn);
+        break;
       }
+      trapped++;
     }
-    if (index in IslandTileIndexes) {
-      tmap.set(pos, IslandTileIndexes[index]);
-    } else {
-      const vpos = new Vec2(pos);
-      IslandAutotiles.wall.autoTile(vpos, mmap, tmap);
-      IslandAutotiles.beachFront.autoTile(vpos, mmap, tmap);
+    if (trapped === 4) {
+      for (let pn of riverTiles) {
+        riverSet.delete(map.posToIndex(pn));
+      }
+      activeHead++;
+      activeP = new Vec2(riverHeads[activeHead]);
+      riverTiles = [activeP];
+      riverSet.add(map.posToIndex(activeP));
+    } else if (islandLayout.hasAdjacent(activeP, [LayoutTiles.ocean])) {
+      for (let pn of riverTiles) {
+        islandLayout.set(pn, LayoutTiles.stream);
+      }
+      riverCount++;
+      activeHead++;
+      activeP = new Vec2(riverHeads[activeHead]);
+      riverTiles = [activeP];
+      riverSet.add(map.posToIndex(activeP));
     }
-    let traversible = index === LayoutTiles.wall || index === LayoutTiles.window ? 0 : 15;
-    for (let e of map.entities.children) {
-      if (e instanceof Entity && e.pos.equals(pos)) traversible &= e.traversible;
-    }
-    mmap.setInLayer(MetaLayers.traversible, pos, traversible);
   }
-  tmap.activeLayer = 1;
-  const sightData = mmap._layerData[MetaLayers.allowsSight];
+  console.log("placed", riverCount, "rivers");
+  let num = 0;
+  let denom = 0;
+  for (let pos of islandElevation.iterInRange(center, 6)) {
+    num += islandElevation.get(pos);
+    denom++;
+  }
+  const elev = Math.floor(num / denom);
+  for (let pos of islandElevation.iterInRange(center, 6)) {
+    islandLayout.set(pos, LayoutTiles.grassy);
+    const curElev = islandElevation.get(pos);
+    if (curElev)
+      islandElevation.set(pos, elev);
+  }
+  const rectA = new Rect([...center.add([-3, -2]), 7, 4]);
+  for (let p of mmap.data.iterRect(rectA)) {
+    mmap.set(p, LayoutTiles.building);
+  }
+  const rectB = new Rect([...center.add([0, -4]), 4, 7]);
+  for (let p of mmap.data.iterRect(rectB)) {
+    mmap.set(p, LayoutTiles.building);
+  }
+  mmap.set(new Vec2([Math.floor(rectB.center_x), rectB.y]), LayoutTiles.window);
+  mmap.set(new Vec2([Math.floor(rectB.center_x), rectB.bottom - 1]), LayoutTiles.doorway);
+  mmap.set(new Vec2([rectA.x, Math.floor(rectA.center_y)]), LayoutTiles.doorway);
+  mmap.set(new Vec2([rectA.right - 1, Math.floor(rectA.center_y)]), LayoutTiles.window);
+  const bedP = choose([...mmap.data.iterRect(rectB.shrinkBorders(1))]);
+  map.entities.set(map.posToIndex(bedP), new Bed(bedP));
+  const allPos = shuffle([...mmap.data.iterTypes([LayoutTiles.rocky, LayoutTiles.grassy], map.rect)]);
+  let i = 0;
+  for (let p of allPos.slice(0, 100)) {
+    if (mmap.layer[MetaLayers.layout].hasAdjacent(p, [LayoutTiles.doorway || LayoutTiles.window])) continue;
+    const tree = i < 10 ? new Berry(p) : i < 50 ? new StaticEntity(p, "Spruce", voxelNames.tree1) : new StaticEntity(p, "Fir", voxelNames.tree2);
+    map.entities.set(map.posToIndex(p), tree);
+    if (i < 10) mmap.set(p, LayoutTiles.rocky);
+    i++;
+  }
+  const grassy = choose([...mmap.data.iterTypes([LayoutTiles.grassy], map.rect)]);
+  map.entities.set(map.posToIndex(grassy), new Well(grassy));
+  for (let p of mmap.layer[MetaLayers.layout].iterAll()) {
+    map.updateTileInfo(p);
+  }
   mmap.activeLayer = MetaLayers.layout;
-  for (let p of mmap.data.iterAll()) {
-    mmap.setInLayer(MetaLayers.seen, p, mmap.data.numInRange(p, [LayoutTiles.rocky, LayoutTiles.grassy, LayoutTiles.ocean, LayoutTiles.sand], 1.5) > 0 ? 1 : 0);
-    const layout = mmap.getFromLayer(MetaLayers.layout, p);
-    const ind = p[0] + p[1] * w;
-    sightData[ind] |= layout === LayoutTiles.wall ? 0 : 15;
-    for (let e of map.entities.children) {
-      if (e instanceof Entity && e.pos.equals(p)) sightData[ind] &= e.allowsSight;
-    }
-  }
-  for (let p of trees) {
-    tmap.set(p, random() > 0.5 ? DecorationTiles.tree1 : DecorationTiles.tree2);
-    const ind = p[0] + p[1] * w;
-    sightData[ind] |= 240;
-  }
   tmap._vLayer = mmap._layerData[MetaLayers.seen];
   tmap._aLayer = mmap._layerData[MetaLayers.visible];
+  tmap._maxElevation = mmap._layerData[MetaLayers.elevation];
   tmap.clearCache();
 }
-class PositionSelector extends Widget {
-  /**@type {Vec2[]} */
-  _validCells = [];
-  /**@type {Character[]} */
-  _validCharacters = [];
-  /**@type {number} */
-  activeCell = -1;
-  constructor(props = {}) {
-    super();
-    if (props) this.updateProperties(props);
+function launchVolcano(map) {
+  const center = new Vec2([Math.ceil(map.w / 2), Math.ceil(map.h / 2)]).add([getRandomInt(-4, 5), -getRandomInt(10, 16)]);
+  const layout = map.metaTileMap.layer[MetaLayers.layout];
+  const elevation = map.metaTileMap.layer[MetaLayers.elevation];
+  const maxDist = Math.ceil(map.w / 4);
+  const centerPositions = [...layout.iterInRange(center, maxDist)];
+  for (let pos of centerPositions) {
+    const dist2 = center.dist(pos);
+    const noise = 0;
+    const height = Math.min(6, Math.floor(1 + 8 * (1 - dist2 / maxDist)) + noise);
+    elevation.set(pos, height);
+    layout.set(pos, LayoutTiles.rocky);
   }
-  set validCharacters(value) {
-    this._validCharacters = value;
-    this._validCells = this.validCharacters.map((v) => v.gpos);
-    this.setupValidCells();
+  for (let pos of layout.iterInRange(center, 4)) {
+    elevation.set(pos, 5);
+    layout.set(pos, LayoutTiles.rocky);
+    map.entities.set(map.posToIndex(pos), new Lava(pos));
   }
-  get validCharacters() {
-    return this._validCharacters;
-  }
-  set validCells(value) {
-    this._validCharacters = [];
-    this._validCells = value;
-    this.setupValidCells();
-  }
-  get validCells() {
-    return this._validCells;
-  }
-  setupValidCells() {
-    const children = [];
-    let i = 0;
-    for (let pos of this._validCells) {
-      children.push(new SpriteWidget({
-        spriteSheet: App.resources["sprites"],
-        x: pos[0],
-        y: pos[1],
-        w: 1,
-        h: 1,
-        frames: [this.activeCell === i ? 6 : 5]
-      }));
-      i++;
-    }
-    this.children = children;
-    this.activeCell = this._validCells.length > 0 ? 0 : -1;
-  }
-  on_activeCell(e, o, v) {
-    let i = 0;
-    for (let w of this.children) {
-      if (w instanceof SpriteWidget) w.frames = [this.activeCell === i ? 6 : 5];
-      i++;
+  shuffle(centerPositions);
+  for (let i = 0; i < 20; i++) {
+    for (let pos of layout.iterInBetween(center, centerPositions[i])) {
+      map.entities.set(map.posToIndex(pos), new Lava(pos));
     }
   }
-  /**
-   * 
-   * @param {Vec2} direction 
-   */
-  moveActiveCell(direction) {
-    const activePos = this.validCells[this.activeCell];
-    let maxDist = 0;
-    let minDist = Infinity;
-    let minDistInd = -1;
-    let maxDistInd = this.activeCell;
-    let i = 0;
-    for (let pos of this.validCells) {
-      const delta = pos.sub(activePos);
-      const dist2 = delta.mul(direction).sum() + vec2(1, 1).sub(direction.abs()).mul(delta).sum();
-      if (dist2 > 0 && dist2 < minDist) {
-        minDist = dist2;
-        minDistInd = i;
-      }
-      if (dist2 < 0 && dist2 < maxDist) {
-        maxDist = dist2;
-        maxDistInd = i;
-      }
-      i++;
+  for (let pos of centerPositions) {
+    map.updateTileInfo(pos);
+  }
+  map.playerCharacter.elevation = elevation.get(map.playerCharacter.gpos);
+  map.playerCharacter.gpos = map.playerCharacter.gpos;
+}
+function launchBoat(map) {
+  const layout = map.metaTileMap.layer[MetaLayers.layout];
+  const oceanPositions = shuffle([...layout.iterTypes([LayoutTiles.ocean], map.rect)]);
+  for (let op of oceanPositions) {
+    if (layout.hasAdjacent(op, [LayoutTiles.sand])) continue;
+    map.entities.set(map.posToIndex(op), new Boat(op));
+    map.updateTileInfo(op);
+    break;
+  }
+}
+class DebugSelector extends SpriteWidget {
+  /**@type {eskv.Grid2D|null} */
+  elevGrid = null;
+  elev = 0;
+  gpos = new Vec2([-1, -1]);
+  on_gpos(e, o, v) {
+    if (this.elevGrid !== null) {
+      this.elev = this.elevGrid.get(this.gpos);
     }
-    this.activeCell = minDistInd >= 0 ? minDistInd : maxDistInd;
+    this.pos = this.gpos.add([0, -this.elev]);
+  }
+}
+class SkyBox extends Widget {
+  /**@type {eskv.Widget['draw']} */
+  draw(app, ctx) {
+    const oldOp = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "multiply";
+    super.draw(app, ctx);
+    ctx.globalCompositeOperation = oldOp;
   }
 }
 class GameMap extends Widget {
   rng = new PRNG_sfc32();
   //.setPRNG('sfc32');
   clipRegion = new Rect();
-  tileMap = new LayeredTileMap();
+  tileMap = new VoxelTileMap({ voxelIndex });
   metaTileMap = new LayeredTileMap();
-  /**@type {Character[]} */
   enemies = [
     new Character({ id: "alfred" }),
     new Character({ id: "bennie" }),
     new Character({ id: "charlie" }),
     new Character({ id: "devon" })
   ];
-  entities = new Widget({ hints: { h: 1, w: 1 } });
-  /**@type {Character} */
+  /**@type {Map<number, StaticEntity>} */
+  entities = /* @__PURE__ */ new Map();
   playerCharacter = new PlayerCharacter({ id: "randy", activeCharacter: true });
   characters = [...this.enemies, this.playerCharacter];
   /**@type {Character|null} */
   activeCharacter = this.playerCharacter;
   /**@type {SpriteSheet|null} */
   spriteSheet = null;
+  turn = 0;
+  day = 1;
+  dayLength = 400;
+  daytimeLength = 250;
+  sunset = 50;
+  sunrise = 50;
+  // bgColor = 'rgb(0,0,290)';
+  dailyEvents = [];
+  time = "Daybreak";
+  /**@type {DailyEvent[]} */
+  eventDeck = [];
+  /**@type {DailyEvent[]} */
+  activeEvents = [];
   constructor(props = null) {
     super();
-    this.positionSelector = new PositionSelector();
-    this.children = [this.tileMap, this.entities, this.positionSelector, ...this.enemies, this.playerCharacter];
+    this.debugSelector = new DebugSelector({ size: [1, 1], frames: [DecorationTiles.aimer] });
+    this.skyBox = new SkyBox({ hints: { w: 1, h: 1, x: 0, y: 0 } });
+    const timerCB = (e, o, v) => {
+      if (v > 0) {
+        setTimeout(() => {
+          if (o.canCancel) {
+            o.text = "";
+            o.x = -1;
+            o.y = -1;
+          }
+          o.canCancel = true;
+        }, v);
+        o.v = 0;
+      }
+    };
+    this.popup = new Label({ color: "white", bgColor: "rgba(60, 60, 60, 0.5)", align: "left", x: 100, y: 100, w: 6, hints: { h: null }, wrap: true, fontSize: 0.5, timer: 0, canCancel: false, on_timer: timerCB });
+    this.children = [this.tileMap, this.skyBox, this.debugSelector, this.popup];
+    this.tileMap.children = [...this.enemies, this.playerCharacter];
     if (props) this.updateProperties(props);
   }
-  setupLevel() {
-    generateIslandMap(this, this.rng);
-    this.playerCharacter.setupForLevelStart(this, this.rng);
-    this.enemies.forEach((e) => e.setupForLevelStart(this, this.rng));
-    this.playerCharacter.actionInventory = App.get().findById("firstPlayerInventory");
-    this.playerCharacter.addAction(new Rifle());
+  popMessage(msg, time = 3e3) {
+    this.popup.canCancel = false;
+    this.popup.text = msg;
+    this.popup.pos = this.playerCharacter.pos.add([0, 2]);
+    this.popup.timer = time;
   }
-  on_spriteSheet() {
-    this.tileMap.spriteSheet = this.spriteSheet;
+  on_turn(e, o, v) {
+    for (let e2 of this.activeEvents) {
+      e2.onTurn(this);
+    }
+    this.playerCharacter.endTurn(this);
+    if (this.turn >= this.dayLength) {
+      this.endDay();
+    }
+    if (this.turn === 260) {
+      this.popMessage("Find somewhere to lie down and sleep", 5e3);
+    }
+    if (this.turn < 50) {
+      this.time = "Daybreak";
+    } else if (this.turn < 100) {
+      this.time = "Morning";
+    } else if (this.turn < 150) {
+      this.time = "Midday";
+    } else if (this.turn < 200) {
+      this.time = "Afternoon";
+    } else if (this.turn < 250) {
+      this.time = "Sunset";
+    } else if (this.turn < 300) {
+      this.time = "Evening";
+    } else if (this.turn < 250) {
+      this.time = "Night";
+    } else if (this.turn < 350) {
+      this.time = "Owl time";
+    }
+    if (this.turn >= this.daytimeLength) {
+      this.skyBox.bgColor = "rgba(100, 100, 180, 1)";
+      this.playerCharacter.visionRange = 3;
+      this.tileMap.alphaValue = 0.7;
+    } else if (this.turn >= this.daytimeLength - this.sunset) {
+      const sunsetFrac = (this.turn - (this.daytimeLength - this.sunset)) / this.sunset;
+      this.skyBox.bgColor = `rgba(${255 - 155 * sunsetFrac},${clamp(255 - 240 * sunsetFrac / 0.5, 100, 255)},${clamp(255 - 300 * sunsetFrac, 180, 255)},1)`;
+      this.playerCharacter.visionRange = 10 - Math.ceil(7 * sunsetFrac);
+      this.tileMap.alphaValue = 0.5 + 0.2 * sunsetFrac;
+    } else if (this.turn < this.sunrise) {
+      const sunriseFrac = this.turn / this.sunrise;
+      this.skyBox.bgColor = `rgba(${clamp(100 + 400 * sunriseFrac, 100, 255)},${100 + 155 * sunriseFrac},${clamp(180 + 300 * sunriseFrac, 180, 255)},1)`;
+      this.playerCharacter.visionRange = 5 + Math.ceil(5 * sunriseFrac);
+      this.tileMap.alphaValue = 0.5;
+    } else {
+      this.skyBox.bgColor = null;
+      this.playerCharacter.visionRange = 10;
+      this.tileMap.alphaValue = 0.5;
+    }
+  }
+  endDay() {
+    for (let e2 of this.activeEvents) {
+      if (e2.onDayEnd(this)) {
+        this.activeEvents = this.activeEvents.filter((ev) => ev != e2);
+      }
+    }
+    const e = this.eventDeck.shift();
+    if (e !== void 0) {
+      this.activeEvents.push(e);
+    }
+    const player = this.playerCharacter;
+    if (player.thirst === 0) {
+      player.state = "dead";
+      this.popMessage("You have died of thirst", 5e3);
+    } else {
+      player.thirst = player.thirst - 1;
+    }
+    if (player.hunger > 0) {
+      if (player.health < player.maxHealth && this.turn < 300) {
+        player.health++;
+      }
+      player.hunger--;
+    }
+    if (player.state !== "dead") {
+      player.moveHome(this);
+      if (this.turn < 300) {
+        this.popMessage("A new day begins...", 5e3);
+      } else {
+        this.popMessage("A restless sleep...", 5e3);
+      }
+    }
+    this.day = this.day + 1;
+    this.turn = 0;
   }
   /**
    * 
-   * @param {Vec2} pos 
+   * @param {import("eskv/lib/modules/geometry.js").VecLike} pos 
+   */
+  posToIndex(pos) {
+    return this.w * pos[1] + pos[0];
+  }
+  /**
+   * 
+   * @param {number} index
+   */
+  indexToPos(index) {
+    return new Vec2([index % this.w, Math.floor(index / this.w)]);
+  }
+  setupGame() {
+    this.entities.clear();
+    this.activeEvents = [new ShipWrecked()];
+    this.eventDeck = [new NullDay(), new Berries(), new End7DRL()];
+    generateIslandMap(this, this.rng);
+    this.debugSelector.elevGrid = this.metaTileMap.layer[MetaLayers.elevation];
+    this.turn = 0;
+    this.day = 1;
+    this.playerCharacter.setupForGameStart(this, this.rng);
+    this.enemies.forEach((e) => e.setupForGameStart(this, this.rng));
+    this.playerCharacter.actionInventory = App.get().findById("firstPlayerInventory");
+    this.popMessage('"Where am I? I remember a boat... a storm... falling..."', 5e3);
+  }
+  on_spriteSheet(e, o, v) {
+    this.tileMap.spriteSheet = this.spriteSheet;
+    this.debugSelector.spriteSheet = this.spriteSheet;
+  }
+  /**
+   * 
+   * @param {import("eskv/lib/modules/geometry.js").VecLike} pos 
    */
   updateTileInfo(pos) {
     const layout = this.metaTileMap.layer[MetaLayers.layout].get(pos);
@@ -6814,22 +11956,48 @@ class GameMap extends Widget {
     mmap.activeLayer = MetaLayers.layout;
     const tmap = this.tileMap;
     tmap.activeLayer = 0;
-    if (layout in IslandTileIndexes) {
-      tmap.set(pos, IslandTileIndexes[layout]);
-      tmap.clearCache();
+    if (layout in LayoutToVoxel) {
+      const elev = mmap.getFromLayer(MetaLayers.elevation, pos);
+      for (let i = 0; i < elev; i++) {
+        tmap.setInLayer(i, pos, voxelNames.rocky);
+      }
+      tmap.setInLayer(elev, pos, LayoutToVoxel[layout]);
     } else {
-      IslandAutotiles.wall.autoTile(pos, mmap, tmap);
-      IslandAutotiles.beachFront.autoTile(pos, mmap, tmap);
+      const vpos = new Vec2(pos);
+      if (layout === LayoutTiles.doorway) {
+        tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos), pos, voxelNames.rocky);
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos) + 1;
+        IslandAutotiles.door.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.window) {
+        tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos), pos, voxelNames.rocky);
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos) + 1;
+        IslandAutotiles.window.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.building) {
+        tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos), pos, voxelNames.rocky);
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos) + 1;
+        IslandAutotiles.wall.autoTile(vpos, mmap, tmap);
+        IslandAutotiles.wallExt.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.ocean) {
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos);
+        IslandAutotiles.beachFront.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.stream) {
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos);
+        IslandAutotiles.stream.autoTile(vpos, mmap, tmap);
+      }
     }
-    let traversible = layout === LayoutTiles.wall || layout === LayoutTiles.window ? 0 : 15;
-    for (let e of this.entities.children) {
-      if (e instanceof Entity && e.pos.equals(pos)) traversible &= e.traversible;
+    let traversible = layout === LayoutTiles.building && mmap._data.hasAdjacent(pos, [LayoutTiles.rocky, LayoutTiles.grassy, LayoutTiles.sand]) || layout === LayoutTiles.window ? 0 : 15;
+    let sight = layout === LayoutTiles.building && mmap._data.hasAdjacent(pos, [LayoutTiles.rocky, LayoutTiles.grassy, LayoutTiles.sand], true) ? 0 : 15;
+    const e = this.entities.get(this.posToIndex(pos));
+    if (e instanceof StaticEntity) {
+      tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos) + 1, pos, e.voxelIndex);
+      traversible &= e.traversible;
+      sight &= e.allowsSight;
     }
     this.metaTileMap.setInLayer(MetaLayers.traversible, pos, traversible);
-    let sight = layout === LayoutTiles.wall ? 0 : 15;
-    for (let e of this.entities.children) {
-      if (e instanceof Entity && e.pos.equals(pos)) sight &= e.allowsSight;
-    }
     this.metaTileMap.setInLayer(MetaLayers.allowsSight, pos, sight);
   }
   /**
@@ -6885,9 +12053,17 @@ class Camera extends ScrollView {
       ]);
     }
   }
+  on_touch_down(e, o, v) {
+    App.get().showTouchControls();
+    super.on_touch_down(e, o, v);
+    return false;
+  }
 }
-const urlTileset = "" + new URL("colored_tilemap-Y7qg7PJ2.png", import.meta.url).href;
+const urlTileset = "" + new URL("colored_tilemap-CcCY-wA7.png", import.meta.url).href;
 setSeed(Date.now());
+window.onclick = () => {
+  window.focus();
+};
 class FPS extends Label {
   _counter = 0;
   _frames = 0;
@@ -6914,37 +12090,145 @@ class FPS extends Label {
     App.get().requestFrameUpdate();
   }
 }
-class GLDemo extends App {
+class IslandApp extends App {
   prefDimW = 20;
-  prefDimH = 21;
+  prefDimH = 23;
   /**@type {[number, number]} */
   playerPos = [8, 5];
   /**@type {[number, number]} */
-  terrainSize = [128, 80];
+  terrainSize = [80, 80];
   score = 0;
   gameOver = false;
   showFPS = false;
   constructor() {
     super();
+    this.lastActionTime = 0;
     this.spritesheet = new SpriteSheet(urlTileset, 8, 1);
     App.resources["sprites"] = this.spritesheet;
     this.gameMap = new GameMap({ hints: { w: null, h: null } });
     this.gameMap.spriteSheet = this.spritesheet;
-    this.camera = new Camera({ id: "camera", uiZoom: false, hints: { y: 0.1, h: "20", w: "30" } });
+    this.camera = new Camera({ id: "camera", uiZoom: false, hints: { y: "3", h: "20", w: 1 } });
     this.camera.addChild(this.gameMap);
     this.header = new Label({
       text: `The Island`,
       fontName: "serif",
       align: "center",
-      hints: { center_x: 0.5, center_y: 0.05, w: 0.6, h: 0.1 }
+      hints: { center_x: 0.5, center_y: 0.05, w: 0.6, h: "2" }
     });
-    this.fps = new FPS({ hints: { right: 1, center_y: 0.05, w: 0.2, h: 0.1 } });
+    this.healthLabel = new Label({
+      id: "healthStatus",
+      text: "test",
+      align: "left",
+      color: "pink",
+      hints: { w: null }
+    });
+    this.hungerLabel = new Label({
+      id: "hungerStatus",
+      color: "orange",
+      align: "center",
+      hints: { w: null }
+    });
+    this.thirstLabel = new Label({
+      id: "thirstStatus",
+      color: "lightblue",
+      align: "right",
+      hints: { w: null }
+    });
+    this.timeLabel = new Label({
+      id: "timeStatus",
+      color: "yellow",
+      align: "right",
+      hints: { w: null }
+    });
+    this.footer = new BoxLayout({
+      orientation: "horizontal",
+      hints: { h: "1", w: 1, y: "2", x: 0 },
+      spacingX: "1",
+      children: [
+        this.healthLabel,
+        this.hungerLabel,
+        this.thirstLabel,
+        new Widget(),
+        this.timeLabel
+      ]
+    });
+    this.gameMap.playerCharacter.bind(
+      "health",
+      (e, o, v) => {
+        this.healthLabel.text = `Health: ${v}/5`;
+        this.footer._needsLayout = true;
+      }
+    );
+    this.gameMap.playerCharacter.bind(
+      "hunger",
+      (e, o, v) => {
+        this.hungerLabel.text = `Hunger: ${v}/5`;
+        this.footer._needsLayout = true;
+      }
+    );
+    this.gameMap.playerCharacter.bind(
+      "thirst",
+      (e, o, v) => {
+        this.thirstLabel.text = `Thirst: ${v}/1`;
+        this.footer._needsLayout = true;
+      }
+    );
+    const timeCB = (e, o, v) => {
+      this.timeLabel.text = `${this.gameMap.time} ~ Day ${this.gameMap.day} ~ Turn ${this.gameMap.turn}`;
+      this.footer._needsLayout = true;
+    };
+    this.gameMap.bind("time", timeCB);
+    this.gameMap.bind("turn", timeCB);
+    this.gameMap.bind("day", timeCB);
+    this.fps = new FPS({ hints: { right: 1, y: "0.5", w: 0.2, h: "1" } });
+    this.debugSelectorLabel = new Label({ color: "white", hints: { x: 0, y: "0.5", w: 0.2, h: "1" } });
+    const selCB = (e, o, v) => {
+      if (v[0] >= 0 && v[1] >= 0) {
+        this.debugSelectorLabel.text = `(${v[0]}, ${v[1]}) -- index ${this.gameMap.posToIndex(v)}-- elev ${o.elev}`;
+      } else {
+        this.debugSelectorLabel.text = "";
+      }
+    };
+    this.gameMap.debugSelector.bind("gpos", selCB);
+    this.buttonLeft = new Button({ text: "<", hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("left") }), this.buttonRight = new Button({ text: ">", hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("right") }), this.buttonUp = new Button({ text: `/\\`, hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("up") });
+    this.buttonDown = new Button({ text: `\\/`, hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("down") }), this.buttonWait = new Button({ text: `O`, hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("wait") }), this.touchController = new GridLayout({
+      hints: { x: 0, bottom: 1, h: "9", w: "9" },
+      orientation: "vertical",
+      numY: 3,
+      children: [
+        new Widget(),
+        this.buttonLeft,
+        new Widget(),
+        this.buttonUp,
+        this.buttonWait,
+        this.buttonDown,
+        new Widget(),
+        this.buttonRight,
+        new Widget()
+      ]
+    });
     this.baseWidget.children = [
       this.header,
-      this.camera
+      this.footer,
+      this.camera,
+      this.debugSelectorLabel
     ];
     this.updateProperties({});
-    this.gameMap.setupLevel();
+    window.focus();
+    this.gameMap.setupGame();
+  }
+  /**
+   * 
+   * @param {boolean} show 
+   */
+  showTouchControls(show = true) {
+    if (show) {
+      if (!this._baseWidget.children.includes(this.touchController)) {
+        this._baseWidget.addChild(this.touchController);
+      }
+    } else {
+      this._baseWidget.children = this._baseWidget.children.filter((c) => c !== this.touchController);
+    }
   }
   layoutChildren() {
     super.layoutChildren();
@@ -6975,6 +12259,8 @@ class GLDemo extends App {
     return pos[1] * this.terrainSize[0] + pos[0];
   }
   restart() {
+    this.gameMap.setupGame();
+    this.gameOver = false;
   }
   updateHeader() {
   }
@@ -6985,38 +12271,114 @@ class GLDemo extends App {
   updateTiles() {
   }
   on_key_down(e, o, v) {
+    if (Date.now() - this.lastActionTime < 250) {
+      return true;
+    }
+    this.showTouchControls(false);
+    this.lastActionTime = Date.now();
     const ip = this.inputHandler;
-    const player = this.gameMap.playerCharacter;
-    const mmap = this.gameMap;
+    this.gameMap.playerCharacter;
+    const gmap = this.gameMap;
     if (ip === void 0) return;
     if (this.gameOver) {
       if (ip.isKeyDown("r")) {
         this.restart();
+      } else {
+        gmap.popMessage("Game is over, press R to restart");
       }
+      return;
     } else {
-      if (ip.isKeyDown("w") && player.pos[1] > 0) {
-        player.move(Facing.north, mmap);
-      } else if (ip.isKeyDown("s") && player.pos[1] < mmap.tileMap.tileDim[1] - 1) {
-        player.move(Facing.south, mmap);
-      } else if (ip.isKeyDown("a") && player.pos[0] > 0) {
-        player.move(Facing.west, mmap);
-      } else if (ip.isKeyDown("d") && player.pos[0] < mmap.tileMap.tileDim[0] - 1) {
-        player.move(Facing.east, mmap);
+      if (gmap.popup.text !== "") {
+        if (gmap.popup.canCancel) {
+          gmap.popup.canCancel = false;
+          gmap.popup.text = "";
+          gmap.popup.x = -1;
+          gmap.popup.y = -1;
+        }
+      }
+      if (gmap.day === 1 && gmap.turn === 0) gmap.popMessage("W/A/S/D keys to move", 0);
+      {
+        const ds = gmap.debugSelector;
+        if (ip.isKeyDown("Q")) {
+          ds.gpos = new Vec2(gmap.playerCharacter.gpos);
+        }
+        if (ip.isKeyDown("W")) {
+          ds.gpos = ds.gpos.add([0, -1]);
+        }
+        if (ip.isKeyDown("A")) {
+          ds.gpos = ds.gpos.add([-1, 0]);
+        }
+        if (ip.isKeyDown("S")) {
+          ds.gpos = ds.gpos.add([0, 1]);
+        }
+        if (ip.isKeyDown("D")) {
+          ds.gpos = ds.gpos.add([1, 0]);
+        }
+        if (ip.isKeyDown("V")) {
+          gmap.metaTileMap.layer[MetaLayers.seen].fill(1);
+        }
+        if (ip.isKeyDown("Z")) {
+          this.camera.zoom = this.camera.zoom / 2;
+          if (this.camera.zoom < 0.25) {
+            this.camera.zoom = 1;
+          }
+        }
+      }
+      if (ip.isKeyDown("w")) {
+        this.takeAction("up");
+      } else if (ip.isKeyDown("s")) {
+        this.takeAction("down");
+      } else if (ip.isKeyDown("a")) {
+        this.takeAction("left");
+      } else if (ip.isKeyDown("d")) {
+        this.takeAction("right");
       } else if (ip.isKeyDown(" ")) {
-        player.rest(mmap);
+        this.takeAction("wait");
       } else if (ip.isKeyDown("f")) {
         this.showFPS = !this.showFPS;
       }
     }
-    mmap.updateCharacterVisibility();
+  }
+  /**
+   * 
+   * @param {'left'|'right'|'up'|'down'|'wait'} action 
+   * @returns 
+   */
+  takeAction(action) {
+    const player = this.gameMap.playerCharacter;
+    const gmap = this.gameMap;
+    if (action === "up" && player.pos[1] > 0) {
+      player.move(Facing.north, gmap);
+    } else if (action === "down" && player.pos[1] < gmap.tileMap.tileDim[1] - 1) {
+      player.move(Facing.south, gmap);
+    } else if (action === "left" && player.pos[0] > 0) {
+      player.move(Facing.west, gmap);
+    } else if (action === "right" && player.pos[0] < gmap.tileMap.tileDim[0] - 1) {
+      player.move(Facing.east, gmap);
+    } else if (action === "right") {
+      player.rest(gmap);
+    }
+    gmap.updateCharacterVisibility();
     if (player.actionsThisTurn === 0) {
-      for (let e2 of mmap.enemies) {
-        e2.takeTurn(mmap);
+      for (let e of gmap.enemies) {
+        e.takeTurn(gmap);
       }
+      gmap.turn = gmap.turn + 1;
+      gmap.updateCharacterVisibility(true);
       player.actionsThisTurn = 1;
-      mmap.updateCharacterVisibility(true);
+    }
+    if (player.state === "dead") {
+      this.gameOver = true;
+    }
+    return true;
+  }
+  //TODO: Move this somewhere sensible
+  on_sheetLoaded(e, o, v) {
+    const renderer = this.gameMap.tileMap._renderer;
+    if (renderer instanceof WebGLSpriteRenderer) {
+      renderer.registerTexture("main", this.gameMap.spriteSheet.canvas, this.gameMap.spriteSheet.spriteSize, null, this.gameMap.spriteSheet.padding);
     }
   }
 }
-var glDemo = new GLDemo();
-glDemo.start();
+var islandApp = new IslandApp();
+islandApp.start();
