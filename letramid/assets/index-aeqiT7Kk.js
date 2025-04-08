@@ -9648,7 +9648,7 @@ class Star extends Widget {
   //     ctx.fill();
   // }
 }
-const instructionsText = "Objective: Unscramble the 5 words and keep as many stars as you can.\n\nPlay: Select any pair of raised letters and drag one to the other to exchange their positions. If either letter is correctly placed it will no longer be raised and can no longer be moved. If neither letter is correctly placed, you will lose a star. If a letter is in the row but thatit can be placed it will be highlighted.\n\nEnd game: The game ends when you have uncrambled all words.";
+const instructionsText = 'Objective: Unscramble the 5 mystery words and keep as many stars as you can.\n\nPyramid: The pyramid is a 5x7 grid of letters. Each row has a mystery word of length 3 to 7 letters that you must find by exchanging the positions of letters.\n\nExchange: Drag a raised letter to another raise letter in any row to exchange their positions.\n\nCorrect placement: If a letter is correctly positioned for a word in its row it will no longer be raised and will become locked in place. At the start of the game, one letter in each row will be correctly positioned and locked in place.\n\nIncorrect placement: If neither of the letters you exchanged is correctly positioned, you will lose a star. Try to make educated guesses from the correctly placed letters!\n\nHints: Any letters appearing in a row where they can be placed correctly will be highlighted.\n\nEnd game: Once you have all letters locked in place you have completed the game! Your stars are your score. You can play a new "daily game" every day or play a random game any time you feel like it.\n\n';
 class Instructions extends ModalView {
   constructor() {
     super();
@@ -9720,7 +9720,7 @@ class Menu extends ModalView {
     this.bgColor = null;
     this.outlineColor = null;
     this.children = [
-      new MenuOption({ text: "Restart Game", value: 1 }),
+      // new MenuOption({text: 'Restart Game', value:1}),
       new MenuOption({ text: "Daily Game", value: 2 }),
       new MenuOption({ text: "Random Game", value: 3 }),
       new MenuOption({ text: "Instructions", value: 4 }),
@@ -10030,9 +10030,6 @@ class Board extends Widget {
     this.reset(true);
   }
   restartGame() {
-    if (this.scorebar.score > 0) {
-      this.scorebar.played += 1;
-    }
     this.reset();
   }
   reset(redraw = false) {
