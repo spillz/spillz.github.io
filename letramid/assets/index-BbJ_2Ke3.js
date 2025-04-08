@@ -1209,7 +1209,7 @@ function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordw
       if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
         let lastIndex = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
         if (lastIndex >= 0) {
-          guess -= nextLine.length - lastIndex - 1;
+          guess -= nextLine.length - lastIndex;
         }
       }
     }
@@ -1270,7 +1270,7 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
       if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
         let lastIndex = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
         if (lastIndex >= 0) {
-          guess -= nextLine.length - lastIndex - 1;
+          guess -= nextLine.length - lastIndex;
         }
       }
     }
@@ -9395,18 +9395,17 @@ function loadTheme(themeName) {
   return theme;
 }
 const urlWords = "" + new URL("TWL06-BX4RmYm2.txt", import.meta.url).href;
-const urlSoundCancelSelection = "" + new URL("cancel_selection-DZ1gYDyu.mp3", import.meta.url).href;
+const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
 const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
 const urlSoundMenu = "" + new URL("menu-Wio-ugm1.mp3", import.meta.url).href;
-const urlSoundSelect = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundWordCompleted = "" + new URL("word_completed-Bu2Q1kXb.mp3", import.meta.url).href;
 const sounds = {
   CANCEL_SELECTION: new Audio(urlSoundCancelSelection),
   LEVEL_COMPLETED: new Audio(urlSoundLevelCompleted),
   LEVEL_FAILED: new Audio(urlSoundLevelFailed),
   MENU: new Audio(urlSoundMenu),
-  SELECT: new Audio(urlSoundSelect),
+  CORRECT: new Audio(urlSoundWordCompleted),
   WORD_COMPLETED: new Audio(urlSoundWordCompleted)
 };
 const boardSize = 5;
@@ -9547,6 +9546,9 @@ class LetterTile extends Widget {
           this.board.updateTileStates();
           if (t.active && this.active) {
             this.board.scorebar.score += 1;
+            sounds.CANCEL_SELECTION.play();
+          } else {
+            sounds.CORRECT.play();
           }
           this.board.checkCompletion(this.row);
           this.board.checkCompletion(t.row);
@@ -9648,7 +9650,30 @@ class Star extends Widget {
   //     ctx.fill();
   // }
 }
-const instructionsText = 'Objective: Unscramble the 5 mystery words and keep as many stars as you can.\n\nPyramid: The pyramid is a 5x7 grid of letters. Each row has a mystery word of length 3 to 7 letters that you must find by exchanging the positions of letters.\n\nExchange: Drag a raised letter to another raise letter in any row to exchange their positions.\n\nCorrect placement: If a letter is correctly positioned for a word in its row it will no longer be raised and will become locked in place. At the start of the game, one letter in each row will be correctly positioned and locked in place.\n\nIncorrect placement: If neither of the letters you exchanged is correctly positioned, you will lose a star. Try to make educated guesses from the correctly placed letters!\n\nHints: Any letters appearing in a row where they can be placed correctly will be highlighted.\n\nEnd game: Once you have all letters locked in place you have completed the game! Your stars are your score. You can play a new "daily game" every day or play a random game any time you feel like it.\n\n';
+const instructionsText = `🎯 Objective:
+Unscramble the 5 mystery words and keep as many stars as you can!
+
+🔺 Letramid:
+The Letramid is a five-tiered stack of mystery words, each 3 to 7 letters long. Your goal is to restore them by swapping the incorrectly placed raised letters.
+
+🔄 How to Play:
+Drag one raised letter onto another in the same or a different row to exchange their positions.
+
+✅ Correct Placement:
+When a letter is in the correct spot for its word, it will drop and lock in place. 
+
+❌ Incorrect Placement:
+If neither swapped letter is in the correct spot, you'll lose a star. Make your swaps carefully!
+
+💡 Hints:
+- Scrabble rules apply -- no proper nouns, no plurals, and no abbreviations are valid in the Letramid.
+- One letter per row starts in the correct position — use that to guide your exchanges.
+- Letters that appear in a row where they can be placed correctly in that row are highlighted.
+
+🏁 Winning:
+Complete the Letramid by locking all letters in place. Your remaining stars are your score. Play a new daily game each day, or try a random game anytime!
+
+Good luck, wordsmith! 🏆`;
 class Instructions extends ModalView {
   constructor() {
     super();
@@ -10083,7 +10108,7 @@ class Board extends Widget {
     if (isCompletedWord) {
       this.checkGameOver();
       if (!this.gameOver) {
-        sounds.WORD_COMPLETED.play();
+        setTimeout(() => sounds.WORD_COMPLETED.play(), 100);
       }
     }
   }
@@ -10158,9 +10183,7 @@ class Board extends Widget {
   }
   statusPressed(e, o, v) {
     if (this.statusbar.wordScore === -1) {
-      this.dailyGame();
-    } else if (this.statusbar.wordScore === -2) {
-      this.reset(true);
+      this.randomGame();
     }
   }
   checkGameOver() {
