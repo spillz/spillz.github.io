@@ -9885,7 +9885,7 @@ class ScoreBar extends BoxLayout {
       })
     ];
     try {
-      this.store = localStorage.getItem("7Words/scores.json");
+      this.store = localStorage.getItem("letramid/scores.json");
     } catch (error) {
       this.store = null;
     }
@@ -9895,7 +9895,7 @@ class ScoreBar extends BoxLayout {
   getStatus() {
     var _a;
     try {
-      const status = localStorage.getItem("7Words/status");
+      const status = localStorage.getItem("letramid/status");
       if (status) {
         const data = JSON.parse(status);
         this.gameId = (_a = data.gameId) != null ? _a : "";
@@ -9908,7 +9908,7 @@ class ScoreBar extends BoxLayout {
   }
   setPlayed() {
     try {
-      localStorage.setItem("7Words/games/" + this.gameId, JSON.stringify({ score: this.score }));
+      localStorage.setItem("letramid/games/" + this.gameId, JSON.stringify({ score: this.score }));
     } catch (error) {
     }
     console.info(`Played game ${this.gameId} ${this.played} times`);
@@ -9918,12 +9918,12 @@ class ScoreBar extends BoxLayout {
     console.info(`Setting game ${this.gameId}`);
     if (this.gameId !== "") {
       try {
-        localStorage.setItem("7Words/status", JSON.stringify({ gameId: this.gameId }));
+        localStorage.setItem("letramid/status", JSON.stringify({ gameId: this.gameId }));
       } catch (error) {
       }
     }
     try {
-      const store = localStorage.getItem("7Words/games/" + String(this.gameId));
+      const store = localStorage.getItem("letramid/games/" + String(this.gameId));
       if (store) {
         const data = JSON.parse(store);
         this.hiScore = (_a = data.highScore) != null ? _a : 0;
@@ -9943,7 +9943,7 @@ class ScoreBar extends BoxLayout {
     if (this.score > this.hiScore) {
       this.hiScore = this.score;
       try {
-        localStorage.setItem("7Words/games/" + String(this.gameId), JSON.stringify({ score: this.score }));
+        localStorage.setItem("letramid/games/" + String(this.gameId), JSON.stringify({ score: this.score }));
       } catch (error) {
       }
     }
@@ -10161,7 +10161,7 @@ class Board extends Widget {
   }
   /**@type {eskv.Widget['layoutChildren']} */
   layoutChildren() {
-    this.tileSpaceSize = Math.min(this.size[0], 0.7 * this.size[1]) / boardSize;
+    this.tileSpaceSize = Math.min(this.size[0] / (boardSize + 3), 0.7 * this.size[1] / boardSize);
     this.tileSize = this.tileSpaceSize - 0.01 * this.size[1];
     this.pyramidSize = boardSize * this.tileSpaceSize;
     this.offX = 0;
@@ -10170,7 +10170,7 @@ class Board extends Widget {
     [this.statusbar.x, this.statusbar.y] = [this.size[0] / 8, this.size[1] - (0.04 * this.size[1] + (this.offY + 0.04 * this.size[1] + 0.06 * this.size[1]) / 2)];
     [this.messagebar.w, this.messagebar.h] = [this.size[0], 0.04 * this.size[1]];
     [this.messagebar.x, this.messagebar.y] = [0, this.size[1]];
-    [this.scorebar.w, this.scorebar.h] = [this.size[0], 0.15 * this.size[1]];
+    [this.scorebar.w, this.scorebar.h] = [this.size[0], 0.12 * this.size[1]];
     [this.scorebar.x, this.scorebar.y] = [0, 0];
     console.log("Laying out pyramid");
     this.pyramid.forEach((row, r) => {
@@ -10212,7 +10212,7 @@ class SevenWordsApp extends App {
     var _a;
     super();
     this.id = "app";
-    const themeName = (_a = localStorage.getItem("7Words/theme")) != null ? _a : "midnight";
+    const themeName = (_a = localStorage.getItem("letramid/theme")) != null ? _a : "midnight";
     this.colors = loadTheme(themeName);
     this.words = words;
     this.instructions = new Instructions();
@@ -10276,7 +10276,7 @@ class SevenWordsApp extends App {
     const ind = (themes$1.indexOf(this.colors["id"]) + 1) % themes$1.length;
     if (ind >= 0) {
       this.colors = loadTheme(themes$1[ind]);
-      localStorage.setItem("7Words/theme", themes$1[ind]);
+      localStorage.setItem("letramid/theme", themes$1[ind]);
     }
   }
   /**
