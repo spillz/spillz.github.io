@@ -1,6 +1,3 @@
-var __defProp = Object.defineProperty;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 (function polyfill() {
   const relList = document.createElement("link").relList;
   if (relList && relList.supports && relList.supports("modulepreload")) {
@@ -39,9 +36,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   }
 })();
 class PRNG {
-  constructor() {
-    __publicField(this, "_seed", 0);
-  }
+  _seed = 0;
   /**
    * Generate pseudo random number in the interval [0,1)
    * @returns {number}
@@ -54,7 +49,6 @@ class PRNG {
    * @param {number} seed 
    */
   seed(seed) {
-    throw new Error("Seeding is not available in the default PRNG class. You can set another with `eskv.rand.setPRNG`.");
   }
   /**
    * Generate an interger in the interval [m1,m2) or [0,m1) if m2===0
@@ -141,119 +135,18 @@ function sfc32(a, b, c, d) {
     return (t >>> 0) / 4294967296;
   };
 }
-function mulberry32(a) {
-  return function() {
-    var t = a += 1831565813;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function xoshiro128ss(a, b, c, d) {
-  return function() {
-    var t = b << 9, r = b * 5;
-    r = (r << 7 | r >>> 25) * 9;
-    c ^= a;
-    d ^= b;
-    b ^= c;
-    a ^= d;
-    c ^= t;
-    d = d << 11 | d >>> 21;
-    return (r >>> 0) / 4294967296;
-  };
-}
-function jsf32(a, b, c, d) {
-  return function() {
-    a |= 0;
-    b |= 0;
-    c |= 0;
-    d |= 0;
-    var t = a - (b << 27 | b >>> 5) | 0;
-    a = b ^ (c << 17 | c >>> 15);
-    b = c + d | 0;
-    c = d + t | 0;
-    d = a + t | 0;
-    return (d >>> 0) / 4294967296;
-  };
-}
 class PRNG_sfc32 extends PRNG {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "_seed", 1);
-    __publicField(this, "d", 3735928559);
-    __publicField(this, "xorSeed", Math.floor(Date.now()) ^ this.d);
-    __publicField(this, "random", sfc32(2654435769, 608135816, 3084996962, this.xorSeed));
-  }
+  _seed = 1;
+  d = 3735928559;
+  xorSeed = Math.floor(Date.now()) ^ this.d;
+  random = sfc32(2654435769, 608135816, 3084996962, this.xorSeed);
   seed(seed) {
     this._seed = seed;
     this.xorSeed = seed ^ this.d;
     this.random = sfc32(2654435769, 608135816, 3084996962, this.xorSeed);
   }
 }
-class PRNG_mulberry32 extends PRNG {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "_seed", 1);
-    __publicField(this, "d", 3735928559);
-    __publicField(this, "xorSeed", Math.floor(Date.now()) ^ this.d);
-    __publicField(this, "random", mulberry32(this.xorSeed));
-  }
-  seed(seed) {
-    this._seed = seed;
-    this.xorSeed = seed ^ this.d;
-    this.random = mulberry32(this.xorSeed);
-  }
-}
-class PRNG_xoshiro128ss extends PRNG {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "_seed", 1);
-    __publicField(this, "d", 3735928559);
-    __publicField(this, "xorSeed", Math.floor(Date.now()) ^ this.d);
-    __publicField(this, "random", xoshiro128ss(2654435769, 608135816, 3084996962, this.xorSeed));
-  }
-  seed(seed) {
-    this._seed = seed;
-    this.xorSeed = seed ^ this.d;
-    this.random = xoshiro128ss(2654435769, 608135816, 3084996962, this.xorSeed);
-  }
-}
-class PRNG_jsf32 extends PRNG {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "_seed", 1);
-    __publicField(this, "d", 3735928559);
-    __publicField(this, "xorSeed", Math.floor(Date.now()) ^ this.d);
-    __publicField(this, "random", jsf32(2654435769, 608135816, 3084996962, this.xorSeed));
-  }
-  seed(seed) {
-    this._seed = seed;
-    this.xorSeed = seed ^ this.d;
-    this.random = jsf32(2654435769, 608135816, 3084996962, this.xorSeed);
-  }
-}
 var defaultPRNG = new PRNG_sfc32();
-function setPRNG(name) {
-  switch (name) {
-    case "Math.random":
-      defaultPRNG = new PRNG();
-      return;
-    case "sfc32":
-      defaultPRNG = new PRNG_sfc32();
-      return;
-    case "mulberry32":
-      defaultPRNG = new PRNG_mulberry32();
-      return;
-    case "xoshiro128ss":
-      defaultPRNG = new PRNG_xoshiro128ss();
-      return;
-    case "jsf32":
-      defaultPRNG = new PRNG_jsf32();
-      return;
-    default:
-      throw Error(`Unknown PRNG ${name}`);
-  }
-}
 function getRandomInt(m1, m2 = 0) {
   return defaultPRNG.getRandomInt(m1, m2);
 }
@@ -272,13 +165,11 @@ function choose(array) {
 function setSeed(seed) {
   return defaultPRNG.seed(seed);
 }
-function stringToSeed(str) {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) + hash + str.charCodeAt(i);
-    hash = hash & 4294967295;
-  }
-  return hash >>> 0;
+function vec2(x, y) {
+  return new Vec2([x, y]);
+}
+function v2(vecLike) {
+  return new Vec2(vecLike);
 }
 class Vec2 extends Array {
   /**
@@ -1209,7 +1100,7 @@ function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordw
       if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
         let lastIndex = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
         if (lastIndex >= 0) {
-          guess -= nextLine.length - lastIndex;
+          guess -= nextLine.length - lastIndex - 1;
         }
       }
     }
@@ -1270,7 +1161,7 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
       if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
         let lastIndex = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
         if (lastIndex >= 0) {
-          guess -= nextLine.length - lastIndex;
+          guess -= nextLine.length - lastIndex - 1;
         }
       }
     }
@@ -1313,7 +1204,6 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
   return textData;
 }
 function drawWrappedText(ctx, textData, color = null) {
-  var _a;
   let scale = 1;
   let size = textData.size;
   if (color === null) color = textData.color;
@@ -1336,7 +1226,7 @@ function drawWrappedText(ctx, textData, color = null) {
   ctx.fillStyle = color;
   ctx.font = (size >= minFontSize ? size : Math.ceil(size / scale)) + "px " + textData.fontName;
   for (let tdat of textData.outText) {
-    ctx.fillText(tdat[0], tdat[1], tdat[2] + ((_a = textData.off) != null ? _a : 0));
+    ctx.fillText(tdat[0], tdat[1], tdat[2] + (textData.off ?? 0));
   }
   if (size < minFontSize) {
     ctx.restore();
@@ -1473,21 +1363,21 @@ class MathArray extends Array {
   }
 }
 class Touch {
+  /**@type {number} */
+  identifier = -1;
+  /**@type {Vec2|[number,number]} */
+  pos = [0, 0];
+  /**@type {string} */
+  state = "touch_up";
+  // one of 'touch_up', 'touch_down', 'touch_move', 'touch_cancel'
+  /**@type {'touch'|'mouse'|'keyboard'} */
+  device = "touch";
+  //source of touch: touch, mouse or keyboard
+  /**@type {globalThis.Touch|MouseEvent|WheelEvent} */
+  nativeObject = null;
+  /**@type {MouseEvent|TouchEvent} */
+  nativeEvent = null;
   constructor(props = {}) {
-    /**@type {number} */
-    __publicField(this, "identifier", -1);
-    /**@type {Vec2|[number,number]} */
-    __publicField(this, "pos", [0, 0]);
-    /**@type {string} */
-    __publicField(this, "state", "touch_up");
-    // one of 'touch_up', 'touch_down', 'touch_move', 'touch_cancel'
-    /**@type {'touch'|'mouse'|'keyboard'} */
-    __publicField(this, "device", "touch");
-    //source of touch: touch, mouse or keyboard
-    /**@type {globalThis.Touch|MouseEvent|WheelEvent} */
-    __publicField(this, "nativeObject", null);
-    /**@type {MouseEvent|TouchEvent} */
-    __publicField(this, "nativeEvent", null);
     for (let p in props) {
       this[p] = props[p];
     }
@@ -1551,16 +1441,16 @@ class Touch {
   }
 }
 class InputHandler {
+  /**@type {Widget|null} */
+  grabbed = null;
+  mouseTouchEmulation = true;
+  mouseev = null;
+  keyStates = {};
   /**
    * 
    * @param {App} app 
    */
   constructor(app) {
-    /**@type {Widget|null} */
-    __publicField(this, "grabbed", null);
-    __publicField(this, "mouseTouchEmulation", true);
-    __publicField(this, "mouseev", null);
-    __publicField(this, "keyStates", {});
     this.app = app;
     this.canvas = app.canvas;
     let canvas = this.canvas;
@@ -1823,6 +1713,15 @@ class Timer {
     }
   }
 }
+class Resource {
+  /**
+   * 
+   * @param {App} app 
+   * @param {number} millis 
+   */
+  update(app, millis) {
+  }
+}
 class Rules {
   constructor() {
     this.rules = /* @__PURE__ */ new Map();
@@ -1849,8 +1748,7 @@ class Rules {
    * @returns {Object}
    */
   get(widgetClass) {
-    var _a;
-    return (_a = this.rules.get(widgetClass)) != null ? _a : {};
+    return this.rules.get(widgetClass) ?? {};
   }
   /**
    * Remove and return the rules object for the specified class
@@ -1922,16 +1820,14 @@ class EventManager {
   }
 }
 class WidgetAnimation {
-  constructor() {
-    /**@type {Array<[AnimationProperties, number]>} The sequentially applied stack of animation effects (each effect can comprise multiple animations)*/
-    __publicField(this, "stack", []);
-    /**@type {Widget|null} */
-    __publicField(this, "widget", null);
-    /**@type {AnimationProperties} */
-    __publicField(this, "props", {});
-    /**@type {number} */
-    __publicField(this, "elapsed", 0);
-  }
+  /**@type {Array<[AnimationProperties, number]>} The sequentially applied stack of animation effects (each effect can comprise multiple animations)*/
+  stack = [];
+  /**@type {Widget|null} */
+  widget = null;
+  /**@type {AnimationProperties} */
+  props = {};
+  /**@type {number} */
+  elapsed = 0;
   /**
    * Add animation effect to the stack of effects (the stack is animated sequentially). Multiple properties can be
    * altered with each effect.
@@ -2003,6 +1899,17 @@ class WidgetAnimation {
   }
 }
 class Widget extends Rect {
+  /**@type {string|null} Background color of the widget, transparent (i.e., no fill) if null*/
+  bgColor = null;
+  /**@type {string|null} Color of outline drawn around the widget, no outline if null*/
+  outlineColor = null;
+  /**@type {WidgetAnimation|null} The animation currently being applied to this widget (null if none being applied)*/
+  _animation = null;
+  /**@type {boolean} Flag to indicate whether the layout for this widget and its children needs to be udpated*/
+  _layoutNotify = false;
+  //By default, we don't notify about layout events because that's a lot of function calls across a big widget collection
+  /**@type {WidgetSizeHints} Sizing hints for the widget*/
+  hints = {};
   /**
    * Widget provides the base interface for all interactable objects in ESKV
    * Widget constructor can be passed properties to instantiate it
@@ -2011,17 +1918,6 @@ class Widget extends Rect {
    */
   constructor(properties = null) {
     super();
-    /**@type {string|null} Background color of the widget, transparent (i.e., no fill) if null*/
-    __publicField(this, "bgColor", null);
-    /**@type {string|null} Color of outline drawn around the widget, no outline if null*/
-    __publicField(this, "outlineColor", null);
-    /**@type {WidgetAnimation|null} The animation currently being applied to this widget (null if none being applied)*/
-    __publicField(this, "_animation", null);
-    /**@type {boolean} Flag to indicate whether the layout for this widget and its children needs to be udpated*/
-    __publicField(this, "_layoutNotify", false);
-    //By default, we don't notify about layout events because that's a lot of function calls across a big widget collection
-    /**@type {WidgetSizeHints} Sizing hints for the widget*/
-    __publicField(this, "hints", {});
     this.parent = null;
     this._processTouches = false;
     this._deferredProps = null;
@@ -2060,14 +1956,13 @@ class Widget extends Rect {
    * is called by the framework and does not need to be called by user code.
    */
   deferredProperties(app) {
-    var _a;
     let properties = this._deferredProps;
     this._deferredProps = null;
     for (let p in properties) {
       if (!p.startsWith("on_") && !p.startsWith("_") && typeof properties[p] == "function") {
         let func = properties[p];
         let args, rval;
-        [args, rval] = ((_a = func["text"]) != null ? _a : func.toString()).split("=>");
+        [args, rval] = (func["text"] ?? func.toString()).split("=>");
         args = args.replace("(", "").replace(")", "").split(",").map((a) => a.trim());
         let objs = args.map((a) => app.findById(a));
         let obmap = {};
@@ -2498,8 +2393,8 @@ class Widget extends Rect {
     }
     let value = 0;
     let base = "relative";
-    parentWidth = parentWidth != null ? parentWidth : this.w;
-    parentHeight = parentHeight != null ? parentHeight : this.h;
+    parentWidth = parentWidth ?? this.w;
+    parentHeight = parentHeight ?? this.h;
     while (true) {
       if (rule.constructor == String) {
         let r2 = rule.slice(-2);
@@ -2562,8 +2457,8 @@ class Widget extends Rect {
     }
     let value = 0;
     let base = "relative";
-    parentWidth = parentWidth != null ? parentWidth : this.w;
-    parentHeight = parentHeight != null ? parentHeight : this.h;
+    parentWidth = parentWidth ?? this.w;
+    parentHeight = parentHeight ?? this.h;
     while (true) {
       if (rule.constructor == String) {
         let r2 = rule.slice(-2);
@@ -2619,8 +2514,8 @@ class Widget extends Rect {
    */
   applyHints(c, w = null, h = null) {
     let hints = c.hints;
-    w = w != null ? w : this.w;
-    h = h != null ? h : this.h;
+    w = w ?? this.w;
+    h = h ?? this.h;
     if ("w" in hints && hints["w"] != null && hints["w"].constructor == String && hints["w"].slice(-2) == "wh") {
       if (hints["h"] !== void 0) this.applyHintMetric(c, "h", hints["h"], w, h);
       if (hints["w"] !== void 0) this.applyHintMetric(c, "w", hints["w"], w, h);
@@ -2720,7 +2615,18 @@ class Widget extends Rect {
     for (let c of this._children) c.update(app, millis);
   }
 }
-const _App = class _App extends Widget {
+class App extends Widget {
+  /**
+   * Object representing the singleton App instance
+   * @type {App|null}
+   */
+  static appInstance = null;
+  /** @type {Rules} */
+  static rules = new Rules();
+  /** @type {Map<string, Resource>} */
+  static resources = /* @__PURE__ */ new Map();
+  /** @type {WidgetClassInfo} */
+  static classes = {};
   /**
    * 
    * @param {string} name 
@@ -2728,7 +2634,7 @@ const _App = class _App extends Widget {
    * @param {string} baseClsName
    */
   static registerClass(name, cls, baseClsName) {
-    _App.classes[name] = [cls, baseClsName];
+    App.classes[name] = [cls, baseClsName];
   }
   /**
    * 
@@ -2736,9 +2642,9 @@ const _App = class _App extends Widget {
    * @returns 
    */
   constructor(props = null) {
-    if (_App.appInstance != null) return _App.appInstance;
+    if (App.appInstance != null) return App.appInstance;
     super();
-    _App.appInstance = this;
+    App.appInstance = this;
     window.app = this;
     this._eventManager = new EventManager();
     this.id = "app";
@@ -2814,8 +2720,8 @@ const _App = class _App extends Widget {
    * @returns {App}
    */
   static get() {
-    if (!_App.appInstance) _App.appInstance = new _App();
-    return _App.appInstance;
+    if (!App.appInstance) App.appInstance = new App();
+    return App.appInstance;
   }
   /**
    * Start the application runnning
@@ -2910,7 +2816,7 @@ const _App = class _App extends Widget {
     if (this._needsLayout) {
       this.layoutChildren();
     }
-    for (let res of _App.resources.values()) res.update(this, millis);
+    for (let res of App.resources.values()) res.update(this, millis);
     this._baseWidget.update(this, millis);
     for (let mw of this._modalWidgets) mw.update(this, millis);
     if (this.ctx) this._draw(this, this.ctx, millis);
@@ -3095,54 +3001,42 @@ const _App = class _App extends Widget {
       mw.layoutChildren();
     }
   }
-};
-/**
- * Object representing the singleton App instance
- * @type {App|null}
- */
-__publicField(_App, "appInstance", null);
-/** @type {Rules} */
-__publicField(_App, "rules", new Rules());
-/** @type {Map<string, Resource>} */
-__publicField(_App, "resources", /* @__PURE__ */ new Map());
-/** @type {WidgetClassInfo} */
-__publicField(_App, "classes", {});
-let App = _App;
+}
 class Label extends Widget {
+  /**@type {number|string|null} size of the font in tile units */
+  fontSize = null;
+  /**
+   * @type {string} If label is part of a size group, the fontSize (not the rect) 
+   * will be set to the smallest that will fit text to the rect for all Labels
+   * in the group. */
+  sizeGroup = "";
+  /**@type {boolean} If clip is true, the text will be clipped to the bounding rect */
+  clip = false;
+  /**
+   * @type {boolean} If ignoreSizeForGroup is true and this Label is part of a group,
+   * this Label's fontSize will not be used to set the fontSize for the group (useful
+   * in combination with clip to handle text that can be very long). */
+  ignoreSizeForGroup = false;
+  /**@type {string} name of the font */
+  fontName = '"Nimbus Mono PS", "Courier New", monospace';
+  /**@type {string} text displayed in the label*/
+  text = "";
+  /**@type {boolean} true to wrap long lines of text */
+  wrap = false;
+  /**@type {boolean} wraps at words if true, at character if false */
+  wrapAtWord = true;
+  /** @type {'left'|'center'|'right'} horizontal alignment, one of 'left','right','center'*/
+  align = "center";
+  /** @type {'top'|'middle'|'bottom'} vertical alignment, one of 'top','middle','bottom'*/
+  valign = "middle";
+  /** @type {string} text color, any valid HTML5 color string*/
+  color = "white";
   /**
    * Constructs a label with optional specified properties. 
    * @param {LabelProperties|null} properties 
    * */
   constructor(properties = null) {
     super();
-    /**@type {number|string|null} size of the font in tile units */
-    __publicField(this, "fontSize", null);
-    /**
-     * @type {string} If label is part of a size group, the fontSize (not the rect) 
-     * will be set to the smallest that will fit text to the rect for all Labels
-     * in the group. */
-    __publicField(this, "sizeGroup", "");
-    /**@type {boolean} If clip is true, the text will be clipped to the bounding rect */
-    __publicField(this, "clip", false);
-    /**
-     * @type {boolean} If ignoreSizeForGroup is true and this Label is part of a group,
-     * this Label's fontSize will not be used to set the fontSize for the group (useful
-     * in combination with clip to handle text that can be very long). */
-    __publicField(this, "ignoreSizeForGroup", false);
-    /**@type {string} name of the font */
-    __publicField(this, "fontName", '"Nimbus Mono PS", "Courier New", monospace');
-    /**@type {string} text displayed in the label*/
-    __publicField(this, "text", "");
-    /**@type {boolean} true to wrap long lines of text */
-    __publicField(this, "wrap", false);
-    /**@type {boolean} wraps at words if true, at character if false */
-    __publicField(this, "wrapAtWord", true);
-    /** @type {'left'|'center'|'right'} horizontal alignment, one of 'left','right','center'*/
-    __publicField(this, "align", "center");
-    /** @type {'top'|'middle'|'bottom'} vertical alignment, one of 'top','middle','bottom'*/
-    __publicField(this, "valign", "middle");
-    /** @type {string} text color, any valid HTML5 color string*/
-    __publicField(this, "color", "white");
     this._textData = null;
     if (properties !== null) {
       this.updateProperties(properties);
@@ -3260,22 +3154,22 @@ class Label extends Widget {
   }
 }
 class Button extends Label {
+  /**@type {string} Color of button (derives from widget)*/
+  bgColor = colorString([0.5, 0.5, 0.5]);
+  /**@type {string} Color of button when pressed down*/
+  selectColor = colorString([0.7, 0.7, 0.8]);
+  /**@type {string} Background color of button when disabled*/
+  disableColor1 = colorString([0.2, 0.2, 0.2]);
+  /**@type {string} Text color of button when disabled*/
+  disableColor2 = colorString([0.4, 0.4, 0.4]);
+  /**@type {boolean} */
+  disable = false;
   /**
    * Constructs a button with specified properties in `properties`
    * @param {ButtonProperties|null} properties 
    */
   constructor(properties = null) {
     super();
-    /**@type {string} Color of button (derives from widget)*/
-    __publicField(this, "bgColor", colorString([0.5, 0.5, 0.5]));
-    /**@type {string} Color of button when pressed down*/
-    __publicField(this, "selectColor", colorString([0.7, 0.7, 0.8]));
-    /**@type {string} Background color of button when disabled*/
-    __publicField(this, "disableColor1", colorString([0.2, 0.2, 0.2]));
-    /**@type {string} Text color of button when disabled*/
-    __publicField(this, "disableColor2", colorString([0.4, 0.4, 0.4]));
-    /**@type {boolean} */
-    __publicField(this, "disable", false);
     if (properties !== null) {
       this.updateProperties(properties);
     }
@@ -3325,24 +3219,24 @@ class Button extends Label {
   }
 }
 class BasicButton extends Widget {
+  /**@type {string} Color of button (derives from widget)*/
+  color = colorString([0.8, 0.8, 0.8]);
+  /**@type {string} Color of button (derives from widget)*/
+  bgColor = colorString([0.5, 0.5, 0.5]);
+  /**@type {string} Color of button when pressed down*/
+  selectColor = colorString([0.7, 0.7, 0.8]);
+  /**@type {string} Background color of button when disabled*/
+  disableColor1 = colorString([0.2, 0.2, 0.2]);
+  /**@type {string} Text color of button when disabled*/
+  disableColor2 = colorString([0.4, 0.4, 0.4]);
+  /**@type {boolean} */
+  disable = false;
   /**
    * Constructs a button with specified properties in `properties`
    * @param {BasicButtonProperties|null} properties 
    */
   constructor(properties = null) {
     super();
-    /**@type {string} Color of button (derives from widget)*/
-    __publicField(this, "color", colorString([0.8, 0.8, 0.8]));
-    /**@type {string} Color of button (derives from widget)*/
-    __publicField(this, "bgColor", colorString([0.5, 0.5, 0.5]));
-    /**@type {string} Color of button when pressed down*/
-    __publicField(this, "selectColor", colorString([0.7, 0.7, 0.8]));
-    /**@type {string} Background color of button when disabled*/
-    __publicField(this, "disableColor1", colorString([0.2, 0.2, 0.2]));
-    /**@type {string} Text color of button when disabled*/
-    __publicField(this, "disableColor2", colorString([0.4, 0.4, 0.4]));
-    /**@type {boolean} */
-    __publicField(this, "disable", false);
     if (properties !== null) {
       this.updateProperties(properties);
     }
@@ -3392,30 +3286,30 @@ class BasicButton extends Widget {
   }
 }
 class ToggleButton extends Label {
+  /**@type {string} Color of button (derives from widget)*/
+  bgColor = colorString([0.5, 0.5, 0.5]);
+  /**@type {string} Color of button when pressed down*/
+  pressColor = colorString([0.7, 0.7, 0.7]);
+  /**@type {string} Color of button when pressed down*/
+  selectColor = colorString([0.7, 0.7, 0.8]);
+  /**@type {string} Background color of button when disabled*/
+  disableColor1 = colorString([0.2, 0.2, 0.2]);
+  /**@type {string} Text color of button when disabled*/
+  disableColor2 = colorString([0.4, 0.4, 0.4]);
+  /**@type {boolean} */
+  disable = false;
+  /**@type {boolean} State of the ToggleButton, true if checked and false if unchecked */
+  _press = false;
+  /**@type {string|null} If not null, the ToggleButton becomes part of a group where only one option in the group can be active */
+  group = null;
+  /**@type {boolean} If group is true, activating this button deactivates others  */
+  singleSelect = true;
   /**
    * Constructs a new Checkbox with specified propertes in `props` 
    * @param {ToggleButtonProperties|null} [props=null] 
    */
   constructor(props = null) {
     super();
-    /**@type {string} Color of button (derives from widget)*/
-    __publicField(this, "bgColor", colorString([0.5, 0.5, 0.5]));
-    /**@type {string} Color of button when pressed down*/
-    __publicField(this, "pressColor", colorString([0.7, 0.7, 0.7]));
-    /**@type {string} Color of button when pressed down*/
-    __publicField(this, "selectColor", colorString([0.7, 0.7, 0.8]));
-    /**@type {string} Background color of button when disabled*/
-    __publicField(this, "disableColor1", colorString([0.2, 0.2, 0.2]));
-    /**@type {string} Text color of button when disabled*/
-    __publicField(this, "disableColor2", colorString([0.4, 0.4, 0.4]));
-    /**@type {boolean} */
-    __publicField(this, "disable", false);
-    /**@type {boolean} State of the ToggleButton, true if checked and false if unchecked */
-    __publicField(this, "_press", false);
-    /**@type {string|null} If not null, the ToggleButton becomes part of a group where only one option in the group can be active */
-    __publicField(this, "group", null);
-    /**@type {boolean} If group is true, activating this button deactivates others  */
-    __publicField(this, "singleSelect", true);
     if (props !== null) {
       this.updateProperties(props);
     }
@@ -3481,28 +3375,28 @@ class ToggleButton extends Label {
   }
 }
 class CheckBox extends Widget {
+  /**@type {string} Color of checkbox when pressed down*/
+  selectColor = colorString([0.7, 0.7, 0.8]);
+  /**@type {string} Color of checkbox check when checked*/
+  color = colorString([0.6, 0.6, 0.6]);
+  /**@type {string} Color of checkbox outline when pressed down*/
+  bgColor = colorString([0.5, 0.5, 0.5]);
+  /**@type {string} Color of checkbox outline when pressed down*/
+  disableColor1 = colorString([0.2, 0.2, 0.2]);
+  /**@type {string} Color of checkbox check when disabled*/
+  disableColor2 = colorString([0.3, 0.3, 0.3]);
+  /**@type {boolean} Checkbox is disabled if true and cannot be interacted with*/
+  disable = false;
+  /**@type {boolean} State of the checkbox, true if checked and false if unchecked */
+  check = false;
+  /**@type {string|null} If part of a group, the checkbox becomes a radio box where only one option in the group can be active */
+  group = null;
   /**
    * Constructs a new Checkbox with specified propertes in `props` 
    * @param {CheckBoxProperties|null} [props=null] 
    */
   constructor(props = null) {
     super();
-    /**@type {string} Color of checkbox when pressed down*/
-    __publicField(this, "selectColor", colorString([0.7, 0.7, 0.8]));
-    /**@type {string} Color of checkbox check when checked*/
-    __publicField(this, "color", colorString([0.6, 0.6, 0.6]));
-    /**@type {string} Color of checkbox outline when pressed down*/
-    __publicField(this, "bgColor", colorString([0.5, 0.5, 0.5]));
-    /**@type {string} Color of checkbox outline when pressed down*/
-    __publicField(this, "disableColor1", colorString([0.2, 0.2, 0.2]));
-    /**@type {string} Color of checkbox check when disabled*/
-    __publicField(this, "disableColor2", colorString([0.3, 0.3, 0.3]));
-    /**@type {boolean} Checkbox is disabled if true and cannot be interacted with*/
-    __publicField(this, "disable", false);
-    /**@type {boolean} State of the checkbox, true if checked and false if unchecked */
-    __publicField(this, "check", false);
-    /**@type {string|null} If part of a group, the checkbox becomes a radio box where only one option in the group can be active */
-    __publicField(this, "group", null);
     if (props !== null) {
       this.updateProperties(props);
     }
@@ -3605,52 +3499,51 @@ class CheckBox extends Widget {
   }
 }
 class Slider extends Widget {
+  /**@type {string} Color of the slider button when pressed down*/
+  selectColor = colorString([0.7, 0.7, 0.8]);
+  /**@type {string} Color of the slider button*/
+  color = colorString([0.6, 0.6, 0.6]);
+  /**@type {string} Color of the groove and slider button outline*/
+  bgColor = colorString([0.4, 0.4, 0.4]);
+  /**@type {string} Color of the groove and slider button outline when disabled*/
+  disableColor1 = colorString([0.2, 0.2, 0.2]);
+  /**@type {string} Color of the slider button when disabled*/
+  disableColor2 = colorString([0.3, 0.3, 0.3]);
+  /**@type {boolean} Slider is greyed out and cannot be interacted with if disabled is true */
+  disable = false;
+  /**@type {number} Min value of slider */
+  min = 0;
+  /**@type {number|null} Max value of slider, if null there is no upper limit */
+  max = 1;
+  /**@type {number} current max for slider with no upper limit */
+  curMax = 1;
+  /**
+   * @type {number} for unbounded slider sets `curMax` equal to this multiple of 
+   * the current value after each slider release */
+  unboundedStopMultiple = 10;
+  /**@type {boolean} if true, the slider operates on an exponential scale */
+  exponentialSlider = false;
+  /**@type {number|null} Step increment of slider, continuous if null */
+  step = null;
+  /**@type {'horizontal'|'vertical'} Orientation of the slider */
+  orientation = "horizontal";
+  /**@type {number} The position of the slider */
+  value = 0;
+  /**@type {number} Size of the slider button as a fraction of the length of slider */
+  sliderSize = 0.2;
   /**
    * Constructs a slider with specified properties in `props`
    * @param {SliderProperties|null} props 
    */
   constructor(props = null) {
     super();
-    /**@type {string} Color of the slider button when pressed down*/
-    __publicField(this, "selectColor", colorString([0.7, 0.7, 0.8]));
-    /**@type {string} Color of the slider button*/
-    __publicField(this, "color", colorString([0.6, 0.6, 0.6]));
-    /**@type {string} Color of the groove and slider button outline*/
-    __publicField(this, "bgColor", colorString([0.4, 0.4, 0.4]));
-    /**@type {string} Color of the groove and slider button outline when disabled*/
-    __publicField(this, "disableColor1", colorString([0.2, 0.2, 0.2]));
-    /**@type {string} Color of the slider button when disabled*/
-    __publicField(this, "disableColor2", colorString([0.3, 0.3, 0.3]));
-    /**@type {boolean} Slider is greyed out and cannot be interacted with if disabled is true */
-    __publicField(this, "disable", false);
-    /**@type {number} Min value of slider */
-    __publicField(this, "min", 0);
-    /**@type {number|null} Max value of slider, if null there is no upper limit */
-    __publicField(this, "max", 1);
-    /**@type {number} current max for slider with no upper limit */
-    __publicField(this, "curMax", 1);
-    /**
-     * @type {number} for unbounded slider sets `curMax` equal to this multiple of 
-     * the current value after each slider release */
-    __publicField(this, "unboundedStopMultiple", 10);
-    /**@type {boolean} if true, the slider operates on an exponential scale */
-    __publicField(this, "exponentialSlider", false);
-    /**@type {number|null} Step increment of slider, continuous if null */
-    __publicField(this, "step", null);
-    /**@type {'horizontal'|'vertical'} Orientation of the slider */
-    __publicField(this, "orientation", "horizontal");
-    /**@type {number} The position of the slider */
-    __publicField(this, "value", 0);
-    /**@type {number} Size of the slider button as a fraction of the length of slider */
-    __publicField(this, "sliderSize", 0.2);
     if (props !== null) {
       this.updateProperties(props);
     }
   }
   /**@type {(touch:Touch)=>void} */
   setValue(touch) {
-    var _a;
-    let max = (_a = this.max) != null ? _a : this.curMax;
+    let max = this.max ?? this.curMax;
     let value = 0;
     if (this.orientation == "horizontal") value = clamp((touch.rect.x - this.x - this.w * this.sliderSize / 2) / (this.w * (1 - this.sliderSize)), 0, 1);
     if (this.orientation == "vertical") value = clamp((touch.rect.y - this.y - this.h * this.sliderSize / 2) / (this.h * (1 - this.sliderSize)), 0, 1);
@@ -3698,7 +3591,6 @@ class Slider extends Widget {
   }
   /**@type {Widget['draw']} */
   draw(app, ctx) {
-    var _a, _b;
     let ts = app.tileSize;
     let r = this.rect;
     if (this.orientation == "horizontal") {
@@ -3711,7 +3603,7 @@ class Slider extends Widget {
       ctx.moveTo(r.x, r.center_y);
       ctx.lineTo(r.right, r.center_y);
       ctx.stroke();
-      let max = (_a = this.max) != null ? _a : this.curMax;
+      let max = this.max ?? this.curMax;
       let vPos;
       if (this.max === null && this.curMax / this.unboundedStopMultiple > this.min) {
         vPos = this.value > max / this.unboundedStopMultiple ? (0.5 + 0.5 * (this.value - max / this.unboundedStopMultiple) / (max - max / this.unboundedStopMultiple)) * r.w : 0.5 * (this.value - this.min) / (max / this.unboundedStopMultiple - this.min) * r.w;
@@ -3738,7 +3630,7 @@ class Slider extends Widget {
       ctx.moveTo(r.center_x, r.y);
       ctx.lineTo(r.center_x, r.bottom);
       ctx.stroke();
-      let max = (_b = this.max) != null ? _b : this.curMax;
+      let max = this.max ?? this.curMax;
       let vPos;
       if (this.max === null && this.curMax / this.unboundedStopMultiple > this.min) {
         vPos = this.value > max / this.unboundedStopMultiple ? (0.5 + 0.5 * (this.value - max / this.unboundedStopMultiple) / (max - max / this.unboundedStopMultiple)) * r.h : 0.5 * (this.value - this.min) / (max / this.unboundedStopMultiple - this.min) * r.h;
@@ -3758,23 +3650,23 @@ class Slider extends Widget {
   }
 }
 class TextInput extends Label {
+  /**@type {HTMLInputElement|HTMLTextAreaElement|null} */
+  _activeDOMInput = null;
+  /**@type {boolean} true when actively edited and has focus, false otherwise */
+  focus = true;
+  /**@type {boolean} Text input cannot be interact with when disable is true */
+  disable = false;
+  /**
+   * Called before updating the text value after the focus on the DOM input object is cleared.
+   * You can override `inputSanitizer` to change what is populated into the `Label`.
+   * @type {undefined|((text:string, textInput:TextInput)=>string)} */
+  _inputSanitizer = void 0;
   /**
    * 
    * @param {TextInputProperties|null} properties 
    */
   constructor(properties = {}) {
     super();
-    /**@type {HTMLInputElement|HTMLTextAreaElement|null} */
-    __publicField(this, "_activeDOMInput", null);
-    /**@type {boolean} true when actively edited and has focus, false otherwise */
-    __publicField(this, "focus", true);
-    /**@type {boolean} Text input cannot be interact with when disable is true */
-    __publicField(this, "disable", false);
-    /**
-     * Called before updating the text value after the focus on the DOM input object is cleared.
-     * You can override `inputSanitizer` to change what is populated into the `Label`.
-     * @type {undefined|((text:string, textInput:TextInput)=>string)} */
-    __publicField(this, "_inputSanitizer");
     this._textData = null;
     if (properties !== null) {
       this.updateProperties(properties);
@@ -3864,7 +3756,7 @@ class TextInput extends Label {
       this.focus = false;
       this._needsLayout = true;
       let iph = App.get().inputHandler;
-      if ((iph == null ? void 0 : iph.grabbed) === this) iph.ungrab();
+      if (iph?.grabbed === this) iph.ungrab();
     }
   }
   /**@type {Widget['layoutChildren']} */
@@ -3881,31 +3773,31 @@ class TextInput extends Label {
   }
 }
 class ImageWidget extends Widget {
+  /**@type {string|null} */
+  bgColor = null;
+  /**@type {string|null} */
+  outlineColor = null;
+  /**@type {string|null} filename or url of the image to display */
+  src = null;
+  /**@type {boolean} lock to the aspect ratio of the image if true, stretch/squeeze to fit if false */
+  lockAspect = true;
+  /**@type {boolean} scales the image to fit the available space*/
+  scaleToFit = true;
+  /**@type {boolean} apply antialiasing to scaled images if true (usually want this to be false to pixel art*/
+  antiAlias = true;
+  /**@type {number} angle in degrees to rotate the image*/
+  angle = 0;
+  /**@type {'center'|[number,number]} Position within the widget for the rotation point */
+  anchor = "center";
+  //anchor for rotation
+  /**@type {boolean} flips the image on the along the y-axis before rotating*/
+  mirror = false;
   /**
    * Constructs a new ImageWidget, optionally apply properties in `props`
    * @param {ImageWidgetProperties|null} props 
    */
   constructor(props = null) {
     super();
-    /**@type {string|null} */
-    __publicField(this, "bgColor", null);
-    /**@type {string|null} */
-    __publicField(this, "outlineColor", null);
-    /**@type {string|null} filename or url of the image to display */
-    __publicField(this, "src", null);
-    /**@type {boolean} lock to the aspect ratio of the image if true, stretch/squeeze to fit if false */
-    __publicField(this, "lockAspect", true);
-    /**@type {boolean} scales the image to fit the available space*/
-    __publicField(this, "scaleToFit", true);
-    /**@type {boolean} apply antialiasing to scaled images if true (usually want this to be false to pixel art*/
-    __publicField(this, "antiAlias", true);
-    /**@type {number} angle in degrees to rotate the image*/
-    __publicField(this, "angle", 0);
-    /**@type {'center'|[number,number]} Position within the widget for the rotation point */
-    __publicField(this, "anchor", "center");
-    //anchor for rotation
-    /**@type {boolean} flips the image on the along the y-axis before rotating*/
-    __publicField(this, "mirror", false);
     this.image = new Image();
     if (props !== null) {
       this.updateProperties(props);
@@ -3982,24 +3874,24 @@ class ImageWidget extends Widget {
   }
 }
 class BoxLayout extends Widget {
+  /**@type {string|number} Horizontal spacing between widgets in a horizontal orientation*/
+  spacingX = 0;
+  /**@type {string|number} Vertical spacing between widgets in a vertical orientation*/
+  spacingY = 0;
+  /**@type {string|number} Padding at left and right sides of BoxLayout*/
+  paddingX = 0;
+  /**@type {string|number} Padding at top and bottom sides of BoxLayout*/
+  paddingY = 0;
+  /**@type {'vertical'|'horizontal'} Direction that child widgets are arranged in the BoxLayout*/
+  orientation = "vertical";
+  /**@type {'forward'|'reverse'} Order that child widgets are arranged in the BoxLayout*/
+  order = "forward";
   /**
    * Creates an instance of a BoxLayout with properties optionally specified in `properties`.
    * @param {BoxLayoutProperties|null} properties 
    */
   constructor(properties = null) {
     super();
-    /**@type {string|number} Horizontal spacing between widgets in a horizontal orientation*/
-    __publicField(this, "spacingX", 0);
-    /**@type {string|number} Vertical spacing between widgets in a vertical orientation*/
-    __publicField(this, "spacingY", 0);
-    /**@type {string|number} Padding at left and right sides of BoxLayout*/
-    __publicField(this, "paddingX", 0);
-    /**@type {string|number} Padding at top and bottom sides of BoxLayout*/
-    __publicField(this, "paddingY", 0);
-    /**@type {'vertical'|'horizontal'} Direction that child widgets are arranged in the BoxLayout*/
-    __publicField(this, "orientation", "vertical");
-    /**@type {'forward'|'reverse'} Order that child widgets are arranged in the BoxLayout*/
-    __publicField(this, "order", "forward");
     if (properties !== null) {
       this.updateProperties(properties);
     }
@@ -4115,21 +4007,20 @@ class BoxLayout extends Widget {
   }
 }
 class Notebook extends Widget {
+  activePage = 0;
   /**
    * Creates an instance of a Notebook with properties optionally specified in `properties`.
    * @param {NotebookProperties|null} properties 
    */
   constructor(properties = null) {
     super();
-    __publicField(this, "activePage", 0);
     if (properties !== null) {
       this.updateProperties(properties);
     }
   }
   /**@type {Widget['on_wheel']} */
   on_wheel(event, object, wheel) {
-    var _a;
-    const ch = (_a = this.children[this.activePage]) != null ? _a : void 0;
+    const ch = this.children[this.activePage] ?? void 0;
     if (ch !== void 0) {
       if (ch.emit(event, wheel)) return true;
     }
@@ -4137,18 +4028,17 @@ class Notebook extends Widget {
   }
   /**@type {Widget['on_touch_down']} */
   on_touch_down(event, object, touch) {
-    var _a, _b;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const ch = (_a = this.children[this.activePage]) != null ? _a : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4157,18 +4047,17 @@ class Notebook extends Widget {
   }
   /**@type {Widget['on_touch_up']} */
   on_touch_up(event, object, touch) {
-    var _a, _b;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const ch = (_a = this.children[this.activePage]) != null ? _a : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4177,18 +4066,17 @@ class Notebook extends Widget {
   }
   /**@type {Widget['on_touch_move']} */
   on_touch_move(event, object, touch) {
-    var _a, _b;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const ch = (_a = this.children[this.activePage]) != null ? _a : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4197,18 +4085,17 @@ class Notebook extends Widget {
   }
   /**@type {Widget['on_touch_cancel']} */
   on_touch_cancel(event, object, touch) {
-    var _a, _b;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const ch = (_a = this.children[this.activePage]) != null ? _a : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4220,32 +4107,31 @@ class Notebook extends Widget {
   }
   /**@type {Widget['_draw']} */
   _draw(app, ctx, millis) {
-    var _a, _b;
     this.draw(app, ctx);
     let transform = this.getTransform();
     if (transform) {
       ctx.save();
       ctx.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
-      let w2 = (_a = this.children[this.activePage]) != null ? _a : void 0;
+      let w2 = this.children[this.activePage] ?? void 0;
       if (w2 !== void 0) w2._draw(app, ctx, millis);
       ctx.restore();
       return;
     }
-    let w = (_b = this.children[this.activePage]) != null ? _b : void 0;
+    let w = this.children[this.activePage] ?? void 0;
     if (w !== void 0) w._draw(app, ctx, millis);
   }
 }
 class TabbedNotebook extends Notebook {
+  /**@type {string|number} The height hint for the tabbed area of the TabbedNotebook */
+  tabHeightHint = "1";
+  /**@type {string} The named of the button group for the TabbedNotebook */
+  tabGroupName = "tabbedNotebookGroup";
   /**
    * Creates an instance of a Notebook with properties optionally specified in `properties`.
    * @param {TabbedNotebookProperties|null} properties 
    */
   constructor(properties = null) {
     super();
-    /**@type {string|number} The height hint for the tabbed area of the TabbedNotebook */
-    __publicField(this, "tabHeightHint", "1");
-    /**@type {string} The named of the button group for the TabbedNotebook */
-    __publicField(this, "tabGroupName", "tabbedNotebookGroup");
     this.buttonBox = new BoxLayout({
       orientation: "horizontal",
       hints: { h: this.tabHeightHint, w: null }
@@ -4277,12 +4163,11 @@ class TabbedNotebook extends Notebook {
   }
   /**@type {Widget['on_wheel']} */
   on_wheel(event, object, wheel) {
-    var _a, _b;
-    const bb = (_a = this._children[0]) != null ? _a : void 0;
+    const bb = this._children[0] ?? void 0;
     if (bb !== void 0) {
       if (bb.emit(event, wheel)) return true;
     }
-    const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+    const ch = this.children[this.activePage] ?? void 0;
     if (ch !== void 0) {
       if (ch.emit(event, wheel)) return true;
     }
@@ -4290,26 +4175,25 @@ class TabbedNotebook extends Notebook {
   }
   /**@type {Widget['on_touch_down']} */
   on_touch_down(event, object, touch) {
-    var _a, _b, _c, _d;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const bb = (_a = this._children[0]) != null ? _a : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, t)) return true;
       }
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const bb = (_c = this._children[0]) != null ? _c : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, touch)) return true;
       }
-      const ch = (_d = this.children[this.activePage]) != null ? _d : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4318,26 +4202,25 @@ class TabbedNotebook extends Notebook {
   }
   /**@type {Widget['on_touch_up']} */
   on_touch_up(event, object, touch) {
-    var _a, _b, _c, _d;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const bb = (_a = this._children[0]) != null ? _a : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, t)) return true;
       }
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const bb = (_c = this._children[0]) != null ? _c : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, touch)) return true;
       }
-      const ch = (_d = this.children[this.activePage]) != null ? _d : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4346,26 +4229,25 @@ class TabbedNotebook extends Notebook {
   }
   /**@type {Widget['on_touch_move']} */
   on_touch_move(event, object, touch) {
-    var _a, _b, _c, _d;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const bb = (_a = this._children[0]) != null ? _a : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, t)) return true;
       }
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const bb = (_c = this._children[0]) != null ? _c : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, touch)) return true;
       }
-      const ch = (_d = this.children[this.activePage]) != null ? _d : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4374,26 +4256,25 @@ class TabbedNotebook extends Notebook {
   }
   /**@type {Widget['on_touch_cancel']} */
   on_touch_cancel(event, object, touch) {
-    var _a, _b, _c, _d;
     let newT = this.getTransform();
     if (newT) {
       let t = touch.copy();
       let dp = newT.inverse().transformPoint(new DOMPoint(t.pos[0], t.pos[1]));
       t.pos = [dp.x, dp.y];
-      const bb = (_a = this._children[0]) != null ? _a : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, t)) return true;
       }
-      const ch = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, t)) return true;
       }
     } else {
-      const bb = (_c = this._children[0]) != null ? _c : void 0;
+      const bb = this._children[0] ?? void 0;
       if (bb !== void 0) {
         if (bb.emit(event, touch)) return true;
       }
-      const ch = (_d = this.children[this.activePage]) != null ? _d : void 0;
+      const ch = this.children[this.activePage] ?? void 0;
       if (ch !== void 0) {
         if (ch.emit(event, touch)) return true;
       }
@@ -4417,12 +4298,11 @@ class TabbedNotebook extends Notebook {
     }
   }
   updateButtons() {
-    var _a;
     this.buttonBox.children = [];
     let i = 0;
     for (let page of this.children) {
       const tb = new ToggleButton({
-        text: (_a = page["name"]) != null ? _a : String(i + 1),
+        text: page["name"] ?? String(i + 1),
         group: this.tabGroupName,
         singleSelect: true,
         press: this.activePage === i,
@@ -4456,26 +4336,39 @@ class TabbedNotebook extends Notebook {
   }
   /**@type {Widget['_draw']} */
   _draw(app, ctx, millis) {
-    var _a, _b, _c, _d;
     this.draw(app, ctx);
     let transform = this.getTransform();
     if (transform) {
       ctx.save();
       ctx.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
-      let bb2 = (_a = this._children[0]) != null ? _a : void 0;
+      let bb2 = this._children[0] ?? void 0;
       if (bb2 !== void 0) bb2._draw(app, ctx, millis);
-      let w2 = (_b = this.children[this.activePage]) != null ? _b : void 0;
+      let w2 = this.children[this.activePage] ?? void 0;
       if (w2 !== void 0) w2._draw(app, ctx, millis);
       ctx.restore();
       return;
     }
-    let bb = (_c = this._children[0]) != null ? _c : void 0;
+    let bb = this._children[0] ?? void 0;
     if (bb !== void 0) bb._draw(app, ctx, millis);
-    let w = (_d = this.children[this.activePage]) != null ? _d : void 0;
+    let w = this.children[this.activePage] ?? void 0;
     if (w !== void 0) w._draw(app, ctx, millis);
   }
 }
 class GridLayout extends Widget {
+  /**@type {number} Number of widgets per row in a horizontal orientation*/
+  numX = 1;
+  /**@type {number} Number of widgets per column in a vertical orientation*/
+  numY = 1;
+  /**@type {string|number} Horizontal spacing between widgets in a horizontal orientation*/
+  spacingX = 0;
+  /**@type {string|number} Vertical spacing between widgets in a vertical orientation*/
+  spacingY = 0;
+  /**@type {string|number} Padding at left and right sides of BoxLayout*/
+  paddingX = 0;
+  /**@type {string|number} Padding at top and bottom sides of BoxLayout*/
+  paddingY = 0;
+  /**@type {'vertical'|'horizontal'} Direction that child widgets are arranged in the BoxLayout*/
+  orientation = "horizontal";
   //TODO: Need to track column widths and row heights based on max height/width hints in each row/col
   /**
    * Constructs a new GridLayout with optional properties set by `properties`
@@ -4483,20 +4376,6 @@ class GridLayout extends Widget {
    */
   constructor(properties = null) {
     super();
-    /**@type {number} Number of widgets per row in a horizontal orientation*/
-    __publicField(this, "numX", 1);
-    /**@type {number} Number of widgets per column in a vertical orientation*/
-    __publicField(this, "numY", 1);
-    /**@type {string|number} Horizontal spacing between widgets in a horizontal orientation*/
-    __publicField(this, "spacingX", 0);
-    /**@type {string|number} Vertical spacing between widgets in a vertical orientation*/
-    __publicField(this, "spacingY", 0);
-    /**@type {string|number} Padding at left and right sides of BoxLayout*/
-    __publicField(this, "paddingX", 0);
-    /**@type {string|number} Padding at top and bottom sides of BoxLayout*/
-    __publicField(this, "paddingY", 0);
-    /**@type {'vertical'|'horizontal'} Direction that child widgets are arranged in the BoxLayout*/
-    __publicField(this, "orientation", "horizontal");
     if (properties !== null) {
       this.updateProperties(properties);
     }
@@ -4645,48 +4524,48 @@ class GridLayout extends Widget {
   }
 }
 class ScrollView extends Widget {
+  /**@type {number} current x-axis scrolling position measured from left of client area in client area units */
+  _scrollX = 0;
+  /**@type {number} current y-axis scrolling position measured from top of client area in client area units */
+  _scrollY = 0;
+  /**@type {number} desired x-axis scrolling position measured from left of client area in client area units */
+  scrollX = 0;
+  /**@type {number} desired y-axis scrolling position measured from top of client area in client area units */
+  scrollY = 0;
+  /**@type {boolean} true if horizontal scrolling allowed */
+  scrollW = true;
+  /**@type {boolean} true if vertical scrolling allowed */
+  scrollH = true;
+  /**@type {'left'|'center'|'right'} how to align content horizontally if horizontal scrolling disallowed */
+  wAlign = "center";
+  //left, center, right
+  /**@type {'top'|'middle'|'bottom'} how to align content vertically if vertical scrolling disallowed */
+  hAlign = "top";
+  //top, middle, bottom
+  /**@type {boolean} zooming allowed via user input if true (pinch to zoom) */
+  uiZoom = true;
+  /**@type {boolean} moving allowed via user input if true (touch and slide to move) */
+  uiMove = true;
+  /**@type {number} zoom ratio (1=no zoom, <1 zoomed out, >1 zoomed in) */
+  zoom = 1;
+  /**@type {Vec2|null} tracks velocity of kinetic scrolling action */
+  vel = null;
+  /**@type {number} vel is set to zero on an axis if the absolute velocity falls below this cutoff */
+  velCutoff = 1e-5;
+  /**@type {number} velocity of kinetic motion, `vel`, declines by this decay ratio every 30ms */
+  velDecay = 0.95;
+  /**@type {boolean} unbounded vertical scrolling*/
+  unboundedH = false;
+  /**@type {boolean} unbounded horizontal scrolling*/
+  unboundedW = false;
+  /**@type {Vec2|null} */
+  _zoomCenter = null;
   /**
    * Construcsts a new ScrollView with optional properties in `properties` 
    * @param {null|ScrollViewProperties} [properties=null] 
    */
   constructor(properties = null) {
     super();
-    /**@type {number} current x-axis scrolling position measured from left of client area in client area units */
-    __publicField(this, "_scrollX", 0);
-    /**@type {number} current y-axis scrolling position measured from top of client area in client area units */
-    __publicField(this, "_scrollY", 0);
-    /**@type {number} desired x-axis scrolling position measured from left of client area in client area units */
-    __publicField(this, "scrollX", 0);
-    /**@type {number} desired y-axis scrolling position measured from top of client area in client area units */
-    __publicField(this, "scrollY", 0);
-    /**@type {boolean} true if horizontal scrolling allowed */
-    __publicField(this, "scrollW", true);
-    /**@type {boolean} true if vertical scrolling allowed */
-    __publicField(this, "scrollH", true);
-    /**@type {'left'|'center'|'right'} how to align content horizontally if horizontal scrolling disallowed */
-    __publicField(this, "wAlign", "center");
-    //left, center, right
-    /**@type {'top'|'middle'|'bottom'} how to align content vertically if vertical scrolling disallowed */
-    __publicField(this, "hAlign", "top");
-    //top, middle, bottom
-    /**@type {boolean} zooming allowed via user input if true (pinch to zoom) */
-    __publicField(this, "uiZoom", true);
-    /**@type {boolean} moving allowed via user input if true (touch and slide to move) */
-    __publicField(this, "uiMove", true);
-    /**@type {number} zoom ratio (1=no zoom, <1 zoomed out, >1 zoomed in) */
-    __publicField(this, "zoom", 1);
-    /**@type {Vec2|null} tracks velocity of kinetic scrolling action */
-    __publicField(this, "vel", null);
-    /**@type {number} vel is set to zero on an axis if the absolute velocity falls below this cutoff */
-    __publicField(this, "velCutoff", 1e-5);
-    /**@type {number} velocity of kinetic motion, `vel`, declines by this decay ratio every 30ms */
-    __publicField(this, "velDecay", 0.95);
-    /**@type {boolean} unbounded vertical scrolling*/
-    __publicField(this, "unboundedH", false);
-    /**@type {boolean} unbounded horizontal scrolling*/
-    __publicField(this, "unboundedW", false);
-    /**@type {Vec2|null} */
-    __publicField(this, "_zoomCenter", null);
     if (properties !== null) {
       this.updateProperties(properties);
     }
@@ -4994,22 +4873,22 @@ class ScrollView extends Widget {
   }
 }
 class ModalView extends BoxLayout {
+  /**@type {boolean} If true, clicking outside of the modal rect will close it*/
+  closeOnTouchOutside = true;
+  /**@type {string|null} background color of modal rect*/
+  bgColor = "slate";
+  /**@type {string|null} outline color of modal rect*/
+  outlineColor = "gray";
+  /**@type {boolean} If true, darken the entire canvas before drawing*/
+  dim = true;
+  /**@type {number} Amount of canvas dimming applied (0=none => 1=opaque black)*/
+  dimScale = 0.8;
   /**
    * Construcsts a new ModalView with optional properties in `properties` 
    * @param {null|ModalViewProperties} [properties=null] 
    */
   constructor(properties = null) {
     super();
-    /**@type {boolean} If true, clicking outside of the modal rect will close it*/
-    __publicField(this, "closeOnTouchOutside", true);
-    /**@type {string|null} background color of modal rect*/
-    __publicField(this, "bgColor", "slate");
-    /**@type {string|null} outline color of modal rect*/
-    __publicField(this, "outlineColor", "gray");
-    /**@type {boolean} If true, darken the entire canvas before drawing*/
-    __publicField(this, "dim", true);
-    /**@type {number} Amount of canvas dimming applied (0=none => 1=opaque black)*/
-    __publicField(this, "dimScale", 0.8);
     if (properties !== null) {
       this.updateProperties(properties);
     }
@@ -5066,6 +4945,362 @@ class ModalView extends BoxLayout {
     }
   }
 }
+function unpackSpriteInfo(ind, len, sw) {
+  const flipped = Math.floor(ind / len / 4) > 0;
+  ind = ind % (len * 4);
+  const angle = Math.floor(ind / len);
+  ind = ind % len;
+  const indY = Math.floor(ind / sw);
+  const indX = ind % sw;
+  return [flipped, angle, indY, indX];
+}
+function packSpriteInfo2D(spriteIndex, flipped, angle, len, sw) {
+  return spriteIndex[0] + spriteIndex[1] * sw + angle * len + (flipped ? 4 * len : 0);
+}
+class AutoTiler {
+  /**
+   * Constructs an autotiler
+   * @param {string} id The name of the autotiler (optional)
+   * @param {number[]} matchTiles The list of valid tile indexes that can be autotiled
+   * @param {number[]} matchAdjTiles The list of valid adjacent tile indexes that can be autotiled
+   * @param {Object<number, number>} autos The mapping from adjacency bits to autotiled indexes
+   * @param {4|8} directions 
+   * @param {number|undefined} def Default value to set
+   */
+  constructor(id = "", matchTiles = [], matchAdjTiles = [], autos = {}, directions = 4, def = void 0) {
+    this.id = id;
+    this.matchTiles = new Set(matchTiles);
+    this.matchAdjTiles = new Set(matchAdjTiles);
+    this.autos = autos;
+    this.directions = directions;
+    this.default = def;
+  }
+  /**
+   * Autotile at position `pos` using `testMap` to check for valid values and setting 
+      * the replacement tile in `destMap`. `testMap` and `destMap` should be the same size.
+   * @param {Vec2} pos 
+   * @param {TileMap} testMap 
+   * @param {TileMap} destMap 
+   */
+  autoTile(pos, testMap, destMap) {
+    let auto = 0;
+    let level = 1;
+    const tile = testMap.get(pos);
+    if (this.matchTiles.has(tile)) {
+      const directions = this.directions == 4 ? (
+        // N       E      S       W
+        [[0, -1], [1, 0], [0, 1], [-1, 0]]
+      ) : (
+        // N       E      S       W      NE      SE      SW      NW
+        [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]]
+      );
+      for (let delta of directions) {
+        const aPos = pos.add(delta);
+        const aTile = testMap.get(aPos);
+        if (this.matchAdjTiles.has(aTile)) {
+          auto += level;
+        }
+        level *= 2;
+      }
+      const ind = this.autos[auto] ?? void 0;
+      if (ind !== void 0) {
+        destMap.set(pos, ind);
+      } else {
+        if (this.default !== void 0) destMap.set(pos, this.default);
+      }
+    }
+  }
+  get length() {
+    return this.matchTiles.size;
+  }
+}
+class SpriteSheet extends Resource {
+  /**@type {Map<number, SpriteAnimation>} */
+  animations = /* @__PURE__ */ new Map();
+  /**@type {Map<string, AutoTiler>} */
+  autoTiles = /* @__PURE__ */ new Map();
+  /**@type {Map<string, TileStamp>} */
+  tileStamps = /* @__PURE__ */ new Map();
+  /**@type {Map<string, number>} */
+  aliases = /* @__PURE__ */ new Map();
+  /**
+   * 
+   * @param {string} srcFile 
+   * @param {number} spriteSize 
+   * @param {number} [padding=0] 
+   * @param {Widget|null} [owner=null] 
+   * 
+   */
+  constructor(srcFile, spriteSize = 16, padding = 0, owner = null) {
+    super();
+    this.spriteSize = spriteSize;
+    this.padding = padding;
+    this.sw = 0;
+    this.sh = 0;
+    this.len = 0;
+    this.sheet = new Image();
+    this.canvas = this.sheet;
+    this.sheet.onload = (ev) => {
+      this.sw = Math.floor(this.sheet.width / this.spriteSize);
+      this.sh = Math.floor(this.sheet.height / this.spriteSize);
+      this.len = this.sw * this.sh;
+      if (this.padding > 0) this.canvas = this.padSheet(this.padding);
+      if (owner === null) {
+        App.get().emit("sheetLoaded", this.canvas);
+        App.get()._needsLayout = true;
+      } else {
+        owner.emit("sheetLoaded", this.canvas);
+      }
+    };
+    this.sheet.src = srcFile;
+  }
+  padSheet(pad = 0) {
+    const newWidth = this.sw * (this.spriteSize + pad);
+    const newHeight = this.sh * (this.spriteSize + pad);
+    const newCanvas = new OffscreenCanvas(newWidth, newHeight);
+    const newCtx = newCanvas.getContext("2d");
+    newCtx.clearRect(0, 0, newWidth, newHeight);
+    for (let y = 0; y < this.sh; y++) {
+      for (let x = 0; x < this.sw; x++) {
+        const sx = x * this.spriteSize;
+        const sy = y * this.spriteSize;
+        const dx = x * (this.spriteSize + pad);
+        const dy = y * (this.spriteSize + pad);
+        newCtx.drawImage(this.sheet, sx, sy, this.spriteSize, this.spriteSize, dx, dy, this.spriteSize, this.spriteSize);
+      }
+    }
+    return newCanvas;
+  }
+  /**
+   * Retrieves the alias for a given cell index value
+   * @param {number|undefined} index 
+   */
+  getAlias(index) {
+    for (let k of this.aliases.keys()) {
+      if (this.aliases.get(k) === index) return k;
+    }
+  }
+  /**@type {Resource['update']} */
+  update(app, millis) {
+    super.update(app, millis);
+    for (let a of this.animations.values()) {
+      a.update(app, millis);
+    }
+  }
+  sheetToDataURL() {
+    const canvas = document.createElement("canvas");
+    canvas.width = this.sheet.width;
+    canvas.height = this.sheet.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(this.sheet, 0, 0);
+    const imageDataUrl = canvas.toDataURL("image/png");
+    return imageDataUrl;
+  }
+  serialize() {
+    const data = {};
+    data["spriteSize"] = this.spriteSize;
+    data["padding"] = this.padding;
+    data["src"] = this.sheetToDataURL();
+    const animations = {};
+    for (let k of this.animations.keys()) animations[String(k)] = this.animations.get(k);
+    data["animations"] = animations;
+    const aliases = {};
+    for (let k of this.aliases.keys()) aliases[k] = this.aliases.get(k);
+    data["aliases"] = aliases;
+    return data;
+  }
+  /**
+   * 
+   * @param {Object} data 
+   */
+  deserialize(data) {
+    this.spriteSize = data["spriteSize"];
+    this.padding = data["padding"];
+    this.sheet = new Image();
+    this.canvas = this.sheet;
+    this.sheet.onload = (ev) => {
+      this.sw = Math.floor(this.sheet.width / this.spriteSize);
+      this.sh = Math.floor(this.sheet.height / this.spriteSize);
+      this.len = this.sw * this.sh;
+      App.get().emit("sheetLoaded", this.sheet);
+      App.get()._needsLayout = true;
+      if (this.padding > 0) this.canvas = this.padSheet(this.padding);
+    };
+    this.sheet.src = data["src"];
+    this.animations = /* @__PURE__ */ new Map();
+    for (let k in data["animations"]) this.animations.set(parseInt(k), data["animations"][k]);
+    this.aliases = /* @__PURE__ */ new Map();
+    for (let k in data["aliases"]) this.aliases.set(k, data["aliases"][k]);
+  }
+  /**
+   * Draw an indexed tilemap reference to a specified x,y position on the canvas
+   * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} ctx
+   * @param {number} ind  
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} dx 
+   * @param {number} dy 
+   */
+  drawIndexed(ctx, ind, x, y, extraAngle = 0, flipX = false, dx = 0, dy = 0) {
+    if (ind < -1) {
+      ind = this.animations.get(ind)?.tileValue ?? -1;
+    }
+    if (ind >= 0) {
+      let [flipped, angle, indY, indX] = unpackSpriteInfo(ind, this.len, this.sw);
+      flipped = flipped && !flipX || !flipped && flipX;
+      angle = (angle + extraAngle) % 4;
+      if (!flipped && angle === 0) {
+        this.draw(ctx, [indX, indY], x + dx, y + dy);
+      } else {
+        this.drawRotated(ctx, [indX, indY], x + 0.5, y + 0.5, angle * 90, flipped, [0.5 - dx, 0.5 - dy]);
+      }
+    }
+  }
+  /**
+   * 
+   * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} ctx
+   * @param {[number, number]} spriteLoc 
+   * @param {number} x 
+   * @param {number} y 
+   * @param {boolean} flipX
+   */
+  draw(ctx, spriteLoc, x, y, flipX = false) {
+    let flipped = flipX ? -1 : 1;
+    if (flipX) {
+      ctx.scale(-1, 1);
+    }
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
+    ctx.drawImage(
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz,
+      sz,
+      flipped * x,
+      y,
+      flipped,
+      1
+    );
+    if (flipX) {
+      ctx.scale(-1, 1);
+    }
+  }
+  /**
+   * 
+   * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} ctx
+   * @param {[number, number]} spriteLoc 
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} scale 
+   * @param {boolean} flipX 
+   */
+  drawScaled(ctx, spriteLoc, x, y, scale, flipX = false) {
+    let flipped = flipX ? -1 : 1;
+    if (flipX) {
+      ctx.scale(-1, 1);
+    }
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
+    ctx.drawImage(
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz,
+      sz,
+      flipped * x,
+      y,
+      flipped * scale,
+      scale
+    );
+    if (flipX) {
+      ctx.scale(-1, 1);
+    }
+  }
+  /**
+   * 
+   * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} ctx
+   * @param {[number, number]} spriteLoc 
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} angle 
+   * @param {boolean} flipx 
+   * @param {[number, number]|'center'} anchor 
+   */
+  drawRotated(ctx, spriteLoc, x, y, angle, flipx = false, anchor = "center") {
+    ctx.save();
+    if (anchor == "center") {
+      anchor = [1 / 2, 1 / 2];
+    } else {
+      anchor = [anchor[0], anchor[1]];
+    }
+    ctx.translate(x, y);
+    ctx.rotate(angle * Math.PI / 180);
+    if (flipx) {
+      ctx.scale(-1, 1);
+    }
+    ctx.translate(-anchor[0], -anchor[1]);
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
+    ctx.drawImage(
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz,
+      sz,
+      0,
+      //-game.tileSize+anchor[0],
+      0,
+      //-game.tileSize+anchor[1],
+      1,
+      1
+    );
+    ctx.restore();
+  }
+  /**
+   * 
+   * @param {[number, number, number, number]} spriteLoc 
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} angle 
+   * @param {boolean} flipx 
+   * @param {[number, number]|'center'} anchor 
+   */
+  drawRotatedMultitile(ctx, spriteLoc, x, y, angle, flipx = false, anchor = "center") {
+    ctx.save();
+    let tw = spriteLoc[2];
+    let th = spriteLoc[3];
+    if (anchor == "center") {
+      anchor = [tw * 1 / 2, th * 1 / 2];
+    } else {
+      anchor = [anchor[0], anchor[1]];
+    }
+    ctx.translate(
+      x + anchor[0],
+      y + anchor[1]
+    );
+    ctx.rotate(angle * Math.PI / 180);
+    if (flipx) {
+      ctx.scale(-1, 1);
+    }
+    ctx.translate(-anchor[0], -anchor[1]);
+    const sz = this.spriteSize;
+    const szp = this.spriteSize + this.padding;
+    ctx.drawImage(
+      this.canvas,
+      spriteLoc[0] * szp,
+      spriteLoc[1] * szp,
+      sz * tw,
+      sz * th,
+      0,
+      0,
+      tw,
+      th
+    );
+    ctx.restore();
+  }
+}
 class LayeredAnimationFrame extends Array {
   /**
    * 
@@ -5091,21 +5326,24 @@ class LayeredAnimationFrame extends Array {
     }
   }
 }
+function laf(frames = [], offsets = []) {
+  return new LayeredAnimationFrame(frames, offsets);
+}
 class SpriteWidget extends Widget {
+  /** @type {SpriteSheet|null} */
+  spriteSheet = null;
+  /** @type {number[]|LayeredAnimationFrame[]} */
+  frames = [];
+  timePerFrame = 30;
+  timeLeft = 0;
+  activeFrame = 0;
+  id = "";
+  facing = 0;
+  flipX = false;
+  flipY = false;
+  oneShot = false;
   constructor(props = {}) {
     super();
-    /** @type {SpriteSheet|null} */
-    __publicField(this, "spriteSheet", null);
-    /** @type {number[]|LayeredAnimationFrame[]} */
-    __publicField(this, "frames", []);
-    __publicField(this, "timePerFrame", 30);
-    __publicField(this, "timeLeft", 0);
-    __publicField(this, "activeFrame", 0);
-    __publicField(this, "id", "");
-    __publicField(this, "facing", 0);
-    __publicField(this, "flipX", false);
-    __publicField(this, "flipY", false);
-    __publicField(this, "oneShot", false);
     if (props) this.updateProperties(props);
   }
   /**
@@ -5140,8 +5378,7 @@ class SpriteWidget extends Widget {
     this.restart();
   }
   get frame() {
-    var _a;
-    return (_a = this.frames[this.activeFrame]) != null ? _a : -1;
+    return this.frames[this.activeFrame] ?? -1;
   }
   /**
   * 
@@ -5149,8 +5386,7 @@ class SpriteWidget extends Widget {
   * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} ctx 
   */
   draw(app, ctx) {
-    var _a;
-    if (this.spriteSheet === null || !((_a = this.spriteSheet.sheet) == null ? void 0 : _a.complete)) return;
+    if (this.spriteSheet === null || !this.spriteSheet.sheet?.complete) return;
     const tx = Math.floor(this.x * this.spriteSheet.spriteSize) / this.spriteSheet.spriteSize;
     const ty = Math.floor(this.y * this.spriteSheet.spriteSize) / this.spriteSheet.spriteSize;
     ctx.translate(tx, ty);
@@ -5187,11 +5423,10 @@ class TileMap extends Widget {
    * @returns {Object}
    */
   serialize() {
-    var _a;
     const data = {};
     data["_data"] = this._data.slice();
     data["tileDim"] = this.tileDim.slice();
-    data["spriteSheet"] = (_a = Array(...App.resources.keys()).find((k) => App.resources[k] === this.spriteSheet)) != null ? _a : null;
+    data["spriteSheet"] = Array(...App.resources.keys()).find((k) => App.resources[k] === this.spriteSheet) ?? null;
     return data;
   }
   /**
@@ -5219,13 +5454,12 @@ class TileMap extends Widget {
    * @param {Object} data 
    */
   deserialize(data) {
-    var _a, _b;
-    this.tileDim = new Vec2((_a = data["tileDim"]) != null ? _a : [0, 0]);
+    this.tileDim = new Vec2(data["tileDim"] ?? [0, 0]);
     const _data = data["_data"];
     for (let i = 0; i < _data.length; i++) {
       this._data[i] = _data[i];
     }
-    this.spriteSheet = (_b = App.resources[data["spriteSheet"]]) != null ? _b : null;
+    this.spriteSheet = App.resources[data["spriteSheet"]] ?? null;
     this._data._cacheData = null;
   }
   /**@type {import('./widgets.js').EventCallbackNullable} */
@@ -5410,7 +5644,6 @@ class LayeredTileMap extends TileMap {
     this._vLayer = this.visibilityLayer >= 0 ? this._layerData[this.visibilityLayer] : null;
   }
   serialize() {
-    var _a;
     const data = {};
     const layerCopy = [];
     for (let l of this._layerData) {
@@ -5420,7 +5653,7 @@ class LayeredTileMap extends TileMap {
     data["activeLayer"] = this.activeLayer;
     data["numLayers"] = this.numLayers;
     data["tileDim"] = this.tileDim.slice();
-    data["spriteSheet"] = (_a = Array(...App.resources.keys()).find((k) => App.resources[k] === this.spriteSheet)) != null ? _a : null;
+    data["spriteSheet"] = Array(...App.resources.keys()).find((k) => App.resources[k] === this.spriteSheet) ?? null;
     return data;
   }
   /**
@@ -5428,10 +5661,9 @@ class LayeredTileMap extends TileMap {
    * @param {Object} data 
    */
   deserialize(data) {
-    var _a, _b;
     this.numLayers = data["numLayers"];
     this.activeLayer = data["activeLayer"];
-    this.tileDim = new Vec2((_a = data["tileDim"]) != null ? _a : [0, 0]);
+    this.tileDim = new Vec2(data["tileDim"] ?? [0, 0]);
     const n = data["_layerData"].length;
     this._layerData.length = n;
     for (let i = 0; i < n; i++) {
@@ -5441,7 +5673,7 @@ class LayeredTileMap extends TileMap {
         lout[j] = lin[j];
       }
     }
-    this.spriteSheet = (_b = App.resources[data["spriteSheet"]]) != null ? _b : null;
+    this.spriteSheet = App.resources[data["spriteSheet"]] ?? null;
     this.clearCache();
   }
   /**@type {import('./widgets.js').EventCallbackNullable} */
@@ -5526,16 +5758,15 @@ class Color extends Array {
    * @returns {Color}
    */
   static fromString(colorName) {
-    var _a, _b, _c;
     if (colorName === null) {
       return new Color(0, 0, 0, 0);
     }
     if (colorName.startsWith("#")) {
       const match = colorName.match(/^#([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])([0-9a-f][0-9a-f])?$/);
       if (!match) throw Error(`Unkwown color string ${colorName}`);
-      const r2 = (_a = parseInt(match[1], 16)) != null ? _a : 0;
-      const g2 = (_b = parseInt(match[2], 16)) != null ? _b : 0;
-      const b2 = (_c = parseInt(match[3], 16)) != null ? _c : 0;
+      const r2 = parseInt(match[1], 16) ?? 0;
+      const g2 = parseInt(match[2], 16) ?? 0;
+      const b2 = parseInt(match[3], 16) ?? 0;
       const a = 0;
       return new Color(r2, g2, b2, a);
     }
@@ -9201,1091 +9432,2953 @@ App.registerClass("TabbedNotebook", TabbedNotebook, "");
 App.registerClass("SpriteWidget", SpriteWidget, "");
 App.registerClass("TileMap", TileMap, "");
 App.registerClass("LayeredTileMap", LayeredTileMap, "");
-const purpleTheme = {
-  "background": [179, 179, 242, 1],
-  // softer light lavender background
-  "tile": [179, 179, 216, 1],
-  // cool light purple for tiles
-  "tileSelected": [204, 204, 230, 1],
-  // soft grayish purple for inactive
-  "tileInactive": [102, 102, 179, 1],
-  // richer purple for selected (more pop)
-  "tileLetterText": [255, 255, 255, 1],
-  // bright white text for contrast
-  "wordScoreBackground": [102, 102, 179, 1],
-  // blue-purple to match selected tiles
-  "wordScoreText": [255, 255, 255, 1],
-  // white for clarity on score text
-  "scoreText": [230, 230, 230, 1],
-  // soft white-gray
-  "checker": [230, 230, 255, 1],
-  // light violet checkerboard
-  "moveCandidates": [128, 153, 255, 1],
-  // soft blue highlight for candidates
-  "menuButtonBackground": [153, 204, 229, 1],
-  // pale teal-ish blue for buttons
-  "menuButtonForeground": [255, 255, 255, 1],
-  // white foreground text
-  "menuButtonForegroundDisabled": [179, 179, 179, 1]
-  // subtle gray when disabled
-};
-const beachTheme = {
-  "background": [26, 156, 178, 1],
-  // richer turquoise sea
-  "tile": [255, 248, 200, 1],
-  // soft warm sand (brighter than original)
-  "tileSelected": [255, 198, 120, 1],
-  // sunny orange-coral (sunset vibes)
-  "tileInactive": [140, 200, 160, 1],
-  // sun-bleached green (like palm fronds fading in the sun)
-  "tileLetterText": [40, 100, 110, 1],
-  // deeper seafoam text for better contrast
-  "wordScoreBackground": [255, 223, 148, 1],
-  // sun-baked peach
-  "wordScoreText": [32, 92, 105, 1],
-  // ocean accent text
-  "scoreText": [255, 255, 255, 1],
-  // crisp white score
-  "checker": [0, 190, 180, 1],
-  // sea foam pattern in the surf
-  "moveCandidates": [255, 190, 110, 1],
-  // beachy orange highlight
-  "menuButtonBackground": [240, 110, 50, 1],
-  // bold tropical orange
-  "menuButtonForeground": [255, 255, 255, 1],
-  "menuButtonForegroundDisabled": [160, 160, 160, 1]
-};
-const midnightTheme = {
-  "background": [18, 24, 47, 1],
-  // deep midnight blue
-  "tile": [92, 64, 153, 1],
-  // soft muted navy
-  "tileSelected": [135, 94, 153, 1],
-  // royal purple
-  "tileInactive": [70, 70, 90, 1],
-  // desaturated dark grey-blue
-  "tileLetterText": [200, 200, 255, 1],
-  // light periwinkle
-  "wordScoreBackground": [64, 41, 115, 1],
-  // deeper purple highlight
-  "wordScoreText": [220, 210, 250, 1],
-  // soft lavender text
-  "scoreText": [190, 220, 255, 1],
-  // sky blue for contrast
-  "checker": [30, 42, 90, 1],
-  // barely visible grid contrast
-  "moveCandidates": [130, 80, 200, 1],
-  // strong purple-pink highlight
-  "menuButtonBackground": [88, 70, 130, 1],
-  // dusky purple
-  "menuButtonForeground": [255, 255, 255, 1],
-  // white text
-  "menuButtonForegroundDisabled": [120, 120, 150, 1]
-  // soft muted grey-blue
-};
-const wordlePlayfulTheme = {
-  "background": [250, 248, 239, 1],
-  // warm paper-like off-white
-  "tile": [130, 130, 130, 1],
-  // gray (wrong letter)
-  "tileSelected": [240, 194, 60, 1],
-  // golden yellow (right letter, wrong place)
-  "tileInactive": [106, 170, 100, 1],
-  // green (correct letter and place)
-  "tileLetterText": [255, 255, 255, 1],
-  // white for strong contrast
-  "wordScoreBackground": [234, 219, 178, 1],
-  // soft beige backdrop
-  "wordScoreText": [80, 80, 80, 1],
-  // dark gray, not fully black
-  "scoreText": [60, 60, 60, 1],
-  // darker gray for scoreboard text
-  "checker": [220, 210, 180, 1],
-  // light parchment-style grid
-  "moveCandidates": [255, 204, 0, 1],
-  // punchy yellow highlight
-  "menuButtonBackground": [102, 153, 204, 1],
-  // playful blue
-  "menuButtonForeground": [250, 248, 239, 1],
-  // white
-  "menuButtonForegroundDisabled": [160, 160, 160, 1]
-  // dimmed gray
-};
-const minecraftTheme = {
-  "background": [89, 125, 39, 1],
-  // grassy green, like the top of a dirt block
-  "tile": [112, 112, 112, 1],
-  // stone gray (wrong letter)
-  "tileSelected": [181, 140, 71, 1],
-  // warm dirt brown (right letter, wrong place)
-  "tileInactive": [63, 106, 45, 1],
-  // deeper green (correct letter & position)
-  "tileLetterText": [255, 255, 255, 1],
-  // bright white text
-  "wordScoreBackground": [148, 120, 80, 1],
-  // soft brown for score area
-  "wordScoreText": [255, 255, 255, 1],
-  // white again for legibility
-  "scoreText": [235, 235, 235, 1],
-  // light gray for contrast on darker bg
-  "checker": [78, 97, 36, 1],
-  // mossy checkerboard tone
-  "moveCandidates": [255, 216, 61, 1],
-  // bright gold (like a torch glow)
-  "menuButtonBackground": [60, 68, 94, 1],
-  // deep slate blue (like stone UI panels)
-  "menuButtonForeground": [255, 255, 255, 1],
-  // white
-  "menuButtonForegroundDisabled": [160, 160, 160, 1]
-  // soft gray
-};
-const starWarsForceTheme = {
-  "background": [0, 0, 0, 1],
-  // deep space black
-  "tile": [64, 64, 64, 1],
-  // neutral gray (wrong letter)
-  "tileSelected": [200, 50, 50, 1],
-  // Sith red (right letter, wrong position)
-  "tileInactive": [50, 120, 255, 1],
-  // Jedi blue (correct letter & position)
-  "tileLetterText": [255, 255, 255, 1],
-  // bright white for all tiles
-  "wordScoreBackground": [30, 30, 30, 1],
-  // dark control panel gray
-  "wordScoreText": [200, 200, 255, 1],
-  // soft blue highlight
-  "scoreText": [220, 220, 220, 1],
-  // light gray
-  "checker": [15, 15, 15, 1],
-  // subtle starfield contrast
-  "moveCandidates": [200, 50, 50, 1],
-  // Sith red for target highlight
-  "menuButtonBackground": [20, 20, 20, 1],
-  // sleek black UI panel
-  "menuButtonForeground": [50, 120, 255, 1],
-  // Jedi blue text
-  "menuButtonForegroundDisabled": [120, 120, 120, 1]
-  // gray when inactive
-};
-const themes = {
-  "purple": purpleTheme,
-  "beach": beachTheme,
-  "midnight": midnightTheme,
-  "wordlePlayful": wordlePlayfulTheme,
-  "minecraft": minecraftTheme,
-  "starWars": starWarsForceTheme
-};
-function loadTheme(themeName) {
-  const themeBase = themes[themeName];
-  let theme = {};
-  for (let c in themeBase) {
-    theme[c] = themeBase[c];
-  }
-  theme["bronze"] = [205, 127, 50, 1];
-  theme["silver"] = [208, 208, 208, 1];
-  theme["gold"] = [255, 215, 0, 1];
-  theme["bronzeOff"] = [128, 128, 128, 0.1];
-  theme["silverOff"] = [128, 128, 128, 0.1];
-  theme["goldOff"] = [128, 128, 128, 0.1];
-  for (let t in theme) {
-    let [r, g, b, a] = theme[t];
-    theme[t] = `rgba(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)},${a})`;
-  }
-  theme["id"] = themeName;
-  return theme;
-}
-const urlWords = "" + new URL("TWL06-BX4RmYm2.txt", import.meta.url).href;
-const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
-const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
-const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
-const urlSoundMenu = "" + new URL("menu-Wio-ugm1.mp3", import.meta.url).href;
-const urlSoundWordCompleted = "" + new URL("word_completed-Bu2Q1kXb.mp3", import.meta.url).href;
-const sounds = {
-  CANCEL_SELECTION: new Audio(urlSoundCancelSelection),
-  LEVEL_COMPLETED: new Audio(urlSoundLevelCompleted),
-  LEVEL_FAILED: new Audio(urlSoundLevelFailed),
-  MENU: new Audio(urlSoundMenu),
-  CORRECT: new Audio(urlSoundWordCompleted),
-  WORD_COMPLETED: new Audio(urlSoundWordCompleted)
-};
-const boardSize = 5;
-function getUTCDateString(date = /* @__PURE__ */ new Date()) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
-}
-async function loadWords(url) {
-  try {
-    const response = await fetch(url);
-    const text = await response.text();
-    const words = new Set(text.replace(/\r/g, "").split("\n"));
-    return words;
-  } catch (err) {
-    console.error("Error loading file:", err);
-  }
-}
-class LetterTile extends Widget {
+class WebGLTileRenderer {
   /**
    * 
-   * @param {Board} board 
-   * @param {number} x 
-   * @param {number} y 
-   * @param {string} letter 
-   * @param {number} value 
-   * @param {number} row 
-   * @param {boolean} active 
+   * @param {HTMLCanvasElement|OffscreenCanvas} canvas 
    */
-  constructor(board, x, y, letter, value, row, col, active = true) {
-    super();
-    this.children = [
-      new Label({
-        text: letter,
-        color: (app) => app.colors["tileLetterText"],
-        fontSize: "0.8wh",
-        hints: { x: 0, y: 0, w: 1, h: 1 }
-      })
-    ];
-    this.bgColor = SevenWordsApp.get().colors["tile"];
-    SevenWordsApp.get().bind("colors", (e, o, v) => {
-      this.updateBgColor();
-    });
-    this.letter = letter;
-    this.gposX = x;
-    this.gposY = y;
-    this.oposX = this.gposX;
-    this.oposY = this.gposY;
-    this.cposX = this.gposX;
-    this.cposY = this.gposY;
-    [this.x, this.y] = this.gpos;
-    this.board = board;
-    this.row = row;
-    this.col = col;
-    this.selected = false;
-    this.active = active;
-    this.correctRow = false;
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.gl = /**@type {WebGLRenderingContext|null}*/
+    canvas.getContext("webgl", { alpha: true });
+    if (this.gl === null) throw Error(`WebGL context could not be retrieved from ${canvas}`);
+    const shaderData = this.initShaders();
+    this.shaderProgram = shaderData.program;
+    this.aPosition = shaderData.aPosition;
+    this.aTexCoord = shaderData.aTexCoord;
+    this.aColor = shaderData.aColor;
+    const gl = this.gl;
+    this.vertexBuffer = gl.createBuffer();
+    gl.disable(gl.DEPTH_TEST);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.BLEND);
+    this.numQuads = 1e3;
+    this.indexBuffer = gl.createBuffer();
+    this.vertexData = new Float32Array(this.numQuads * 6 * (2 + 2 + 4));
+    this.indexData = new Uint16Array(this.numQuads * 6);
+    for (let i = 0, j = 0; i < this.indexData.length; i += 6, j += 4) {
+      this.indexData.set([j, j + 1, j + 2, j + 2, j + 3, j], i);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indexData, gl.STATIC_DRAW);
+    this.textures = /* @__PURE__ */ new Map();
+    this.vertexCount = 0;
+    this.activeTexture = null;
   }
-  draw(app, ctx) {
-    if (this.active) {
-      const oldColor = ctx.fillStyle;
-      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(255, 255, 255), 0.5);
-      ctx.fillRect(this.x, this.y, this.w, this.h);
-      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.5);
-      ctx.fillRect(this.x + 0.05 * this.w, this.y + 0.05 * this.h, this.w * 0.95, this.h * 0.95);
-      ctx.fillStyle = this.bgColor;
-      ctx.fillRect(this.x + 0.05 * this.w, this.y + 0.05 * this.h, this.w * 0.9, this.h * 0.9);
-      ctx.fillStyle = oldColor;
+  initShaders() {
+    const gl = this.gl;
+    const vertSrc = `
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            attribute vec4 aColor;
+            uniform mat4 uProjectionMatrix;
+            uniform mat4 uModelMatrix;
+            varying vec2 vTexCoord;
+            varying vec4 vColor;
+            void main() {
+                gl_Position = uProjectionMatrix * uModelMatrix * vec4(aPosition, 0.0, 1.0);
+                vTexCoord = aTexCoord;
+                vColor = aColor;
+            }
+        `;
+    const fragSrc = `
+            precision mediump float;
+            varying vec2 vTexCoord;
+            varying vec4 vColor;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord) * vColor;
+            }
+        `;
+    const program = this.compileShaderProgram(vertSrc, fragSrc);
+    const aPosition = gl.getAttribLocation(program, "aPosition");
+    const aTexCoord = gl.getAttribLocation(program, "aTexCoord");
+    const aColor = gl.getAttribLocation(program, "aColor");
+    if (aPosition === void 0) throw Error("Could not bind aPosition");
+    if (aTexCoord === void 0) throw Error("Could not bind aTexCoord");
+    if (aColor === void 0) throw Error("Could not bind aColor");
+    return { program, aPosition, aTexCoord, aColor };
+  }
+  /**
+   * Compiles the vertex and fragement shader source into a webGL program
+   * @param {string} vertSrc vertex shader source
+   * @param {string} fragSrc fragmenet shader source
+   * @returns 
+   */
+  compileShaderProgram(vertSrc, fragSrc) {
+    const gl = this.gl;
+    const vertShader = this.compileShader(gl.VERTEX_SHADER, vertSrc);
+    const fragShader = this.compileShader(gl.FRAGMENT_SHADER, fragSrc);
+    if (vertShader === null) throw Error(`Error in vertShader ${vertShader}`);
+    if (fragShader === null) throw Error(`Error in fragShader ${fragShader}`);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertShader);
+    gl.attachShader(program, fragShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error("Shader link error:", gl.getProgramInfoLog(program));
+    }
+    gl.useProgram(program);
+    return program;
+  }
+  /**
+   * Handles the compilation of a single shader part (VERTEX or FRAGMENT)
+   * @param {number} type Should be one of gl.VERTEX_SHADER or gl.FRAGMENT_SHADER
+   * @param {string} src Source code of the shader
+   * @returns 
+   */
+  compileShader(type, src) {
+    const gl = this.gl;
+    const shader = gl.createShader(type);
+    if (shader === null) throw Error(`Invalid shader type ${type}`);
+    gl.shaderSource(shader, src);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      throw Error(`Shader compile error: ${gl.getShaderInfoLog(shader)}`);
+    }
+    return shader;
+  }
+  /**
+   * Registers the texture with assigned `name` to a specified `image`
+   * @param {string} name 
+   * @param {HTMLImageElement|OffscreenCanvas} image 
+   * @param {number|[number, number]} [tileDim=1] 
+   * @param {WebGLRenderingContextBase['NEAREST']|WebGLRenderingContextBase['LINEAR']|null} [interp=null]
+   */
+  registerTexture(name, image, tileDim = 1, interp = null, padding = 0) {
+    const gl = this.gl;
+    const texture = gl.createTexture();
+    const [tw, th] = tileDim instanceof Array ? tileDim : [tileDim, tileDim];
+    if (interp === null) interp = gl.NEAREST;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    const isPowerOfTwo = (value) => (value & value - 1) === 0;
+    const pot = isPowerOfTwo(image.width) && isPowerOfTwo(image.height);
+    if (pot) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.generateMipmap(gl.TEXTURE_2D);
     } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, interp);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, interp);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.textures.set(name, { texture, width: image.width / (tw + padding), height: image.height / (th + padding), fracW: tw / (tw + padding), fracH: th / (th + padding) });
+  }
+  /**
+   * Start rendering configured for a particular tileScale (fix in each direction)
+   * @param {number} tileScale 
+   */
+  start(tileScale) {
+    const gl = this.gl;
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    const uProjectionMatrixLoc = gl.getUniformLocation(this.shaderProgram, "uProjectionMatrix");
+    const projectionMatrix = new Float32Array([
+      2 / this.canvas.width * tileScale,
+      0,
+      0,
+      0,
+      0,
+      -2 / this.canvas.height * tileScale,
+      0,
+      0,
+      // Flip Y so (0,0) is top-left
+      0,
+      0,
+      1,
+      0,
+      -1,
+      1,
+      0,
+      1
+    ]);
+    gl.uniformMatrix4fv(uProjectionMatrixLoc, false, projectionMatrix);
+    this.setRotation(0, 0, 0);
+  }
+  /**
+   * 
+   * @param {number} angle to rotate counter clockwise in radians
+   * @param {number} cx x position of the center 
+   * @param {number} cy y position of the center  
+   * @returns 
+   */
+  getRotationMatrix(angle, cx, cy) {
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    return new Float32Array([
+      cosA,
+      sinA,
+      0,
+      0,
+      -sinA,
+      cosA,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      cx,
+      cy,
+      0,
+      1
+    ]);
+  }
+  /**
+   * 
+   * @param {number} angle to rotate counter clockwise in radians
+   * @param {number} cx x position of the center 
+   * @param {number} cy y position of the center  
+   * @returns 
+   */
+  setRotation(angle, cx, cy) {
+    const gl = this.gl;
+    const uModelMatrixLoc = gl.getUniformLocation(this.shaderProgram, "uModelMatrix");
+    const rotationMatrix = this.getRotationMatrix(angle, cx, cy);
+    gl.uniformMatrix4fv(uModelMatrixLoc, false, rotationMatrix);
+  }
+  /**
+   * Draws the texture segment into the `glCanvas`
+   * @param {string} name Name of texture to draw
+   * @param {number} sx source x position (left) in `tileScale` units specified in `start`
+   * @param {number} sy source y position (top) in `tileScale` units specified in `start`
+   * @param {number} sw source width in `tileScale` units specified in `start`
+   * @param {number} sh source height in `tileScale` units specified in `start`
+   * @param {number} dx destination x position (left) in the `tileDim[0]` units registered for the texture
+   * @param {number} dy destination y position (top) in the `tileDim[1]` units registered for the texture
+   * @param {number} dw destination width in the `tileDim[0]` units registered for the texture
+   * @param {number} dh destination height in the `tileDim[1]` units registered for the texture
+   * @param {[number, number, number, number]} tint the rgba values (between 0 and 1) to tint the region with
+   * @returns 
+   */
+  drawTexture(name, sx, sy, sw, sh, dx, dy, dw, dh, tint) {
+    if (!this.textures.has(name)) return;
+    const { texture, width, height, fracW, fracH } = this.textures.get(name);
+    if (this.activeTexture !== texture) {
+      if (this.activeTexture !== null) this.flush();
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+      this.activeTexture = texture;
+    }
+    const x1 = dx;
+    const y1 = dy;
+    const x2 = dx + dw;
+    const y2 = dy + dh;
+    const u1 = sx / width;
+    const v1 = sy / height;
+    const u2 = (sx + sw * fracW) / width;
+    const v22 = (sy + sh * fracH) / height;
+    const color = tint ?? [1, 1, 1, 1];
+    const baseIndex = this.vertexCount * 8;
+    const arr = this.vertexData;
+    arr.set([x1, y1, u1, v1, ...color], baseIndex);
+    arr.set([x2, y1, u2, v1, ...color], baseIndex + 8);
+    arr.set([x2, y2, u2, v22, ...color], baseIndex + 16);
+    arr.set([x1, y2, u1, v22, ...color], baseIndex + 24);
+    this.vertexCount += 4;
+    if (this.vertexCount >= this.numQuads * 4) this.flush();
+  }
+  /**
+   * Draws the texture segment into the `glCanvas` with a tint per vertex
+   * @param {string} name Name of texture to draw
+   * @param {number} sx source x position (left) in `tileScale` units specified in `start`
+   * @param {number} sy source y position (top) in `tileScale` units specified in `start`
+   * @param {number} sw source width in `tileScale` units specified in `start`
+   * @param {number} sh source height in `tileScale` units specified in `start`
+   * @param {number} dx destination x position (left) in the `tileDim[0]` units registered for the texture
+   * @param {number} dy destination y position (top) in the `tileDim[1]` units registered for the texture
+   * @param {number} dw destination width in the `tileDim[0]` units registered for the texture
+   * @param {number} dh destination height in the `tileDim[1]` units registered for the texture
+   * @param {[number, number, number, number][]} tints the rgba values (between 0 and 1) to tint each vertex from top-left clockwise
+   * @returns 
+   */
+  drawTextureTintedPerVertex(name, sx, sy, sw, sh, dx, dy, dw, dh, tints) {
+    if (!this.textures.has(name)) return;
+    const { texture, width, height, fracW, fracH } = this.textures.get(name);
+    if (this.activeTexture !== texture) {
+      if (this.activeTexture !== null) this.flush();
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+      this.activeTexture = texture;
+    }
+    const x1 = dx;
+    const y1 = dy;
+    const x2 = dx + dw;
+    const y2 = dy + dh;
+    const u1 = sx / width;
+    const v1 = sy / height;
+    const u2 = (sx + sw * fracW) / width;
+    const v22 = (sy + sh * fracH) / height;
+    const color = tints;
+    const baseIndex = this.vertexCount * 8;
+    const arr = this.vertexData;
+    arr.set([x1, y1, u1, v1, ...color[0]], baseIndex);
+    arr.set([x2, y1, u2, v1, ...color[1]], baseIndex + 8);
+    arr.set([x2, y2, u2, v22, ...color[2]], baseIndex + 16);
+    arr.set([x1, y2, u1, v22, ...color[3]], baseIndex + 24);
+    this.vertexCount += 4;
+    if (this.vertexCount >= this.numQuads * 4) this.flush();
+  }
+  /**
+   * Called internally or by the user to render out the current set of vertices
+   */
+  flush() {
+    if (this.vertexCount === 0) return;
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.vertexCount * 8));
+    gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 8 * 4, 0);
+    gl.enableVertexAttribArray(this.aPosition);
+    gl.vertexAttribPointer(this.aTexCoord, 2, gl.FLOAT, false, 8 * 4, 2 * 4);
+    gl.enableVertexAttribArray(this.aTexCoord);
+    gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, 8 * 4, 4 * 4);
+    gl.enableVertexAttribArray(this.aColor);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.drawElements(gl.TRIANGLES, this.vertexCount * 6 / 4, gl.UNSIGNED_SHORT, 0);
+    this.vertexCount = 0;
+  }
+  /**
+   * Clears out the client region of the glCanvas to the specified rgba values
+   * @param {number} r 
+   * @param {number} g 
+   * @param {number} b 
+   * @param {number} a 
+   */
+  clear(r = 0, g = 0, b = 0, a = 1) {
+    const gl = this.gl;
+    gl.clearColor(r, g, b, a);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    this.vertexCount = 0;
+  }
+}
+function packSprite$1(x, y, flip = false, angle = 0) {
+  return packSpriteInfo2D(vec2(x, y), flip, angle, 32 * 32, 32);
+}
+function posToIndex(x, y) {
+  return 32 * y + x;
+}
+const MetaLayers = Object.freeze({
+  layout: 0,
+  //Basic type of location
+  seen: 1,
+  //whether the characters have seen that part of the map
+  visible: 2,
+  //whether the characters can currently see that part of the map
+  traversible: 3,
+  //direction of traversibility
+  allowsSight: 4,
+  //direction of sight
+  allowsSound: 5,
+  cover: 6,
+  //direction that cover is provided from
+  moveCost: 7,
+  elevation: 8
+});
+const DecorationTiles = Object.freeze({
+  tree1: posToIndex(4, 5),
+  tree2: posToIndex(5, 5),
+  saplings: posToIndex(6, 5),
+  palm: posToIndex(7, 5),
+  well: posToIndex(11, 6),
+  logPile1: posToIndex(12, 6),
+  logPile2: posToIndex(13, 6),
+  logPile3: posToIndex(14, 6),
+  bed: packSprite$1(14, 3),
+  raft: packSprite$1(15, 4),
+  boat: packSprite$1(14, 4),
+  berries: packSprite$1(5, 4),
+  pickedBerries: packSprite$1(4, 4),
+  sword: packSprite$1(6, 4),
+  bow: packSprite$1(7, 4),
+  goldKey: packSprite$1(10, 5),
+  bag: packSprite$1(9, 7),
+  meat: packSprite$1(7, 8),
+  reservoir: packSprite$1(11, 6),
+  fire1: packSprite$1(9, 8),
+  fire2: packSprite$1(10, 8),
+  table: packSprite$1(12, 5),
+  lava: packSprite$1(3, 8),
+  aimer: packSprite$1(0, 7)
+});
+const spriteSheetIndex = Object.freeze({
+  black: posToIndex(3, 14),
+  ocean: posToIndex(10, 12),
+  rocky: posToIndex(2, 14),
+  grassy: posToIndex(0, 15),
+  sand: posToIndex(0, 14),
+  floor: posToIndex(2, 1),
+  cliffS: posToIndex(5, 14),
+  rockyE: posToIndex(5, 15),
+  rockyN: packSpriteInfo2D(vec2(5, 15), false, 3, 32 * 32, 32),
+  rockyW: packSprite$1(5, 15, true),
+  wallE: packSprite$1(3, 1),
+  wallN: packSprite$1(1, 0),
+  wallS: packSprite$1(1, 0),
+  wallW: packSprite$1(0, 1),
+  wallNE: packSprite$1(3, 0),
+  wallNW: packSprite$1(0, 0),
+  wallSE: packSprite$1(3, 2),
+  wallSW: packSprite$1(0, 2),
+  wallNES: packSprite$1(0, 3),
+  wallNEW: packSprite$1(2, 3),
+  wallNSW: packSprite$1(3, 3),
+  wallESW: packSprite$1(1, 3),
+  doorway: posToIndex(2, 2),
+  doorwayW: posToIndex(16, 5),
+  doorwayE: posToIndex(17, 5),
+  window: posToIndex(1, 2),
+  windowW: posToIndex(15, 5),
+  windowE: posToIndex(14, 5),
+  roof: posToIndex(16, 5),
+  beachN: packSprite$1(1, 12),
+  beachE: packSprite$1(0, 11),
+  beachS: packSprite$1(1, 10),
+  beachW: packSprite$1(2, 11),
+  beachNE: packSprite$1(0, 12),
+  beachSE: packSprite$1(0, 10),
+  beachSW: packSprite$1(2, 10),
+  beachNW: packSprite$1(2, 12),
+  beachNS: packSprite$1(1, 14),
+  beachEW: packSprite$1(1, 14),
+  beachNES: packSprite$1(0, 11),
+  beachNEW: packSprite$1(1, 12),
+  beachNSW: packSprite$1(2, 11),
+  beachESW: packSprite$1(1, 10),
+  river1EW: packSprite$1(8, 14),
+  river2EW: packSprite$1(8, 15),
+  river1NE: packSprite$1(9, 14, false, 3),
+  river2NE: packSprite$1(9, 15, false, 3),
+  river1SE: packSprite$1(9, 14, false, 0),
+  river2SE: packSprite$1(9, 15, false, 0),
+  river1SW: packSprite$1(9, 14, false, 1),
+  river2SW: packSprite$1(9, 15, false, 1),
+  river1NW: packSprite$1(9, 14, false, 2),
+  river2NW: packSprite$1(9, 15, false, 2),
+  river1NS: packSprite$1(10, 14),
+  river2NS: packSprite$1(10, 15),
+  riverE: packSprite$1(11, 14),
+  riverN: packSprite$1(11, 14, false, 3),
+  riverW: packSprite$1(11, 14, false, 2),
+  riverS: packSprite$1(11, 14, false, 1),
+  riverWaterFallS: packSprite$1(12, 15),
+  riverWaterFallE: packSprite$1(11, 15),
+  riverWaterFallW: packSprite$1(11, 15, true),
+  riverWaterFallN: packSprite$1(12, 14)
+});
+const voxelNames = Object.freeze({
+  rocky: 1,
+  rockyLedgeE: 2,
+  rockyLedgeW: 3,
+  rockyLedgeN: 4,
+  grassy: 5,
+  grassyLedgeE: 6,
+  grassyLedgeW: 7,
+  grassyLedgeN: 8,
+  sand: 9,
+  beachFront: 10,
+  floor: 11,
+  path: 12,
+  ocean: 13,
+  pool: 15,
+  wallN: 16,
+  wallE: 17,
+  wallS: 18,
+  wallW: 19,
+  wallNE: 20,
+  wallNW: 21,
+  wallSE: 22,
+  wallSW: 23,
+  wallNES: 24,
+  wallNEW: 25,
+  wallNSW: 26,
+  wallESW: 27,
+  doorwayN: 28,
+  doorwayS: 29,
+  doorwayE: 30,
+  doorwayW: 31,
+  windowN: 32,
+  windowS: 33,
+  windowE: 34,
+  windowW: 35,
+  roof: 36,
+  beachN: 37,
+  beachE: 38,
+  beachS: 39,
+  beachW: 40,
+  beachNE: 41,
+  beachSE: 42,
+  beachSW: 43,
+  beachNW: 44,
+  beachNS: 45,
+  beachEW: 46,
+  beachNES: 47,
+  beachNEW: 48,
+  beachNSW: 49,
+  beachESW: 50,
+  streamN: 51,
+  streamE: 52,
+  streamS: 53,
+  streamW: 54,
+  streamNS: 55,
+  streamEW: 56,
+  streamNE: 57,
+  streamSE: 58,
+  streamNW: 59,
+  streamSW: 60,
+  tree1: 64,
+  tree2: 65,
+  saplings: 66,
+  palm: 67,
+  well: 68,
+  logPile1: 69,
+  logPile2: 70,
+  logPile3: 71,
+  bed: 72,
+  raft: 73,
+  boat: 74,
+  berries: 75,
+  pickedBerries: 76,
+  sword: 77,
+  bow: 78,
+  goldKey: 79,
+  bag: 80,
+  meat: 81,
+  reservoir: 82,
+  fire1: 83,
+  fire2: 84,
+  table: 85,
+  lava: 86
+});
+const voxelIndex = Object.freeze({
+  [voxelNames.rocky]: [spriteSheetIndex.rocky, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.grassy]: [spriteSheetIndex.grassy, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.sand]: [spriteSheetIndex.sand],
+  [voxelNames.beachFront]: [spriteSheetIndex.sand],
+  [voxelNames.floor]: [void 0, void 0, void 0, spriteSheetIndex.floor],
+  [voxelNames.streamN]: [spriteSheetIndex.riverN, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.rockyE],
+  [voxelNames.streamE]: [spriteSheetIndex.riverE, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamS]: [spriteSheetIndex.riverS, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.streamW]: [spriteSheetIndex.riverW, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.streamNS]: [spriteSheetIndex.river1NS, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.rockyE],
+  [voxelNames.streamEW]: [spriteSheetIndex.river1EW, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.rockyN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamNE]: [spriteSheetIndex.river1NE, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamSE]: [spriteSheetIndex.river1SE, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.rockyW, spriteSheetIndex.rockyN, spriteSheetIndex.riverWaterFallE],
+  [voxelNames.streamSW]: [spriteSheetIndex.river1SW, spriteSheetIndex.riverWaterFallS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.rockyN, spriteSheetIndex.rockyE],
+  [voxelNames.streamNW]: [spriteSheetIndex.river1NW, spriteSheetIndex.cliffS, void 0, void 0, spriteSheetIndex.riverWaterFallW, spriteSheetIndex.riverWaterFallN, spriteSheetIndex.rockyE],
+  // [voxelNames.path]:          [0, 0, 0, 0],
+  // [voxelNames.runningWater]:  [0, 0, 0, 0],
+  [voxelNames.ocean]: [spriteSheetIndex.ocean],
+  // [voxelNames.pool]:          [0, 0, 0, 0],
+  [voxelNames.wallN]: [void 0, spriteSheetIndex.wallN, void 0],
+  [voxelNames.wallS]: [void 0, spriteSheetIndex.wallS, void 0],
+  [voxelNames.wallE]: [void 0, void 0, void 0, spriteSheetIndex.wallE],
+  [voxelNames.wallW]: [void 0, void 0, void 0, spriteSheetIndex.wallW],
+  [voxelNames.wallNE]: [void 0, spriteSheetIndex.wallNE, void 0],
+  [voxelNames.wallNW]: [void 0, spriteSheetIndex.wallNW, void 0],
+  [voxelNames.wallSE]: [void 0, spriteSheetIndex.wallSE, void 0],
+  [voxelNames.wallSW]: [void 0, spriteSheetIndex.wallSW, void 0],
+  [voxelNames.wallNES]: [void 0, spriteSheetIndex.wallNES, void 0],
+  [voxelNames.wallNEW]: [void 0, spriteSheetIndex.wallNEW, void 0],
+  [voxelNames.wallNSW]: [void 0, spriteSheetIndex.wallNSW, void 0],
+  [voxelNames.wallESW]: [void 0, spriteSheetIndex.wallESW, void 0],
+  [voxelNames.doorwayN]: [void 0, void 0, spriteSheetIndex.doorway],
+  [voxelNames.doorwayS]: [void 0, spriteSheetIndex.doorway, void 0],
+  [voxelNames.doorwayE]: [void 0, void 0, void 0, spriteSheetIndex.doorwayE],
+  [voxelNames.doorwayW]: [void 0, void 0, void 0, spriteSheetIndex.doorwayW],
+  [voxelNames.windowN]: [void 0, spriteSheetIndex.window, void 0],
+  [voxelNames.windowS]: [void 0, spriteSheetIndex.window, void 0],
+  [voxelNames.windowE]: [void 0, void 0, void 0, spriteSheetIndex.windowE],
+  [voxelNames.windowW]: [void 0, void 0, void 0, spriteSheetIndex.windowW],
+  [voxelNames.roof]: [void 0, void 0, void 0, spriteSheetIndex.roof],
+  [voxelNames.beachN]: [spriteSheetIndex.beachN],
+  [voxelNames.beachE]: [spriteSheetIndex.beachE],
+  [voxelNames.beachS]: [spriteSheetIndex.beachS],
+  [voxelNames.beachW]: [spriteSheetIndex.beachW],
+  [voxelNames.beachNE]: [spriteSheetIndex.beachNE],
+  [voxelNames.beachSE]: [spriteSheetIndex.beachSE],
+  [voxelNames.beachSW]: [spriteSheetIndex.beachSW],
+  [voxelNames.beachNW]: [spriteSheetIndex.beachNW],
+  [voxelNames.beachNS]: [spriteSheetIndex.beachNS],
+  [voxelNames.beachEW]: [spriteSheetIndex.beachEW],
+  [voxelNames.beachNES]: [spriteSheetIndex.beachNES],
+  [voxelNames.beachNEW]: [spriteSheetIndex.beachNEW],
+  [voxelNames.beachNSW]: [spriteSheetIndex.beachNSW],
+  [voxelNames.beachESW]: [spriteSheetIndex.beachESW],
+  [voxelNames.tree1]: [void 0, void 0, void 0, DecorationTiles.tree1],
+  [voxelNames.tree2]: [void 0, void 0, void 0, DecorationTiles.tree2],
+  [voxelNames.saplings]: [void 0, void 0, void 0, DecorationTiles.saplings],
+  [voxelNames.palm]: [void 0, void 0, void 0, DecorationTiles.palm],
+  [voxelNames.well]: [void 0, void 0, void 0, DecorationTiles.well],
+  [voxelNames.logPile1]: [void 0, void 0, void 0, DecorationTiles.logPile1],
+  [voxelNames.logPile2]: [void 0, void 0, void 0, DecorationTiles.logPile2],
+  [voxelNames.logPile3]: [void 0, void 0, void 0, DecorationTiles.logPile3],
+  [voxelNames.bed]: [void 0, void 0, void 0, DecorationTiles.bed],
+  [voxelNames.raft]: [void 0, void 0, void 0, DecorationTiles.raft],
+  [voxelNames.boat]: [void 0, void 0, void 0, DecorationTiles.boat],
+  [voxelNames.berries]: [void 0, void 0, void 0, DecorationTiles.berries],
+  [voxelNames.pickedBerries]: [void 0, void 0, void 0, DecorationTiles.pickedBerries],
+  [voxelNames.sword]: [void 0, void 0, void 0, DecorationTiles.sword],
+  [voxelNames.bow]: [void 0, void 0, void 0, DecorationTiles.bow],
+  [voxelNames.goldKey]: [void 0, void 0, void 0, DecorationTiles.goldKey],
+  [voxelNames.bag]: [void 0, void 0, void 0, DecorationTiles.bag],
+  [voxelNames.meat]: [void 0, void 0, void 0, DecorationTiles.meat],
+  [voxelNames.reservoir]: [void 0, void 0, void 0, DecorationTiles.reservoir],
+  [voxelNames.fire1]: [void 0, void 0, void 0, DecorationTiles.fire1],
+  [voxelNames.fire2]: [void 0, void 0, void 0, DecorationTiles.fire2],
+  [voxelNames.table]: [void 0, void 0, void 0, DecorationTiles.table],
+  [voxelNames.lava]: [void 0, void 0, void 0, DecorationTiles.lava]
+});
+const Facing = {
+  north: 0,
+  east: 1,
+  south: 2,
+  west: 3
+};
+const FacingVec = {
+  0: vec2(0, -1),
+  1: vec2(1, 0),
+  2: vec2(0, 1),
+  3: vec2(-1, 0),
+  4: vec2(0, 0)
+};
+const binaryFacing = {
+  0: 1,
+  1: 2,
+  2: 4,
+  3: 8,
+  4: 0
+};
+function facingFromVec(vec) {
+  if (vec[1] < 0) return 0;
+  if (vec[0] > 0) return 1;
+  if (vec[1] > 0) return 2;
+  if (vec[0] < 0) return 3;
+  return 4;
+}
+class Entity extends SpriteWidget {
+  visible = true;
+  constructor(props = {}) {
+    super();
+    if (props) this.updateProperties(props);
+  }
+  get traversible() {
+    return 15;
+  }
+  get allowsSight() {
+    return 15;
+  }
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    return false;
+  }
+}
+class StaticEntity {
+  traversible = 15;
+  allowsSight = 15;
+  name = "";
+  /**@type {number} */
+  voxelIndex = voxelNames.tree1;
+  /**
+   * 
+   * @param {import("eskv/lib/modules/geometry.js").VecLike} pos 
+   * @param {string} [name=''] 
+   * @param {number|null} [voxelIndex=null] 
+   */
+  constructor(pos, name = "", voxelIndex2 = null) {
+    this.pos = new Vec2(pos);
+    if (name != "") this.name = name;
+    if (voxelIndex2 !== null) this.voxelIndex = voxelIndex2;
+  }
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (character instanceof PlayerCharacter) {
+      map.popMessage(this.name);
+      return true;
+    }
+    return false;
+  }
+}
+class Berry extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.berries
+  );
+  name = "berries";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    if (this.voxelIndex === voxelNames.berries) {
+      if (character.hunger < 5) {
+        character.hunger = character.hunger + 1;
+      }
+      this.voxelIndex = voxelNames.pickedBerries;
+      map.updateTileInfo(this.pos);
+      map.popMessage("Ate some berries");
+      return true;
+    } else {
+      map.popMessage("No berries left");
+      return false;
+    }
+  }
+}
+class Well extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.well
+  );
+  name = "well";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    if (character.thirst < character.maxThirst) {
+      character.thirst = character.maxThirst;
+      map.popMessage("Drank water");
+      return true;
+    }
+    map.popMessage("Not thirsty");
+    return false;
+  }
+}
+class Bed extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.bed
+  );
+  name = "bed";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    if (map.turn >= map.daytimeLength) {
+      map.popMessage("Night night");
+      map.endDay();
+      return true;
+    }
+    map.popMessage("Better after dark");
+    return false;
+  }
+}
+class Boat extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.boat
+  );
+  name = "boat";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    map.popMessage("Thanks for playing my 7DRL entry. Enjoy the trip home.\n\n --Spillz", 0);
+    App.get().gameOver = true;
+    return true;
+  }
+}
+class Lava extends StaticEntity {
+  traversible = 0;
+  voxelIndex = (
+    /**@type {number}*/
+    voxelNames.lava
+  );
+  name = "Lave";
+  /**
+   * 
+   * @param {GameMap} map 
+   * @param {Character} character 
+   */
+  interact(map, character) {
+    if (!(character instanceof PlayerCharacter)) return false;
+    map.popMessage("You touched lava and now you are dead.", 0);
+    character.health = 0;
+    character.state = "dead";
+    return true;
+  }
+}
+class ActionItem extends BoxLayout {
+  /** @type {'vertical'|'horizontal'} */
+  orientation = "vertical";
+  keyControl = "";
+  constructor(props = {}) {
+    super();
+    this.hints = { h: "5" };
+    this.sprite = new SpriteWidget({ spriteSheet: App.resources["sprites"] });
+    this.label = new Label({ hints: { h: "1" } });
+    this.children = [
+      this.sprite,
+      this.label
+    ];
+    if (props) this.updateProperties(props);
+  }
+  /**
+   * To perform an action as the player, first it must be requested to provide
+   * the UI with information that maybe needed (e.g., what the target of the action
+   * will be)
+   * @param {Character} actor 
+   * @param {GameMap} map 
+   * @param {ActionResponseData} response 
+   * @return {ActionResponseData} 
+   */
+  request(actor, map, response) {
+    return { result: "notAvailable" };
+  }
+  get name() {
+    return this.label.text;
+  }
+  set name(value) {
+    this.label.text = value;
+  }
+}
+function packSprite(x, y, flip, angle = 0) {
+  return packSpriteInfo2D(vec2(x, y), flip, angle, 32 * 32, 32);
+}
+const characterAnimations = {
+  randy: {
+    standing: [
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
+    ],
+    walkingS: [
+      laf([packSprite(0, 16, false)], [[0, -0.25]]),
+      laf([packSprite(1, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]]),
+      laf([packSprite(1, 16, true)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
+    ],
+    walkingN: [
+      laf([packSprite(2, 16, false)], [[0, -0.25]]),
+      laf([packSprite(3, 16, false)], [[0, -0.25]]),
+      laf([packSprite(2, 16, false)], [[0, -0.25]]),
+      laf([packSprite(3, 16, true)], [[0, -0.25]]),
+      laf([packSprite(2, 16, false)], [[0, -0.25]]),
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
+    ],
+    walkingE: [
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(5, 16, false)], [[0, -0.25]]),
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(5, 16, false)], [[0, -0.25]]),
+      laf([packSprite(4, 16, false)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
+    ],
+    walkingW: [
+      laf([packSprite(4, 16, true)], [[0, -0.25]]),
+      laf([packSprite(5, 16, true)], [[0, -0.25]]),
+      laf([packSprite(4, 16, true)], [[0, -0.25]]),
+      laf([packSprite(5, 16, true)], [[0, -0.25]]),
+      laf([packSprite(4, 16, true)], [[0, -0.25]]),
+      laf([packSprite(0, 16, false)], [[0, -0.25]])
+    ],
+    dead: [
+      laf([packSprite(6, 16, false)], [[0, -0.25]])
+    ],
+    sleeping: [
+      laf([packSprite(6, 16, false)], [[0, -0.25]])
+    ]
+  },
+  dog: {
+    standing: [
+      laf([packSprite(0, 19, false)], [[0, 0]])
+    ],
+    walkingS: [
+      laf([packSprite(0, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(0, 19, false)], [[0, 0]])
+    ],
+    walkingN: [
+      laf([packSprite(0, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(0, 19, true)], [[0, 0]])
+    ],
+    walkingE: [
+      laf([packSprite(0, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(2, 19, false)], [[0, 0]]),
+      laf([packSprite(0, 19, false)], [[0, 0]])
+    ],
+    walkingW: [
+      laf([packSprite(0, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(2, 19, true)], [[0, 0]]),
+      laf([packSprite(0, 19, true)], [[0, 0]])
+    ],
+    dead: [
+      laf([packSprite(7, 8, false)], [[0, 0]])
+    ]
+  },
+  mouse: {
+    standing: [
+      laf([packSprite(0, 17, false)], [[0, 0]])
+    ],
+    walkingS: [
+      laf([packSprite(0, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(0, 17, false)], [[0, 0]])
+    ],
+    walkingN: [
+      laf([packSprite(0, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(0, 17, true)], [[0, 0]])
+    ],
+    walkingE: [
+      laf([packSprite(0, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(1, 17, false)], [[0, 0]]),
+      laf([packSprite(0, 17, false)], [[0, 0]])
+    ],
+    walkingW: [
+      laf([packSprite(0, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(1, 17, true)], [[0, 0]]),
+      laf([packSprite(0, 17, true)], [[0, 0]])
+    ],
+    dead: [
+      laf([packSprite(7, 8, false)], [[0, 0]])
+    ]
+  }
+};
+function costedBFSPath(costGrid, origin, dest) {
+  if (origin.equals(dest)) return [dest];
+  let distances = new Grid2D(costGrid.tileDim).fill(Infinity);
+  distances.set(origin, 0);
+  let candidates = [origin];
+  let deferredCandidates = [];
+  let done = false;
+  while (candidates.length > 0 && !done) {
+    let newCandidates = [];
+    for (let pos of candidates) {
+      for (let npos of costGrid.iterAdjacent(pos)) {
+        let cost = costGrid.get(npos);
+        if (distances.get(pos) + cost < distances.get(npos)) {
+          if (npos.equals(dest)) done = true;
+          distances.set(npos, distances.get(pos) + cost);
+          if (cost > 1 && !done) {
+            deferredCandidates.push([npos, cost]);
+          } else {
+            newCandidates.push(npos);
+          }
+        }
+      }
+    }
+    const newDeferred = [];
+    for (let posCost of deferredCandidates) {
+      if (posCost[1] > 1) {
+        posCost[1]--;
+        newDeferred.push(posCost);
+      } else {
+        newCandidates.push(posCost[0]);
+      }
+    }
+    deferredCandidates = newDeferred;
+    candidates = newCandidates;
+  }
+  const route = [];
+  if (distances.get(dest) === Infinity) return route;
+  let current = dest;
+  while (!current.equals(origin)) {
+    let lowest = Infinity;
+    let nextCurrent = null;
+    for (let candidate of distances.iterAdjacent(current)) {
+      const dist2 = distances.get(candidate);
+      if (dist2 < lowest) {
+        lowest = dist2;
+        nextCurrent = candidate;
+      }
+    }
+    route.unshift(current);
+    if (nextCurrent !== null) current = nextCurrent;
+  }
+  return route;
+}
+class Character extends Entity {
+  /**@type {Set<ActionItem>} */
+  actions = /* @__PURE__ */ new Set();
+  /**@type {eskv.Widget|null}*/
+  actionInventory = null;
+  /**@type {Facing} */
+  heading = Facing.north;
+  constitution = 1;
+  /**@type {CharacterStates} */
+  priorState = "patrolling";
+  /**@type {CharacterStates} */
+  state = "patrolling";
+  /**@type {CharacterStates} */
+  resumeState = "patrolling";
+  /**@type {AnimationStates} */
+  animationState = "standing";
+  /**@type {{[id:string]: LayeredAnimationFrame[]|number[]}|null} */
+  animationGroup = null;
+  elevation = 0;
+  visionRange = 10;
+  /**Grid location of the character on the map */
+  gpos = vec2(0, 0);
+  /**@type {eskv.Vec2[]} Array of waypoints that character will move along in patrol mode*/
+  patrolRoute = [];
+  /** Index of the current target on the patrol route*/
+  patrolTarget = -1;
+  /** Number of actions remaining this turn */
+  actionsThisTurn = 1;
+  /** true if player can see this character */
+  visibleToPlayer = false;
+  /** @type {[ActionItem, ActionResponseData][]} */
+  history = [];
+  suppressed = false;
+  /**Cumulative # of actions where the character's movement has been impeded */
+  movementBlockedCount = 0;
+  /**@type {Set<eskv.Vec2>} */
+  _coverPositions = /* @__PURE__ */ new Set();
+  _visibleLayer = new Grid2D();
+  activeCharacter = false;
+  constructor(props = {}) {
+    super();
+    this.spriteSheet = App.resources["sprites"];
+    this.frames = [452];
+    this.w = 1;
+    this.h = 1;
+    if (props) this.updateProperties(props);
+  }
+  on_state(e, o, v) {
+    if (v === "dead") {
+      this.x = this.gpos[0];
+      this.y = this.gpos[1] - this.elevation;
+      this._animation = null;
+      this.animationState = "dead";
+      return true;
+    }
+  }
+  on_actionInventory(e, o, v) {
+    if (this.actionInventory) {
+      const children = [];
+      for (let a of this.actions) {
+        a.hints = { w: "3", h: "3" };
+        this.actionInventory.addChild(a);
+      }
+      this.actionInventory.children = children;
+    }
+  }
+  /**
+   * 
+   * @param {ActionItem} action 
+   */
+  addAction(action) {
+    if (this.actions.has(action)) return false;
+    this.actions.add(action);
+    action.hints = { w: "3", h: "3" };
+    if (this.actionInventory) this.actionInventory.addChild(action);
+    return true;
+  }
+  /**
+   * 
+   * @param {ActionItem} action 
+   */
+  removeAction(action) {
+    if (!this.actions.has(action)) return false;
+    this.actions.delete(action);
+    if (this.actionInventory) this.actionInventory.removeChild(action);
+    return true;
+  }
+  on_animationState(e, o, v) {
+    if (this.animationGroup) this.frames = this.animationGroup[this.animationState];
+  }
+  /**
+   * Line of sight check from one character to another
+   * respects both tile sight and cover properties
+   * @param {Character} character 
+   * @param {GameMap} map 
+   */
+  canSee(character, map) {
+    const sightMap = map.metaTileMap.layer[MetaLayers.allowsSight];
+    const coverMap = map.metaTileMap.layer[MetaLayers.cover];
+    const w = sightMap.tileDim[0];
+    let cover = false;
+    for (let pos of sightMap.iterInBetween(this.gpos, character.gpos)) {
+      if (sightMap[pos[0] + pos[1] * w] === 0 || cover) return false;
+      cover = coverMap[pos[0] + pos[1] * w] > 0 ? true : false;
+    }
+    return true;
+  }
+  /**
+   * 
+   * @param {GameMap} map 
+   */
+  setupForGameStart(map, rng) {
+    this._coverPositions = /* @__PURE__ */ new Set();
+    this._visibleLayer = new Grid2D([map.w, map.h]).fill(0);
+    let i = 0;
+    let a = vec2(1, 1);
+    let b = vec2(1, 1);
+    let c = vec2(1, 1);
+    const layout = map.metaTileMap.layer[MetaLayers.layout];
+    const startTiles = shuffle([...layout.iterTypes([LayoutTiles.rocky, LayoutTiles.sand, LayoutTiles.grassy], map.rect)]);
+    while (i < 1e3) {
+      a = v2(startTiles[i]);
+      b = v2(startTiles[i + 1]);
+      c = v2(startTiles[i + 2]);
+      if (a.dist(b) > 10 && b.dist(c) > 10 && a.dist(c) > 10) break;
+      i += 3;
+    }
+    this.patrolRoute = [a, b, c];
+    this.gpos = v2(b);
+    [this.x, this.y] = this.gpos;
+    this.elevation = map.metaTileMap.getFromLayer(MetaLayers.elevation, this.gpos);
+    this.y -= this.elevation;
+    this.animationGroup = this.id[0] === "d" ? characterAnimations.dog : characterAnimations.mouse;
+    this.animationState = "standing";
+    this.flipX = this.heading === 3 || this.heading === 0;
+  }
+  /**
+   * @param {GameMap} mmap
+   */
+  rest(mmap) {
+    if (this.state === "dead") return;
+    this.actionsThisTurn--;
+    if (this.activeCharacter) {
+      this.updateFoV(mmap);
+      this.updateCamera(mmap);
+    }
+  }
+  /**
+   * 
+   * @param {Facing} dir direction to move in
+   * @param {GameMap} mmap
+   */
+  move(dir, mmap) {
+    if (this.state === "dead") return;
+    const npos = this.gpos.add(FacingVec[dir]);
+    const tmap = mmap.metaTileMap;
+    const traverse = tmap.getFromLayer(MetaLayers.traversible, npos);
+    this.heading = dir;
+    if ((traverse & binaryFacing[dir]) === 0) {
+      const e = mmap.entities.get(mmap.posToIndex(npos));
+      if (e instanceof StaticEntity && e.pos.equals(npos) && this.elevation === mmap.metaTileMap.getFromLayer(MetaLayers.elevation, npos)) {
+        if (e.interact(mmap, this)) this.actionsThisTurn--;
+      }
+    } else if (mmap.characters.reduce((accum, e) => accum || e.gpos.equals(npos) && e.state !== "dead", false)) {
+      this.movementBlockedCount++;
+      if (this.activeCharacter) mmap.popMessage('"One day you might eat me. Not today."');
+    } else {
+      const newElevation = mmap.metaTileMap.getFromLayer(MetaLayers.elevation, npos);
+      if (this.elevation >= newElevation - 1) {
+        this.pos = v2(this.gpos);
+        this.y -= this.elevation;
+        this.gpos = npos;
+        this.elevation = newElevation;
+        const anim = new WidgetAnimation();
+        anim.add({ x: this.gpos[0], y: this.gpos[1] - this.elevation }, 300);
+        anim.start(this);
+        if (this.animationGroup !== null) {
+          const walking = { 0: "walkingN", 1: "walkingE", 2: "walkingS", 3: "walkingW" };
+          this.animationState = walking[this.heading];
+          this.flipX = false;
+          this.timePerFrame = 60;
+        }
+        this.actionsThisTurn--;
+        this.movementBlockedCount = Math.max(this.movementBlockedCount - 1, 0);
+      }
+    }
+    if (this.activeCharacter) {
+      this.updateFoV(mmap);
+      this.updateCamera(mmap);
+    }
+  }
+  on_animationComplete(e, o, v) {
+    if (this.animationState === "walkingN" || this.animationState === "walkingE" || this.animationState === "walkingS" || this.animationState === "walkingW") {
+      this.animationState = "standing";
+      this.flipX = this.heading === 3 || this.heading === 0;
+    }
+  }
+  /**
+   * @param {'piercing'|'shock'|'force'} damageType
+   */
+  takeDamage(damageType) {
+    if (damageType === "piercing") {
+      this.state = "dead";
+    }
+  }
+  /**
+   * 
+   * @param {string} actionId 
+   * @param {string} mode 
+   * @param {Vec2} position 
+   */
+  useAction(actionId, position, mode) {
+  }
+  /**
+   * Updates the field of view for the character
+   * This is expensive so typically we will only run this
+   * on the active player character. Non-player character
+   * checks should use canSee instead on discrete points
+   * @param {GameMap} map 
+   */
+  updateFoV(map) {
+    const mmap = map.metaTileMap;
+    this._coverPositions.clear();
+    this._visibleLayer.fill(0);
+    mmap.activeLayer = MetaLayers.allowsSight;
+    const elev = this.elevation;
+    const elevMap = mmap.layer[MetaLayers.elevation];
+    const cpos = v2(this.gpos);
+    for (let pBounds of mmap.data.iterInRange(this.gpos, this.visionRange)) {
+      const pBounds0 = v2(pBounds);
+      const dest = v2(pBounds0);
+      let prevPos = v2(this.gpos);
+      let coversNext = false;
+      let dir = dest.sub(cpos).scale(1 / dest.dist(cpos));
+      if (Math.abs(dir[0]) > Math.abs(dir[1])) dir[1] = 0;
+      else if (Math.abs(dir[1]) > Math.abs(dir[0])) dir[0] = 0;
+      for (let p of mmap.data.iterBetween(cpos, dest)) {
+        let p0 = v2([Math.round(p[0]), Math.round(p[1])]);
+        let p1 = v2(p0);
+        const addx = p[0] - p0[0];
+        if (addx > 0) p1[0] += 1;
+        else if (addx < 0) p1[0] -= 1;
+        const addy = p[1] - p0[1];
+        if (addy > 0) p1[1] += 1;
+        else if (addy < 0) p1[1] -= 1;
+        let sight0 = mmap.get(prevPos);
+        let sight1 = mmap.get(p0);
+        sight0 &= elevMap.get(prevPos) <= elev ? 15 : 0;
+        sight1 &= elevMap.get(p0) <= elev ? 15 : 0;
+        let canContinue = false;
+        if (cpos.equals(p)) canContinue = true;
+        else if (dir[1] < 0 && dir[0] === 0 && sight0 & 1 && sight1 & 4) canContinue = true;
+        else if (dir[1] < 0 && dir[0] > 0 && (sight0 & 1 && sight1 & 8 && sight0 & 2 && sight1 & 4)) canContinue = true;
+        else if (dir[0] > 0 && dir[1] === 0 && sight0 & 2 && sight1 & 8) canContinue = true;
+        else if (dir[1] > 0 && dir[0] > 0 && (sight0 & 4 && sight1 & 1 && sight0 & 2 && sight1 & 8)) canContinue = true;
+        else if (dir[1] > 0 && dir[0] === 0 && sight0 & 4 && sight1 & 1) canContinue = true;
+        else if (dir[1] > 0 && dir[0] < 0 && (sight0 & 4 && sight1 & 1 && sight0 & 8 && sight1 & 2)) canContinue = true;
+        else if (dir[0] < 0 && dir[1] === 0 && sight0 & 8 && sight1 & 2) canContinue = true;
+        else if (dir[1] < 0 && dir[0] < 0 && (sight0 & 1 && sight1 & 4 && sight0 & 8 && sight1 & 2)) canContinue = true;
+        if (canContinue && !coversNext) {
+          this._visibleLayer[p0[0] + p0[1] * mmap.tileDim[0]] = 1;
+          if (this.activeCharacter) mmap.setInLayer(MetaLayers.seen, p0, 1);
+        } else {
+          if (sight1 === 0) {
+            this._visibleLayer[p0[0] + p0[1] * mmap.tileDim[0]] = 1;
+            if (this.activeCharacter) mmap.setInLayer(MetaLayers.seen, p0, 1);
+          }
+          this._coverPositions.add(p0);
+        }
+        if (!canContinue) break;
+        coversNext = false;
+        if (!cpos.equals(p)) {
+          if (dir[1] < 0 && sight1 & 16) coversNext = true;
+          else if (dir[0] > 0 && sight1 & 32) coversNext = true;
+          else if (dir[1] > 0 && sight1 & 64) coversNext = true;
+          else if (dir[0] < 0 && sight1 & 128) coversNext = true;
+        }
+        prevPos = v2(p0);
+      }
+    }
+    for (let ent of map.entities) {
+      if (ent instanceof Entity) {
+        ent.visible = this._visibleLayer.get(ent.pos) > 0;
+      }
+    }
+    map.tileMap.clearCache();
+  }
+  /**
+   * 
+   * @param {GameMap} mmap 
+   */
+  updateCamera(mmap, animate = true) {
+    const camera = (
+      /**@type {Camera}*/
+      App.get().findById("camera")
+    );
+    if (camera) {
+      const target = this.gpos.add(FacingVec[this.heading].scale(5));
+      target[1] -= this.elevation;
+      const dist2 = target.dist(this.gpos);
+      let X = Math.min(Math.max(target[0] + 0.5 - camera.w / camera.zoom / 2, 0), mmap.w);
+      let Y = Math.min(Math.max(target[1] + 0.5 - camera.h / camera.zoom / 2, 0), mmap.h);
+      const ts = App.get().tileSize;
+      X = Math.floor(X * ts) / ts;
+      Y = Math.floor(Y * ts) / ts;
+      if (animate) {
+        const anim = new WidgetAnimation();
+        anim.add({ scrollX: X, scrollY: Y }, 250 * dist2 / 2);
+        anim.start(camera);
+      } else {
+        camera._animation = null;
+        camera.scrollX = X;
+        camera.scrollY = Y;
+      }
+    }
+  }
+  /**
+   * 
+   * @param {ActionItem} actionItem
+   * @param {GameMap} mmap 
+   * @param {ActionResponseData} request
+   * @returns {ActionResponseData}
+   */
+  takeAction(actionItem, mmap, request = {}) {
+    if (this.actions.has(actionItem)) {
+      const response = actionItem.request(this, mmap, request);
+      if (response.result === "complete") {
+        this.history.push([actionItem, request]);
+        this.actionsThisTurn--;
+      }
+      return response;
+    }
+    return { result: "notAvailable" };
+  }
+  /**
+   * 
+   * @param {GameMap} mmap 
+   * @returns 
+   */
+  takeTurn(mmap) {
+    mmap.updateCharacterVisibility(true);
+    while (this.actionsThisTurn > 0) {
+      if (this.state === "patrolling") {
+        if (this.patrolTarget < 0) this.patrolTarget = 0;
+        if (this.patrolRoute.length === 0) break;
+        if (this.gpos.equals(this.patrolRoute[this.patrolTarget])) this.patrolTarget = (this.patrolTarget + 1) % this.patrolRoute.length;
+        const src = this.gpos;
+        const dest = this.patrolRoute[this.patrolTarget];
+        const moveCostGrid = new Grid2D([mmap.w, mmap.h]);
+        const elevMap = mmap.metaTileMap.layer[MetaLayers.elevation];
+        mmap.metaTileMap.layer[MetaLayers.layout].forEach((v, i) => {
+          let mc = v === LayoutTiles.building || v === LayoutTiles.window ? Infinity : 1;
+          mc = mc + (this.elevation + 1 < elevMap[i] ? Infinity : 0);
+          moveCostGrid[i] = mc;
+        });
+        for (let e of mmap.entities.values()) {
+          moveCostGrid.set(e.pos, e.traversible === 0 ? Infinity : 3 + moveCostGrid.get(e.pos));
+        }
+        for (let e of mmap.characters) {
+          if (e !== this) moveCostGrid.set(e.gpos, moveCostGrid.get(e.gpos) + (e.movementBlockedCount <= this.movementBlockedCount ? 4 + this.movementBlockedCount * 2 : 4));
+        }
+        if (this.penalizedPos !== void 0) {
+          moveCostGrid.set(this.penalizedPos, moveCostGrid.get(this.penalizedPos) + 2);
+        }
+        const route = costedBFSPath(moveCostGrid, src, dest);
+        if (route.length > 0) {
+          this.penalizedPos = new Vec2(this.gpos);
+          this.move(facingFromVec(route[0].sub(this.gpos)), mmap);
+          this.history.push([new ActionItem(), {}]);
+        }
+        this.actionsThisTurn--;
+        mmap.updateCharacterVisibility(true);
+      } else if (this.state === "dead") {
+        this.actionsThisTurn--;
+      }
+    }
+    this.actionsThisTurn = 2;
+  }
+  /**@type {eskv.sprites.SpriteWidget['draw']} */
+  draw(app, ctx) {
+    if (this.activeCharacter || this.visibleToPlayer) {
       super.draw(app, ctx);
     }
   }
-  on_letter(event, object, value) {
-    this.children[0].text = value;
-  }
-  updateBgColor() {
-    let colors = SevenWordsApp.get().colors;
-    this.bgColor = this.active && this.correctRow ? colors["tileSelected"] : this.active ? colors["tile"] : colors["tileInactive"];
-  }
-  on_correctRow(event, object, value) {
-    this.updateBgColor();
-  }
-  on_active(event, object, value) {
-    this.updateBgColor();
-  }
-  on_selected(event, object, value) {
-    this.updateBgColor();
-  }
-  on_gpos(event, object, value) {
-    if (this.cpos[0] === -1 && this.cpos[1] === -1) {
-      this.opos = [...this.gpos];
-      this.cpos = [...this.gpos];
-    }
-    const a = new WidgetAnimation();
-    a.add({ x: this.gpos[0], y: this.gpos[1] }, 250);
-    a.start(this);
-  }
-  /**@type {eskv.Widget['on_touch_down']} */
-  on_touch_down(event, object, touch) {
-    if (this.board.blockGposUpdates) {
-      return false;
-    }
-    if (!this.active) {
-      return false;
-    }
-    if (this.collide(touch.rect)) {
-      this.board._children = [...this.board._children.filter((c) => c !== this), this];
-      touch.grab(this);
-      return true;
-    }
-    return false;
-  }
-  /**@type {eskv.Widget['on_touch_move']} */
-  on_touch_move(event, object, touch) {
-    if (touch.grabbed !== this) return false;
-    if (this.board.blockGposUpdates) {
-      return false;
-    }
-    this.center_x = touch.x;
-    this.center_y = touch.y;
-    return true;
-  }
-  /**@type {eskv.Widget['on_touch_up']} */
-  on_touch_up(event, object, touch) {
-    if (touch.grabbed !== this) return false;
-    touch.ungrab();
-    if (this.board.blockGposUpdates) {
-      return false;
-    }
-    let y = 0;
-    for (const row of this.board.pyramid) {
-      for (const t of row) {
-        if (t === this) continue;
-        if (t.collide(touch.rect) && t.active) {
-          this.board.pyramid[t.row][t.col] = this;
-          this.board.pyramid[this.row][this.col] = t;
-          this.board.updatePyramidRowTiles(this.row);
-          this.board.updatePyramidRowTiles(y);
-          this.board.updateTileStates();
-          if (t.active && this.active) {
-            this.board.scorebar.score += 1;
-            sounds.CANCEL_SELECTION.play();
-          } else {
-            sounds.CORRECT.play();
-          }
-          this.board.checkCompletion(this.row);
-          this.board.checkCompletion(t.row);
-          this.board.checkGameOver();
-          return true;
-        }
-      }
-      y++;
-    }
-    this.gpos = this.opos.slice();
-    this.cpos = this.opos.slice();
-    return true;
-  }
-  // Getter and setter for gpos, opos, and cpos to trigger events
-  get gpos() {
-    return [this.gposX, this.gposY];
-  }
-  set gpos(value) {
-    [this.gposX, this.gposY] = value;
-    this.emit("gpos", value);
-  }
-  get opos() {
-    return [this.oposX, this.oposY];
-  }
-  set opos(value) {
-    [this.oposX, this.oposY] = value;
-  }
-  get cpos() {
-    return [this.cposX, this.cposY];
-  }
-  set cpos(value) {
-    [this.cposX, this.cposY] = value;
-  }
 }
-class Star extends Widget {
+class PlayerCharacter extends Character {
+  homePos = new Vec2([40, 40]);
   constructor(props = {}) {
     super();
-    __publicField(this, "bgColor", "rgba(128,128,128,1.0)");
-    __publicField(this, "altColor", "rgba(52,192,52,1.0)");
-    __publicField(this, "numberColor", "rgba(252,252,0,1.0)");
-    __publicField(this, "textColor", "rgba(255,255,255,1)");
-    __publicField(this, "target", 999);
-    __publicField(this, "active", false);
-    this.updateProperties(props);
-    const label = new Label({
-      fontSize: "0.3wh",
-      hints: { x: 0, y: 0, w: 1, h: 1 }
-    });
-    this.children = [label];
-    this.bind("textColor", (event, star, data) => {
-      label.color = /**@type {Star}*/
-      star.textColor;
-    });
-    this.bind("target", (event, star, data) => {
-      label.text = "" + /**@type {Star}*/
-      star.target;
-    });
+    this.spriteSheet = App.resources["sprites"];
+    this.frames = [259];
+    this.inventory = {};
+    this.health = 5;
+    this.maxHealth = 5;
+    this.hunger = 5;
+    this.thirst = 1;
+    this.maxThirst = 1;
+    this.visibleToPlayer = true;
+    if (props) this.updateProperties(props);
   }
-  /**@type {eskv.Widget['draw']} */
-  draw(app, ctx) {
-    const radiusOuter = this.center_y / 2;
-    const radiusInner = this.center_y / 4;
-    const spikes = 7;
-    const step = Math.PI / spikes;
-    ctx.fillStyle = this.active ? this.altColor : this.bgColor;
-    ctx.beginPath();
-    for (let i = 0; i < spikes * 2; i++) {
-      const angle = i * step;
-      const radius = i % 2 === 0 ? radiusOuter : radiusInner;
-      const x = this.center_x + Math.cos(angle) * radius;
-      const y = this.center_y + Math.sin(angle) * radius;
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
+  /**
+   * 
+   * @param {GameMap} map 
+   */
+  endTurn(map) {
+    if (map.turn % 100 === 45 && this.thirst === 0) {
+      map.popMessage("You are thirsty", 0);
     }
-    ctx.closePath();
-    ctx.fill();
-  }
-  // /**@type {eskv.Widget['draw']} */
-  // draw(app, ctx) {
-  //     ctx.fillStyle = this.active? this.altColor:this.bgColor;
-  //     // Triangle:
-  //     //     points: [self.x, (self.y+self.center_y)/2, self.right, (self.y+self.center_y)/2, self.center_x, self.top]
-  //     ctx.beginPath()
-  //     ctx.moveTo(this.x, (this.y+this.center_y)/2);
-  //     ctx.lineTo(this.right, (this.y+this.center_y)/2);
-  //     ctx.lineTo(this.center_x, this.bottom);
-  //     ctx.closePath();
-  //     ctx.fill();
-  //     // Triangle:
-  //     //     points: [self.x, (self.top+self.center_y)/2, self.right, (self.top+self.center_y)/2, self.center_x, self.y]
-  //     ctx.beginPath()
-  //     ctx.moveTo(this.x, (this.bottom+this.center_y)/2);
-  //     ctx.lineTo(this.right, (this.bottom+this.center_y)/2);
-  //     ctx.lineTo(this.center_x, this.y);
-  //     ctx.closePath();
-  //     ctx.fill();
-  // }
-}
-const instructionsText = `🎯 Objective:
-Unscramble the 5 mystery words and keep as many stars as you can!
-
-🔺 Letramid:
-The Letramid is a five-tiered stack of mystery words, each 3 to 7 letters long. Your goal is to restore them by swapping the incorrectly placed raised letters.
-
-🔄 How to Play:
-Drag one raised letter onto another in the same or a different row to exchange their positions.
-
-✅ Correct Placement:
-When a letter is in the correct spot for its word, it will drop and lock in place. 
-
-❌ Incorrect Placement:
-If neither swapped letter is in the correct spot, you'll lose a star. Make your swaps carefully!
-
-💡 Hints:
-- Scrabble rules apply -- no proper nouns, no plurals, and no abbreviations are valid in the Letramid.
-- One letter per row starts in the correct position — use that to guide your exchanges.
-- Letters that appear in a row where they can be placed correctly in that row are highlighted.
-
-🏁 Winning:
-Complete the Letramid by locking all letters in place. Your remaining stars are your score. Play a new daily game each day, or try a random game anytime!
-
-Good luck, wordsmith! 🏆`;
-class Instructions extends ModalView {
-  constructor() {
-    super();
-    __publicField(this, "hints", { w: 0.8, h: 0.8, center_x: 0.5, center_y: 0.5 });
-    this.bgColor = "rgba(0,0,0,0.5)";
-    this.children = [
-      new Label({
-        hints: { h: null },
-        text: "How to play",
-        fontSize: "0.05ah"
-      }),
-      new ScrollView({
-        scrollW: false,
-        uiZoom: false,
-        children: [
-          new Label({
-            hints: { h: null },
-            text: instructionsText,
-            wrap: true,
-            wrapAtWord: true,
-            fontSize: "0.04ah",
-            align: "left",
-            valign: "middle"
-          })
-        ]
-      })
-    ];
-  }
-}
-class MenuButton extends BasicButton {
-  constructor(props = {}) {
-    props["color"] = (app) => app.colors["menuButtonBackground"];
-    props["selectColor"] = "white";
-    props["bgColor"] = null;
-    super(props);
-  }
-  /**@type {eskv.BasicButton['draw']} */
-  draw(app, ctx) {
-    super.draw(app, ctx);
-    ctx.beginPath();
-    ctx.fillStyle = this._touching ? this.selectColor : this.color;
-    ctx.rect(this.x + this.h / 8, this.y + this.h * 2 / 16, 3 * this.w / 4, this.h / 8);
-    ctx.rect(this.x + this.h / 8, this.y + this.h * 7 / 16, 3 * this.w / 4, this.h / 8);
-    ctx.rect(this.x + this.h / 8, this.y + this.h * 12 / 16, 3 * this.w / 4, this.h / 8);
-    ctx.fill();
-  }
-}
-class MenuOption extends Label {
-  constructor(props = {}) {
-    super();
-    __publicField(this, "active", true);
-    __publicField(this, "value", -1);
-    props["bgColor"] = (app) => app.colors["menuButtonBackground"];
-    props["color"] = (app) => this.active ? app.colors["menuButtonForeground"] : app.colors["menuButtonForegroundDisabled"];
-    this.updateProperties(props);
-  }
-  on_active(e, o, v) {
-    const app = SevenWordsApp.get();
-    this.color = this.active ? app.colors["menuButtonForeground"] : app.colors["menuButtonForegroundDisabled"];
-  }
-}
-class Menu extends ModalView {
-  constructor() {
-    super({ hints: { w: "0.8h", h: 0.5, center_y: 0.5, center_x: 0.5 } });
-    this.orientation = "vertical";
-    this.selection = -1;
-    this.paddingY = "0.02ah";
-    this.spacingY = "0.02ah";
-    this.bgColor = null;
-    this.outlineColor = null;
-    this.children = [
-      // new MenuOption({text: 'Restart Game', value:1}),
-      new MenuOption({ text: "Daily Game", value: 2 }),
-      new MenuOption({ text: "Random Game", value: 3 }),
-      new MenuOption({ text: "Instructions", value: 4 }),
-      new MenuOption({ text: "Theme", value: 7 })
-    ];
-  }
-  on_touch_down(event, object, touch) {
-    super.on_touch_down(event, object, touch);
-    if (this.collide(touch.rect)) {
-      return true;
-    }
-    return false;
-  }
-  on_touch_up(event, object, touch) {
-    super.on_touch_up(event, object, touch);
-    if (this.collide(touch.rect)) {
-      for (let c of this.children) {
-        if (c instanceof MenuOption && c.collide(touch.rect) && c.active) {
-          this.selection = c.value;
-          sounds.MENU.play();
-          return true;
+    if (map.turn % 50 === 0) {
+      if (this.hunger === 0) {
+        if (this.health === 1) {
+          map.popMessage("You are starving and weak", 0);
+        } else {
+          this.health = this.health - 1;
+          map.popMessage("You weaken from hunger");
         }
-      }
-      return true;
-    }
-    return false;
-  }
-}
-class ScoreBar extends BoxLayout {
-  constructor(kwargs = {}) {
-    super(kwargs);
-    __publicField(this, "score", 0);
-    __publicField(this, "hiScore", 0);
-    __publicField(this, "gameId", "");
-    __publicField(this, "id", "scorebar");
-    /**@type {'horizontal'|'vertical'}*/
-    __publicField(this, "orientation", "horizontal");
-    __publicField(this, "target", [50, 150, 300]);
-    this.score = 0;
-    this.hiScore = 0;
-    this.gameId = getUTCDateString();
-    this.played = 0;
-    this.children = [
-      new BoxLayout({
-        orientation: "vertical",
-        children: [
-          new Label({
-            hints: { h: 0.33 },
-            text: "INCORRECT",
-            color: (app) => app.colors["scoreText"],
-            align: "left",
-            valign: "bottom"
-          }),
-          new Label({
-            hints: { h: 0.67 },
-            text: (scorebar) => "" + scorebar.score,
-            color: (app) => app.colors["scoreText"],
-            align: "left",
-            valign: "top"
-          })
-        ]
-      }),
-      new BoxLayout({
-        orientation: "vertical",
-        children: [
-          new Label({
-            hints: { h: 0.33 },
-            text: (scorebar) => {
-              return scorebar.gameId !== "" ? `GAME ${scorebar.gameId}` : "RANDOM GAME";
-            },
-            color: (app) => app.colors["scoreText"],
-            halign: "center",
-            valign: "middle"
-          }),
-          new BoxLayout({
-            hints: { h: 0.67 },
-            spacing: "0.02ah",
-            padding: "0.02ah",
-            orientation: "horizontal",
-            children: [
-              new Star({
-                active: (scorebar) => scorebar.score < 5,
-                target: 1,
-                bgColor: (app) => app.colors["bronzeOff"],
-                altColor: (app) => app.colors["bronze"],
-                hints: { h: "1h", w: "1wh" }
-              }),
-              new Star({
-                active: (scorebar) => scorebar.score < 4,
-                target: 2,
-                bgColor: (app) => app.colors["bronzeOff"],
-                altColor: (app) => app.colors["bronze"],
-                hints: { h: "1h", w: "1wh" }
-              }),
-              new Star({
-                active: (scorebar) => scorebar.score < 3,
-                target: 3,
-                bgColor: (app) => app.colors["bronzeOff"],
-                altColor: (app) => app.colors["bronze"],
-                hints: { h: "1h", w: "1wh" }
-              }),
-              new Star({
-                active: (scorebar) => scorebar.score < 2,
-                target: 4,
-                bgColor: (app) => app.colors["silverOff"],
-                altColor: (app) => app.colors["silver"],
-                hints: { h: "1h", w: "1wh" }
-              }),
-              new Star({
-                active: (scorebar) => scorebar.score < 1,
-                target: 5,
-                bgColor: (app) => app.colors["goldOff"],
-                altColor: (app) => app.colors["gold"],
-                hints: { h: "1h", w: "1wh" }
-              })
-            ]
-          })
-        ]
-      }),
-      new BoxLayout({
-        orientation: "horizontal",
-        children: [
-          new Widget({}),
-          new MenuButton({
-            id: "menubutton",
-            hints: { h: "0.75h", w: "1wh" },
-            bgColor: (app) => app.colors["menuButtonBackground"],
-            on_press: (e, o, v) => SevenWordsApp.get().showMenu()
-          })
-        ]
-      })
-    ];
-    try {
-      this.store = localStorage.getItem("7Words/scores.json");
-    } catch (error) {
-      this.store = null;
-    }
-    this.bind("gameId", (e, o, v) => this.setGameId());
-    this.bind("played", (e, o, v) => this.setPlayed());
-  }
-  getStatus() {
-    var _a;
-    try {
-      const status = localStorage.getItem("7Words/status");
-      if (status) {
-        const data = JSON.parse(status);
-        this.gameId = (_a = data.gameId) != null ? _a : "";
       } else {
-        this.gameId = getUTCDateString();
-      }
-    } catch (error) {
-      this.gameId = getUTCDateString();
-    }
-  }
-  setPlayed() {
-    try {
-      localStorage.setItem("7Words/games/" + this.gameId, JSON.stringify({ score: this.score }));
-    } catch (error) {
-    }
-    console.info(`Played game ${this.gameId} ${this.played} times`);
-  }
-  setGameId() {
-    var _a, _b;
-    console.info(`Setting game ${this.gameId}`);
-    if (this.gameId !== "") {
-      try {
-        localStorage.setItem("7Words/status", JSON.stringify({ gameId: this.gameId }));
-      } catch (error) {
-      }
-    }
-    try {
-      const store = localStorage.getItem("7Words/games/" + String(this.gameId));
-      if (store) {
-        const data = JSON.parse(store);
-        this.hiScore = (_a = data.highScore) != null ? _a : 0;
-        this.played = (_b = data.played) != null ? _b : 0;
-      } else {
-        throw new Error();
-      }
-    } catch (error) {
-      this.hiScore = 0;
-      this.played = 0;
-    }
-    console.info(`High score ${this.hiScore}`);
-    this.score = 0;
-  }
-  gameOver() {
-    console.info(`Setting game score ${this.score} for completed game ${this.gameId}`);
-    if (this.score > this.hiScore) {
-      this.hiScore = this.score;
-      try {
-        localStorage.setItem("7Words/games/" + String(this.gameId), JSON.stringify({ score: this.score }));
-      } catch (error) {
-      }
-    }
-  }
-}
-class StatusBar extends Button {
-  constructor(kwargs = {}) {
-    super();
-    /**@type {eskv.BoxLayout['orientation']} */
-    __publicField(this, "orientation", "vertical");
-    __publicField(this, "id", "statusbar");
-    __publicField(this, "word", "");
-    __publicField(this, "wordScore", 0);
-    this.updateProperties(kwargs);
-    this.updateProperties({
-      color: (app) => app.colors["wordScoreText"],
-      bgColor: (app, statusbar) => statusbar.word !== "" ? app.colors["wordScoreBackground"] : app.colors["background"],
-      text: (statusbar) => statusbar.wordScore > 0 ? `${statusbar.word} for ${statusbar.wordScore}` : statusbar.wordScore < 0 ? `${statusbar.word}` : ""
-    });
-  }
-}
-class MessageBar extends BoxLayout {
-  constructor(kwargs = {}) {
-    super(kwargs);
-    __publicField(this, "id", "messagebar");
-    __publicField(this, "message", "");
-    __publicField(this, "gameId", -1);
-    /**@type {eskv.BoxLayout['orientation']} */
-    __publicField(this, "orientation", "vertical");
-    this.children = [
-      new Label({
-        text: (messagebar) => messagebar.message,
-        color: (app) => app.colors["scoreText"]
-      })
-    ];
-  }
-  gameChanged(scorebar, gameId) {
-    this.gameId = gameId;
-  }
-}
-class Board extends Widget {
-  constructor() {
-    super({ bgColor: (app) => app.colors["background"] });
-    __publicField(this, "hints", { x: 0, y: 0, w: 1, h: 1 });
-    this.scorebar = new ScoreBar();
-    this.statusbar = new StatusBar();
-    this.messagebar = new MessageBar();
-    this.tileSpaceSize = 1;
-    this.tileSize = 1;
-    this.pyramidSize = 1;
-    this.offX = 0;
-    this.offY = 0;
-    this.statusbar.bind("press", (e, o, v) => this.statusPressed());
-    this.addChild(this.scorebar);
-    this.addChild(this.statusbar);
-    this.addChild(this.messagebar);
-    this.blockGposUpdates = false;
-    this.scorebar.getStatus();
-    this.pyramid = [];
-    this.opyramid = [];
-    this.targetWords = [];
-    this.gameOver = false;
-    this.setupBoard();
-  }
-  setupBoard() {
-    this.children = this.children.filter((c) => !(c instanceof LetterTile));
-    const words = SevenWordsApp.get().words;
-    setSeed(stringToSeed(this.scorebar.gameId !== "" ? this.scorebar.gameId : String("RANDOM GAME " + Date.now())));
-    this.targetWords = [];
-    for (let r = 0; r < boardSize; r++) {
-      const wordLength = 3 + r;
-      const filteredWords = Array.from(words).filter((word) => wordLength === word.length);
-      if (wordLength === 3) {
-        console.log("FILTERED WORDS", filteredWords);
-      }
-      this.targetWords.push(choose(filteredWords));
-    }
-    const fixedPositions = this.targetWords.map((row) => getRandomInt(0, row.length));
-    const freeLetters = this.targetWords.flatMap((word, rowIndex) => [...word.slice(0, fixedPositions[rowIndex]), ...word.slice(fixedPositions[rowIndex] + 1)]);
-    const scrambledLetters = shuffle(Array.from(freeLetters));
-    for (let k = 0; k < 999; k++) {
-      let done = true;
-      for (let i = 0; i < scrambledLetters.length; i++) {
-        if (scrambledLetters[i] === freeLetters[i]) {
-          const j = i === scrambledLetters.length - 1 ? 0 : i + 1;
-          [scrambledLetters[j], scrambledLetters[i]] = [scrambledLetters[i], scrambledLetters[j]];
-          done = false;
-        }
-      }
-      if (done) break;
-    }
-    let index = 0;
-    this.pyramid = [];
-    for (let r = 0; r < boardSize; r++) {
-      const word = this.targetWords[r];
-      this.pyramid.push([]);
-      for (let c = 0; c < word.length; c++) {
-        let [x, y] = this.ppos2pos([c, r]);
-        const tile = c === fixedPositions[r] ? new LetterTile(this, x, y, word[c], 1, r, c, true) : new LetterTile(this, x, y, scrambledLetters[index], 1, r, c, true);
-        if (c !== fixedPositions[r]) index++;
-        this.pyramid[r].push(tile);
-        this.addChild(tile);
-      }
-    }
-    this.opyramid = this.pyramid.map((p) => p.slice());
-    this.updateTileStates();
-    this.firstStart = true;
-  }
-  dailyGame() {
-    this.scorebar.gameId = getUTCDateString();
-    this.reset(true);
-  }
-  randomGame() {
-    this.scorebar.gameId = "";
-    this.reset(true);
-  }
-  restartGame() {
-    this.reset();
-  }
-  reset(redraw = false) {
-    this.scorebar.score = 0;
-    this.statusbar.word = "";
-    this.statusbar.wordScore = 0;
-    if (redraw) {
-      this.setupBoard();
-    } else {
-      this.pyramid = this.opyramid.map((p) => p.slice());
-      for (const row of this.pyramid) {
-        for (const t of row) {
-          t.cpos = [-1, -1];
-          t.gpos = [-1, -1];
+        this.hunger = this.hunger - 1;
+        if (this.hunger <= 2) {
+          map.popMessage("You should eat soon");
         }
       }
     }
-    this._needsLayout = true;
-    this.gameOver = false;
-    this.updateTileStates();
-    setTimeout(() => this.resetTick(-1), 10);
-  }
-  resetTick(i) {
-    let arr;
-    if (i === -1) {
-      this.blockGposUpdates = true;
-      arr = [];
-    } else {
-      arr = this.pyramid[i];
+    if (this.health < 1) {
+      this.state = "dead";
     }
-    for (const t of arr) {
-      t.gpos = t.cpos.slice();
-      t.opos = t.cpos.slice();
-    }
-    i += 1;
-    if (i < boardSize) {
-      setTimeout(() => this.resetTick(i), 100);
-    } else {
-      this.blockGposUpdates = false;
+    if (this.state === "dead") {
+      this.gameOver = true;
+      setTimeout(() => {
+        map.popMessage("Game over. Press R to restart.");
+      }, 3e3);
     }
   }
   /**
    * 
-   * @param {number} row 
+   * @param {GameMap} map 
+   * @param {eskv.rand.PRNG} rng 
    */
-  checkCompletion(row) {
-    if (this.gameOver) return;
-    const word = this.targetWords[row];
-    const letters = this.pyramid[row].map((t) => t.letter).join("");
-    const isCompletedWord = word === letters;
-    if (isCompletedWord) {
-      this.checkGameOver();
-      if (!this.gameOver) {
-        setTimeout(() => sounds.WORD_COMPLETED.play(), 100);
+  setupForGameStart(map, rng) {
+    this._coverPositions = /* @__PURE__ */ new Set();
+    this.state = "sleeping";
+    this.animationGroup = characterAnimations[this.id];
+    this.animationState = "sleeping";
+    this.health = 5;
+    this.maxHealth = 5;
+    this.hunger = 5;
+    this.thirst = 1;
+    this.flipX = this.heading === 3 || this.heading === 0;
+    const layer = map.metaTileMap.layer[MetaLayers.layout];
+    const oceanPos = shuffle([...layer.iterTypes([LayoutTiles.ocean], map.rect)]);
+    for (let p of oceanPos) {
+      if (layer.hasAdjacent(p, [LayoutTiles.sand])) {
+        this.gpos = new Vec2(p);
+        break;
       }
     }
+    this.homePos = new Vec2([...map.entities.values()].find((ent) => ent instanceof Bed).pos);
+    this.elevation = map.metaTileMap.getFromLayer(MetaLayers.elevation, this.gpos);
+    this.pos = v2(this.gpos).add([0, -this.elevation]);
+    this.actionsThisTurn = 1;
+    if (this.activeCharacter) {
+      this._visibleLayer = map.metaTileMap._layerData[MetaLayers.visible];
+      this._visibleLayer.fill(0);
+    } else {
+      this._visibleLayer = new Grid2D([map.w, map.h]).fill(0);
+    }
+    this.updateFoV(map);
+    this.updateCamera(map, false);
   }
-  updateTileStates() {
-    this.pyramid.forEach((row, y) => {
-      const word = this.targetWords[y];
-      row.forEach((t, x) => {
-        t.active = this.targetWords[y][x] !== t.letter;
-        t.correctRow = word.split("").filter((w, i) => w === t.letter && row[i].letter !== t.letter).length > 0;
-      });
-    });
+  /**
+   * Line of sight check from one character to another
+   * Uses the player's field of view, which respects both 
+   * tile sight and cover properties
+   * @param {Character} character 
+   * @param {GameMap} map 
+   */
+  canSee(character, map) {
+    const vmap = this._visibleLayer;
+    const [x, y] = character.gpos;
+    return vmap[x + y * vmap.tileDim[0]] > 0;
   }
   /**
    * 
-   * @param {number} row 
+   * @param {string} key 
    */
-  updatePyramidRowTiles(row) {
-    const r = this.pyramid[row];
-    r.forEach((t, col) => {
-      t.row = row;
-      t.col = col;
-      const pos = this.ppos2pos([col, row]);
-      t.cpos = t.opos = t.gpos = pos;
+  getActionForKey(key) {
+    return [...this.actions].find((a) => {
+      return a.keyControl === key;
     });
   }
-  pos2gpos(pos) {
-    return [
-      Math.floor((pos[0] - this.offX) / this.tileSpaceSize),
-      Math.floor((pos[1] - this.offY) / this.tileSpaceSize)
-    ];
-  }
-  convPos(gpos) {
-    return [Math.floor(gpos[0]), Math.floor(gpos[1])];
-  }
-  ppos2pos(ppos) {
-    if (ppos[0] === -1 && ppos[1] === -1) {
-      return [this.size[0] / 2, this.size[1]];
-    } else {
-      return [
-        this.center_x + this.tileSpaceSize * (ppos[0] - 0.5 * this.pyramid[ppos[1]].length),
-        this.size[1] - (0.25 * this.size[1] + this.tileSpaceSize * (boardSize - 1 - ppos[1]))
-      ];
+  /**@param {GameMap} mmap */
+  moveHome(mmap) {
+    this.gpos = v2(this.homePos);
+    this.elevation = mmap.metaTileMap.getFromLayer(MetaLayers.elevation, this.gpos);
+    this.state = "sleeping";
+    this.animationState = "sleeping";
+    this.x = this.gpos[0];
+    this.y = this.gpos[1] - this.elevation;
+    this._animation = null;
+    if (this.animationGroup !== null) {
+      this.animationState = "sleeping";
+      this.flipX = false;
+      this.timePerFrame = 60;
     }
-  }
-  /**@type {eskv.Widget['layoutChildren']} */
-  layoutChildren() {
-    this.tileSpaceSize = Math.min(this.size[0], 0.7 * this.size[1]) / boardSize;
-    this.tileSize = this.tileSpaceSize - 0.01 * this.size[1];
-    this.pyramidSize = boardSize * this.tileSpaceSize;
-    this.offX = 0;
-    this.offY = 0;
-    [this.statusbar.w, this.statusbar.h] = [this.size[0] * 3 / 4, 0.06 * this.size[1]];
-    [this.statusbar.x, this.statusbar.y] = [this.size[0] / 8, this.size[1] - (0.04 * this.size[1] + (this.offY + 0.04 * this.size[1] + 0.06 * this.size[1]) / 2)];
-    [this.messagebar.w, this.messagebar.h] = [this.size[0], 0.04 * this.size[1]];
-    [this.messagebar.x, this.messagebar.y] = [0, this.size[1]];
-    [this.scorebar.w, this.scorebar.h] = [this.size[0], 0.15 * this.size[1]];
-    [this.scorebar.x, this.scorebar.y] = [0, 0];
-    console.log("Laying out pyramid");
-    this.pyramid.forEach((row, r) => {
-      console.log("row", r);
-      row.forEach((tile, c) => {
-        const pos = this.ppos2pos([c, r]);
-        console.log(tile.letter, c, r, pos[0], pos[1]);
-        tile.opos = tile.gpos = tile.cpos = pos;
-        [tile.w, tile.h] = new Vec2([this.tileSize, this.tileSize]);
-      });
-    });
-    if (this.firstStart) {
-      this.firstStart = false;
-    }
-    super.layoutChildren();
-  }
-  statusPressed(e, o, v) {
-    if (this.statusbar.wordScore === -1) {
-      this.randomGame();
-    }
-  }
-  checkGameOver() {
-    for (let row of this.pyramid) {
-      for (let t of row) {
-        if (t.active) {
-          return false;
-        }
-      }
-    }
-    this.gameOver = true;
-    this.statusbar.word = "NEW GAME";
-    this.statusbar.wordScore = -1;
-    setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1e3);
-    return true;
+    this.actionsThisTurn = 1;
+    this.movementBlockedCount = Math.max(this.movementBlockedCount - 1, 0);
   }
 }
-class SevenWordsApp extends App {
-  constructor(words) {
-    var _a;
-    super();
-    this.id = "app";
-    const themeName = (_a = localStorage.getItem("7Words/theme")) != null ? _a : "midnight";
-    this.colors = loadTheme(themeName);
-    this.words = words;
-    this.instructions = new Instructions();
-    this.menu = new Menu();
-    this.menu.bind("selection", (e, o, v) => this.menuChoice(this.menu, v));
-    this.board = new Board();
-    this.board.scorebar.bind("gameId", (e, o, v) => {
-      this.board.messagebar.gameId = v;
-    });
-    this.baseWidget.children = [
-      this.board
-    ];
+class CanvasSpriteRenderer {
+  /**
+   * 
+   * @param {HTMLCanvasElement|OffscreenCanvas} canvas 
+   * @param {SpriteSheet} spriteSheet 
+   */
+  constructor(canvas, spriteSheet) {
+    this.spriteSheet = spriteSheet;
+    this.canvas = canvas;
+    this.context = canvas.getContext("2d", { alpha: true });
   }
-  showMenu() {
-    this.menu.selection = -1;
-    this.menu.popup();
-  }
-  hideMenu() {
-    this.menu.close();
-  }
-  menuChoice(menu, selection) {
-    switch (selection) {
-      case 1:
-        this.hideMenu();
-        this.board.restartGame();
-        break;
-      case 2:
-        this.hideMenu();
-        this.board.dailyGame();
-        break;
-      case 3:
-        this.hideMenu();
-        this.board.randomGame();
-        break;
-      case 4:
-        this.hideMenu();
-        this.instructions.popup();
-        break;
-      case 5:
-        this.hideMenu();
-        break;
-      case 6:
-        this.hideMenu();
-        break;
-      case 7:
-        this.setNextTheme();
-        this.hideMenu();
-        this.showMenu();
-        break;
+  /**
+   * 
+   * @param {number|null} tileDim 
+   */
+  start(tileDim = null) {
+    this.context.resetTransform();
+    if (tileDim === null) {
+      tileDim = this.spriteSheet.spriteSize;
+    }
+    if (this.context !== null) {
+      this.context.scale(tileDim, tileDim);
     }
   }
-  on_key_down(event, object, keyInfo) {
-    if ("Escape" in keyInfo.states && keyInfo.states["Escape"]) {
-      if (this.instructions.parent !== null) this.instructions.close();
-      if (this.menu.parent === null) this.showMenu();
-      else this.hideMenu();
-    }
+  clear() {
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
-  setNextTheme() {
-    const themes$1 = Object.keys(themes);
-    const ind = (themes$1.indexOf(this.colors["id"]) + 1) % themes$1.length;
+  flush() {
+  }
+  /**
+   * @param {[number, number, number, number]} rgba 
+   */
+  set tint(rgba) {
+    let [r, g, b, a] = rgba;
+    this.context.fillStyle = `rgb(${r * 255},${g * 255},${b * 255})`;
+    this.context.globalAlpha = a;
+  }
+  get tint() {
+    if (typeof this.context.fillStyle === "string") {
+      const col = Color.fromString(this.context.fillStyle);
+      let [r, g, b, a] = col;
+      a = this.context.globalAlpha;
+      return [r / 255, g / 255, b / 255, a];
+    }
+    return [1, 1, 1, 1];
+  }
+  /**
+   * Draw an indexed tilemap reference to a specified x,y position on the canvas
+   * @param {number} ind  
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} dx 
+   * @param {number} dy 
+   */
+  drawIndexed(ind, x, y, extraAngle = 0, flipX = false, dx = 0, dy = 0) {
+    const ss = this.spriteSheet;
+    const ctx = this.context;
+    if (ind < -1) {
+      ind = ss.animations.get(ind)?.tileValue ?? -1;
+    }
     if (ind >= 0) {
-      this.colors = loadTheme(themes$1[ind]);
-      localStorage.setItem("7Words/theme", themes$1[ind]);
+      let [flipped, angle, indY, indX] = unpackSpriteInfo(ind, ss.len, ss.sw);
+      flipped = flipped && !flipX || !flipped && flipX;
+      angle = (angle + extraAngle) % 4;
+      if (!flipped && angle === 0) {
+        ss.draw(ctx, [indX, indY], x + dx, y + dy);
+      } else {
+        ss.drawRotated(ctx, [indX, indY], x + 0.5, y + 0.5, angle * 90, flipped, [0.5 - dx, 0.5 - dy]);
+      }
     }
   }
+}
+class WebGLSpriteRenderer extends WebGLTileRenderer {
+  /**@type {[number, number, number, number]} */
+  tint = [1, 1, 1, 1];
   /**
    * 
-   * @returns {SevenWordsApp}
+   * @param {HTMLCanvasElement|OffscreenCanvas} canvas 
+   * @param {SpriteSheet} spriteSheet 
    */
-  static get() {
-    return (
-      /**@type {SevenWordsApp}*/
-      super.get()
+  constructor(canvas, spriteSheet) {
+    super(canvas);
+    this.spriteSheet = spriteSheet;
+    if (spriteSheet.sheet !== null) {
+      this.registerTexture("main", spriteSheet.canvas, spriteSheet.spriteSize, null, spriteSheet.padding);
+    }
+  }
+  start(tileDim = null) {
+    if (tileDim === null) tileDim = this.spriteSheet.spriteSize;
+    super.start(tileDim);
+  }
+  /**
+   * Draw an indexed tilemap reference to a specified x,y position on the canvas
+   * @param {number} ind  
+   * @param {number} x 
+   * @param {number} y 
+   * @param {number} dx 
+   * @param {number} dy 
+   */
+  drawIndexed(ind, x, y, extraAngle = 0, flipX = false, dx = 0, dy = 0) {
+    const ss = this.spriteSheet;
+    if (ind < -1) {
+      ind = ss.animations.get(ind)?.tileValue ?? -1;
+    }
+    if (ind >= 0) {
+      let [flipped, angle, indY, indX] = unpackSpriteInfo(ind, ss.len, ss.sw);
+      flipped = flipped && !flipX || !flipped && flipX;
+      angle = (angle + extraAngle) % 4;
+      if (!flipped && angle === 0) {
+        this.drawTexture("main", indX, indY, 1, 1, x + dx, y + dy, 1, 1, this.tint);
+      } else {
+        if (flipped) {
+          if (angle !== 0) {
+            this.flush();
+            this.setRotation(angle / 2 * Math.PI, x + dx + 0.5, y + dy + 0.5);
+            this.drawTexture("main", indX, indY, 1, 1, 0.5, -0.5, -1, 1, this.tint);
+            this.flush();
+            this.setRotation(0, 0, 0);
+          } else {
+            this.drawTexture("main", indX, indY, 1, 1, x + 1 + dx, y + dy, -1, 1, this.tint);
+          }
+        } else {
+          this.flush();
+          this.setRotation(angle / 2 * Math.PI, x + dx + 0.5, y + dy + 0.5);
+          this.drawTexture("main", indX, indY, 1, 1, -0.5, -0.5, 1, 1, this.tint);
+          this.flush();
+          this.setRotation(0, 0, 0);
+        }
+      }
+    }
+  }
+}
+class VoxelTileMap extends LayeredTileMap {
+  /**@type {'webGL'|'canvas2D'} */
+  mode = "webGL";
+  /**@type {Object<number, number[]>}*/
+  voxelIndex = {};
+  // Mapping voxel types to their top/front sprite indices
+  /**@type {OffscreenCanvas|null} */
+  _oCanvas = null;
+  /**@type {WebGLSpriteRenderer|CanvasSpriteRenderer|null} */
+  _renderer = null;
+  _maxElevation = new Grid2D();
+  drawAlayer = true;
+  constructor(props = {}) {
+    super();
+    this.useCache = false;
+    this.updateProperties(props);
+    this.reconfigure();
+  }
+  /**@type {import('eskv/lib/modules/widgets').EventCallbackNullable} */
+  on_spriteSheet(evt, obj, val) {
+    this.reconfigure();
+  }
+  /**@type {import('eskv/lib/modules/widgets').EventCallbackNullable} */
+  on_tileDim(evt, obj, val) {
+    if (!("_layerData" in this)) return;
+    for (let l of this._layerData) {
+      this._data = l;
+      this.resizeData();
+    }
+    if (this.activeLayer >= 0) this._data = this._layerData[this.activeLayer];
+    this.reconfigure();
+  }
+  reconfigure() {
+    if (!("_maxElevation" in this)) return;
+    this.w = this.tileDim[0];
+    this.h = this.tileDim[1];
+    this._cacheTileDim = new Vec2(this.tileDim);
+    this._maxElevation.tileDim = new Vec2([this.tileDim[0], this.tileDim[1]]);
+    if (this.spriteSheet !== null) {
+      this._oCanvas = new OffscreenCanvas(this.tileDim[0] * this.spriteSheet.spriteSize, this.tileDim[1] * this.spriteSheet.spriteSize);
+      if (this.mode === "webGL") {
+        this._renderer = new WebGLSpriteRenderer(this._oCanvas, this.spriteSheet);
+      } else {
+        this._renderer = new CanvasSpriteRenderer(this._oCanvas, this.spriteSheet);
+      }
+    }
+  }
+  _draw(app, ctx) {
+    this.draw(app, ctx);
+  }
+  /**@type {Widget['draw']} */
+  draw(app, ctx) {
+    if (this.spriteSheet === null) return;
+    if (this._renderer === null) return;
+    let [x0, y0] = [0, 0];
+    let [x1, y1] = this.tileDim;
+    if (this.clipRegion) {
+      [x0, y0] = this.clipRegion.pos;
+      [x1, y1] = this.clipRegion.pos.add(this.clipRegion.size).add([1, 8]);
+      x0 = Math.floor(Math.min(Math.max(x0, 0), this.tileDim[0]));
+      x1 = Math.floor(Math.min(Math.max(x1, 0), this.tileDim[0]));
+      y0 = Math.floor(Math.min(Math.max(y0, 0), this.tileDim[1]));
+      y1 = Math.floor(Math.min(Math.max(y1, 0), this.tileDim[1]));
+    }
+    this._renderer.clear();
+    this._renderer.start();
+    const origTint = this._renderer.tint;
+    const darkPositions = /* @__PURE__ */ new Map();
+    const ledgePositions = [];
+    for (let y = y0; y < y1; y++) {
+      for (let z = 0; z < this.numLayers; z++) {
+        for (let x = x0; x < x1; x++) {
+          if (this._vLayer) {
+            if (this._vLayer.get([x, y]) === 0) continue;
+          }
+          const elev = this._maxElevation.get([x, y]);
+          const elevF = this._maxElevation.get([x, y + 1]);
+          this._renderer.tint = [1, 1, 1, 1];
+          let voxelType = this.getFromLayer(z, [x, y]);
+          if (voxelType > 0) {
+            if (this._aLayer) {
+              const player = this.children[this.children.length - 1];
+              if (z > 0 && this._maxElevation.get([x, y]) >= z && this._aLayer.get([x, y]) === 1) {
+                for (let z0 = z - 1; z0 >= 0; z0--) {
+                  if (z > 1 || player.gpos[0] === x && player.gpos[1] - z0 === y - z) {
+                    if (this._aLayer.get([x, y - z + z0]) === 1 && this._maxElevation.get([x, y - z + z0]) === z0) {
+                      this._renderer.tint = [1, 1, 1, 0.5];
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            const td0 = this.tileDim[0];
+            if (this._aLayer !== null && this._aLayer.get([x, y]) === 0 && this._vLayer !== null) {
+              let [top, front, back, bottom, leftLedge, backLedge, rightLedge] = this.voxelIndex[voxelType] || [void 0];
+              let viz = this._vLayer.get([x, y]) === 1;
+              let vizF = this._vLayer.get([x, y + 1]) === 1;
+              let vizB = this._vLayer.get([x, y - 1]) === 1;
+              let vizR = this._vLayer.get([x + 1, y]) === 1;
+              let vizL = this._vLayer.get([x - 1, y]) === 1;
+              if (bottom !== void 0 && front === void 0 && z >= elev && vizF) {
+                this._renderer.drawIndexed(bottom, x, y - z + 1);
+                if (z === elev) darkPositions.set((y - z + 1) * td0 + x, [x, y - z + 1]);
+              }
+              if (back !== void 0 && top === void 0 && z > 0 && viz) {
+                this._renderer.drawIndexed(back, x, y - z);
+                if (z === elev) darkPositions.set((y - z) * td0 + x, [x, y - z]);
+              }
+              if (front !== void 0 && z > 0 && vizF && elevF < z) {
+                this._renderer.drawIndexed(front, x, y - z + 1);
+                if (z === elev) darkPositions.set((y - z + 1) * td0 + x, [x, y - z + 1]);
+              }
+              if (top !== void 0 && z >= elev) {
+                if (viz) {
+                  this._renderer.drawIndexed(top, x, y - z);
+                  if (z === elev) darkPositions.set((y - z) * td0 + x, [x, y - z]);
+                }
+                if (vizL && leftLedge !== void 0 && this._maxElevation.get([x - 1, y]) < z) {
+                  ledgePositions.push([leftLedge, x - 1, y - z, this._renderer.tint]);
+                  if (z === elev) darkPositions.set((y - z) * td0 + x - 1, [x - 1, y - z]);
+                }
+                if (vizR && rightLedge !== void 0 && this._maxElevation.get([x + 1, y]) < z) {
+                  ledgePositions.push([rightLedge, x + 1, y - z, this._renderer.tint]);
+                  if (z === elev) darkPositions.set((y - z) * td0 + x + 1, [x + 1, y - z]);
+                }
+                if (vizB && backLedge !== void 0 && this._maxElevation.get([x, y - 1]) < z) {
+                  ledgePositions.push([backLedge, x, y - z - 1, this._renderer.tint]);
+                  if (z === elev) darkPositions.set((y - z - 1) * td0 + x, [x, y - z - 1]);
+                }
+              }
+            } else if (this._vLayer !== null) {
+              let [top, front, back, bottom, leftLedge, backLedge, rightLedge] = this.voxelIndex[voxelType] || [void 0];
+              let viz = this._vLayer.get([x, y]) === 1;
+              let vizF = this._vLayer.get([x, y + 1]) === 1;
+              let vizB = this._vLayer.get([x, y - 1]) === 1;
+              let vizR = this._vLayer.get([x + 1, y]) === 1;
+              let vizL = this._vLayer.get([x - 1, y]) === 1;
+              if (bottom !== void 0 && front === void 0 && z >= elev && vizF) {
+                this._renderer.drawIndexed(bottom, x, y - z + 1);
+              }
+              if (back !== void 0 && top === void 0 && z > 0 && viz) {
+                this._renderer.drawIndexed(back, x, y - z);
+              }
+              if (front !== void 0 && z > 0 && vizF && elevF < z) {
+                this._renderer.drawIndexed(front, x, y - z + 1);
+              }
+              if (top !== void 0 && z >= elev && viz) {
+                this._renderer.drawIndexed(top, x, y - z);
+                if (vizL && leftLedge !== void 0 && this._maxElevation.get([x - 1, y]) < z) {
+                  ledgePositions.push([leftLedge, x - 1, y - z, this._renderer.tint]);
+                }
+                if (vizR && rightLedge !== void 0 && this._maxElevation.get([x + 1, y]) < z) {
+                  ledgePositions.push([rightLedge, x + 1, y - z, this._renderer.tint]);
+                }
+                if (vizB && backLedge !== void 0 && this._maxElevation.get([x, y - 1]) < z) {
+                  ledgePositions.push([backLedge, x, y - z - 1, this._renderer.tint]);
+                }
+              }
+            }
+          }
+          for (
+            let c of
+            /**@type {Character[]}*/
+            this.children
+          ) {
+            if (z === c.elevation && c.visibleToPlayer) {
+              if (c.frame instanceof LayeredAnimationFrame) {
+                for (let [f, dx, dy] of c.frame.iter()) {
+                  this._renderer.drawIndexed(f, c.x, c.y, c.facing, c.flipX, dx, dy);
+                }
+              } else {
+                this._renderer.drawIndexed(c.frame, c.x, c.y, c.facing, c.flipX);
+              }
+            }
+          }
+        }
+      }
+      if (ledgePositions.length > 0) {
+        for (let [ind, x, y2, tint] of ledgePositions) {
+          this._renderer.tint = tint;
+          this._renderer.drawIndexed(ind, x, y2);
+        }
+        this._renderer.tint = origTint;
+        ledgePositions.length = 0;
+      }
+      if (this.drawAlayer) {
+        if (darkPositions.size > 0) {
+          this._renderer.tint = [1, 1, 1, this.alphaValue];
+          for (let pos of darkPositions.values()) {
+            this._renderer.drawIndexed(spriteSheetIndex.black, pos[0], pos[1]);
+          }
+          this._renderer.tint = origTint;
+          darkPositions.clear();
+        }
+      }
+    }
+    this._renderer.flush();
+    const s = this.spriteSheet.spriteSize;
+    ctx.fillStyle = this.bgColor !== null ? this.bgColor : "rgba(0,0,0,1)";
+    ctx.fillRect(this.x + x0, this.y + y0, x1 - x0, y1 - y0);
+    ctx.drawImage(
+      this._oCanvas,
+      s * x0,
+      s * y0,
+      s * (x1 - x0),
+      s * (y1 - y0),
+      this.x + x0,
+      this.y + y0,
+      x1 - x0,
+      y1 - y0
     );
   }
 }
-setPRNG("sfc32");
-loadWords(urlWords).then((words) => {
-  var app = new SevenWordsApp(words);
-  app.start();
+function landArea(grid) {
+  return grid.reduce((a, x) => a + (x !== LayoutTiles.ocean ? 1 : 0), 0);
+}
+function countLandNeighbors(grid, pos) {
+  return [...grid.iterAdjacent(pos)].reduce((a, p) => a + (grid.get(p) !== LayoutTiles.ocean ? 1 : 0), 0);
+}
+function islandGen(mapGrid, elevGrid) {
+  let grid = mapGrid.clone();
+  const [gridSizeX, gridSizeY] = grid.tileDim;
+  const baseRadius = 10;
+  const iterations = 5;
+  let [centerX, centerY] = grid.tileDim.scale(0.5).floor();
+  grid = grid.fill(LayoutTiles.ocean);
+  elevGrid.tileDim = new Vec2(grid.tileDim);
+  elevGrid.fill(0);
+  let radius = baseRadius;
+  let hill = 0;
+  while (landArea(grid) < 0.5 * gridSizeX * gridSizeY) {
+    const dist2 = radius + Math.floor(0.5 * radius * Math.random());
+    const angle = Math.random() * 2 * Math.PI;
+    centerX += Math.sin(angle) * dist2;
+    centerY += Math.cos(angle) * dist2;
+    centerX = Math.floor(clamp(centerX, 5 + radius, gridSizeX - 5 - radius));
+    centerY = Math.floor(clamp(centerY, 5 + radius, gridSizeY - 5 - radius));
+    console.log(`hill ${hill}`, [centerX, centerY], radius, dist2, angle * 180 / Math.PI);
+    for (let pos of grid.iterInRange([centerX, centerY], radius)) {
+      grid.set(pos, LayoutTiles.rocky);
+      const elev = elevGrid.get(pos);
+      elevGrid.set(pos, Math.max(elev, 5 - Math.ceil(new Vec2(pos).dist([centerX, centerY]) * 5 / radius)));
+    }
+    radius += Math.ceil(-2 + Math.random() * 5 + 0.05 * (baseRadius - radius));
+    hill++;
+  }
+  for (let i = 0; i < iterations; i++) {
+    let newGrid = grid.clone();
+    for (let pos of grid.iterRect(new Rect([1, 1, gridSizeX - 2, gridSizeY - 2]))) {
+      let landNeighbors = countLandNeighbors(grid, pos);
+      if (grid.get(pos) !== LayoutTiles.ocean) {
+        if (landNeighbors < 1 || Math.random() < 0.33 && landNeighbors === 1) {
+          newGrid.set(pos, LayoutTiles.ocean);
+        }
+      } else {
+        if (landNeighbors >= 1 && Math.random() > 0.5) {
+          newGrid.set(pos, LayoutTiles.rocky);
+        }
+      }
+    }
+    grid = newGrid;
+  }
+  for (let iterations2 of [0, 1, 2]) {
+    let newGrid = grid.clone();
+    for (let pos of grid.iterRect(new Rect([1, 1, gridSizeX - 2, gridSizeY - 2]))) {
+      let posv = new Vec2(pos);
+      let landNeighbors = countLandNeighbors(grid, posv);
+      if (grid.get(posv) !== LayoutTiles.ocean && landNeighbors <= 1) {
+        newGrid.set(posv, LayoutTiles.ocean);
+      } else if (grid.get(posv) !== LayoutTiles.ocean && landNeighbors >= 3) {
+        newGrid.set(posv, LayoutTiles.rocky);
+      }
+    }
+    grid = newGrid;
+  }
+  for (let iterations2 of [0]) {
+    let newGrid = grid.clone();
+    for (let pos of [...grid.iterAll()].filter((p) => grid.get(p) === LayoutTiles.rocky)) {
+      const elev = elevGrid.get(pos);
+      if (elev > 2) continue;
+      const count = [...elevGrid.iterAdjacent(pos)].reduce((a, p) => a + (elevGrid.get(p) === elev ? 1 : 0), 0);
+      if (count === 4) {
+        newGrid.set(pos, elev === 0 ? LayoutTiles.sand : LayoutTiles.grassy);
+      }
+    }
+    grid = newGrid;
+  }
+  grid.clone();
+  const shoreline = [...grid.iterAll()].filter((pos) => grid.get(pos) !== LayoutTiles.ocean && grid.hasAdjacent(pos, [LayoutTiles.ocean]));
+  for (let spos of shoreline) {
+    let numS = 0, denom = 0;
+    for (let p of grid.iterInRange(spos, 4)) {
+      denom++;
+      numS += grid.get(p) !== LayoutTiles.ocean ? 1 : 0;
+    }
+    if (numS / denom > 0.4) grid.set(spos, LayoutTiles.sand);
+  }
+  for (let pos of grid.iterAll()) {
+    mapGrid.set(pos, grid.get(pos));
+  }
+}
+class DailyEvent {
+  title = "Test";
+  introText = "blah";
+  outroText = "blah";
+  /**
+   * 
+   * @param {GameMap} gmap 
+   */
+  startEvent(gmap) {
+  }
+  /**
+   * 
+   * @param {GameMap} gmap 
+   */
+  endEvent(gmap) {
+  }
+  /**
+   * 
+   * @param {GameMap} gmap 
+   */
+  onTurn(gmap) {
+  }
+  /**
+   * @param {GameMap} gmap
+   */
+  onDayEnd(gmap) {
+    return true;
+  }
+}
+class Berries extends DailyEvent {
+  onTurn(gmap) {
+    if (gmap.turn === 5) {
+      for (let e of gmap.entities.values()) {
+        if (e instanceof Berry) {
+          e.voxelIndex = voxelNames.berries;
+          gmap.updateTileInfo(e.pos);
+        }
+      }
+      gmap.popMessage("More berries have ripened", 5e3);
+    }
+  }
+}
+class End7DRL extends DailyEvent {
+  title = "A boat!";
+  introText = "I see something on the horizon";
+  outroText = "Thanks for playing my 7DRL. This was just a small glimpse of a larger Roguelike adventure on the island that I have planned. Check back for updates.\n\n--Spillz";
+  onTurn(gmap) {
+    if (gmap.turn === 0) gmap.popMessage("You made it to the end of our adventure.", 5e3);
+    if (gmap.turn === 5) gmap.popMessage("I have much more planned.", 5e3);
+    if (gmap.turn === 10) {
+      gmap.popMessage("Like the volcano now in the middle of the island!", 5e3);
+      launchVolcano(gmap);
+    }
+    if (gmap.turn === 15) {
+      gmap.popMessage("Lucky for you, I've put a boat out in the sea.", 5e3);
+      launchBoat(gmap);
+    }
+    if (gmap.turn === 50) {
+      gmap.popMessage("Find the boat.", 5e3);
+      launchBoat(gmap);
+    }
+  }
+}
+class NullDay extends DailyEvent {
+  title = "A quiet day";
+  introText = "";
+  outroText = "";
+  /**@type {DailyEvent['startEvent']} */
+  startEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  endEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  onTurn(gmap) {
+  }
+}
+class ShipWrecked extends DailyEvent {
+  title = "Shipwrecked!";
+  introText = "How did I get here?";
+  outroText = "I will rest here for the night.";
+  /**@type {DailyEvent['startEvent']} */
+  startEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  endEvent(gmap) {
+  }
+  /**@type {DailyEvent['startEvent']} */
+  onTurn(gmap) {
+    if (gmap.turn === 1) gmap.popMessage("W/A/S/D keys to move", 0);
+    if (gmap.turn === 5) gmap.popMessage("Space bar to wait", 0);
+    if (gmap.turn === 10) gmap.popMessage("Bump objects to interact", 0);
+    if (gmap.turn === 15) gmap.popMessage("Keep an eye on your health, thirst and hunger -- higher is better", 0);
+    if (gmap.turn === 20) gmap.popMessage("Find some water and shelter", 0);
+    if (gmap.turn === 25) gmap.popMessage("Explore the island", 0);
+    if (gmap.turn === 30) gmap.popMessage("Try to survive a few days and hope for rescue", 5e3);
+  }
+}
+const LayoutTiles = Object.freeze({
+  rocky: 0,
+  grassy: 1,
+  sand: 2,
+  beachFront: 3,
+  floor: 4,
+  path: 5,
+  stream: 6,
+  ocean: 7,
+  pool: 8,
+  building: 9,
+  doorway: 10,
+  window: 11,
+  hallway: 12
 });
+const LayoutToVoxel = Object.freeze({
+  [LayoutTiles.rocky]: voxelNames.rocky,
+  [LayoutTiles.grassy]: voxelNames.grassy,
+  [LayoutTiles.sand]: voxelNames.sand,
+  // [LayoutTiles.beachFront]:   voxelNames.beachFront,
+  [LayoutTiles.floor]: voxelNames.floor,
+  [LayoutTiles.path]: voxelNames.path,
+  // [LayoutTiles.ocean]:        voxelNames.ocean,
+  [LayoutTiles.pool]: voxelNames.pool
+  // [LayoutTiles.building]:     voxelNames.building,
+  // [LayoutTiles.doorway]:      voxelNames.doorway,
+  // [LayoutTiles.window]:       voxelNames.window,
+  // [LayoutTiles.hallway]:      voxelNames.hallway,
+});
+const IslandAutotiles = Object.freeze({
+  wall: new AutoTiler(
+    "islandWalls",
+    [LayoutTiles.building],
+    [LayoutTiles.building, LayoutTiles.doorway, LayoutTiles.window],
+    {
+      1: voxelNames.wallS,
+      2: voxelNames.wallN,
+      4: voxelNames.wallS,
+      8: voxelNames.wallS,
+      5: voxelNames.wallN,
+      10: voxelNames.wallS,
+      3: voxelNames.wallSW,
+      6: voxelNames.wallNW,
+      12: voxelNames.wallNE,
+      9: voxelNames.wallSE,
+      7: voxelNames.wallW,
+      11: voxelNames.wallS,
+      13: voxelNames.wallE,
+      14: voxelNames.wallN
+    }
+  ),
+  wallExt: new AutoTiler(
+    "islandWallCorner",
+    [LayoutTiles.building],
+    [LayoutTiles.building, LayoutTiles.doorway, LayoutTiles.window],
+    {
+      239: voxelNames.wallNES,
+      223: voxelNames.wallNEW,
+      191: voxelNames.wallNSW,
+      127: voxelNames.wallESW
+    },
+    8
+  ),
+  door: new AutoTiler(
+    "islandDoors",
+    [LayoutTiles.doorway],
+    [LayoutTiles.building],
+    {
+      14: voxelNames.doorwayN,
+      13: voxelNames.doorwayE,
+      11: voxelNames.doorwayS,
+      7: voxelNames.doorwayW
+    }
+  ),
+  window: new AutoTiler(
+    "islandWindow",
+    [LayoutTiles.window],
+    [LayoutTiles.building],
+    {
+      14: voxelNames.windowN,
+      13: voxelNames.windowE,
+      11: voxelNames.windowS,
+      7: voxelNames.windowW
+    }
+  ),
+  beachFront: new AutoTiler(
+    "islandBeachFront",
+    [LayoutTiles.ocean],
+    [LayoutTiles.sand],
+    {
+      14: voxelNames.beachN,
+      13: voxelNames.beachE,
+      11: voxelNames.beachS,
+      7: voxelNames.beachW,
+      12: voxelNames.beachNE,
+      9: voxelNames.beachSE,
+      3: voxelNames.beachSW,
+      6: voxelNames.beachNW,
+      10: voxelNames.ocean,
+      5: voxelNames.ocean,
+      8: voxelNames.beachNES,
+      4: voxelNames.beachNEW,
+      2: voxelNames.beachNSW,
+      1: voxelNames.beachESW
+    },
+    4,
+    voxelNames.ocean
+  ),
+  stream: new AutoTiler(
+    "stream",
+    [LayoutTiles.stream],
+    [LayoutTiles.stream, LayoutTiles.ocean],
+    {
+      1: voxelNames.streamN,
+      2: voxelNames.streamE,
+      4: voxelNames.streamS,
+      8: voxelNames.streamW,
+      5: voxelNames.streamNS,
+      10: voxelNames.streamEW,
+      3: voxelNames.streamNE,
+      6: voxelNames.streamSE,
+      12: voxelNames.streamSW,
+      9: voxelNames.streamNW
+    }
+  )
+});
+function generateIslandMap(map, rng) {
+  map.w = 80;
+  map.h = 80;
+  [map.w, map.h];
+  const tdim = new Vec2([map.w, map.h]);
+  const tmap = map.tileMap;
+  tmap.useCache = true;
+  tmap.numLayers = 8;
+  tmap.tileDim = tdim;
+  tmap.activeLayer = 0;
+  for (let l of tmap.layer) {
+    l.fill(0);
+  }
+  const mmap = map.metaTileMap;
+  mmap.defaultValue = 0;
+  mmap.numLayers = 9;
+  mmap.tileDim = tdim;
+  mmap.activeLayer = MetaLayers.layout;
+  for (let m of mmap.layer) {
+    m.fill(0);
+  }
+  const islandLayout = mmap.layer[MetaLayers.layout];
+  const islandElevation = mmap.layer[MetaLayers.elevation];
+  islandGen(islandLayout, islandElevation);
+  const center = vec2(...getRandomPos(map.w / 5, map.h / 5)).add([map.w / 2 - map.w / 10, map.h / 2 - map.h / 10]);
+  center[0] = Math.floor(center[0]);
+  center[1] = Math.floor(center[1]);
+  const riverHeads = shuffle([...islandLayout.iterAll()].filter((p) => islandLayout.get(p) === LayoutTiles.rocky && islandElevation.get(p) >= 4));
+  let riverCount = 0;
+  let activeHead = 0;
+  let activeP = new Vec2(riverHeads[activeHead]);
+  let riverTiles = [activeP];
+  const riverSet = /* @__PURE__ */ new Set();
+  riverSet.add(map.posToIndex(activeP));
+  while (activeHead < riverHeads.length && riverCount < 3) {
+    let trapped = 0;
+    const adjs = shuffle([...islandLayout.iterAdjacent(activeP)]);
+    for (let pn of adjs) {
+      const pni = map.posToIndex(pn);
+      const type = islandLayout.get(pn);
+      if (!riverSet.has(pni) && islandElevation.get(pn) <= islandElevation.get(activeP) && (type === LayoutTiles.sand || type === LayoutTiles.rocky || type === LayoutTiles.grassy) && [...islandLayout.iterAdjacent(pn)].reduce((sum, c) => sum + (riverSet.has(map.posToIndex(c)) ? 1 : 0), 0) <= 1) {
+        activeP = pn;
+        riverSet.add(pni);
+        riverTiles.push(pn);
+        break;
+      }
+      trapped++;
+    }
+    if (trapped === 4) {
+      for (let pn of riverTiles) {
+        riverSet.delete(map.posToIndex(pn));
+      }
+      activeHead++;
+      activeP = new Vec2(riverHeads[activeHead]);
+      riverTiles = [activeP];
+      riverSet.add(map.posToIndex(activeP));
+    } else if (islandLayout.hasAdjacent(activeP, [LayoutTiles.ocean])) {
+      for (let pn of riverTiles) {
+        islandLayout.set(pn, LayoutTiles.stream);
+      }
+      riverCount++;
+      activeHead++;
+      activeP = new Vec2(riverHeads[activeHead]);
+      riverTiles = [activeP];
+      riverSet.add(map.posToIndex(activeP));
+    }
+  }
+  console.log("placed", riverCount, "rivers");
+  let num = 0;
+  let denom = 0;
+  for (let pos of islandElevation.iterInRange(center, 6)) {
+    num += islandElevation.get(pos);
+    denom++;
+  }
+  const elev = Math.floor(num / denom);
+  for (let pos of islandElevation.iterInRange(center, 6)) {
+    islandLayout.set(pos, LayoutTiles.grassy);
+    const curElev = islandElevation.get(pos);
+    if (curElev)
+      islandElevation.set(pos, elev);
+  }
+  const rectA = new Rect([...center.add([-3, -2]), 7, 4]);
+  for (let p of mmap.data.iterRect(rectA)) {
+    mmap.set(p, LayoutTiles.building);
+  }
+  const rectB = new Rect([...center.add([0, -4]), 4, 7]);
+  for (let p of mmap.data.iterRect(rectB)) {
+    mmap.set(p, LayoutTiles.building);
+  }
+  mmap.set(new Vec2([Math.floor(rectB.center_x), rectB.y]), LayoutTiles.window);
+  mmap.set(new Vec2([Math.floor(rectB.center_x), rectB.bottom - 1]), LayoutTiles.doorway);
+  mmap.set(new Vec2([rectA.x, Math.floor(rectA.center_y)]), LayoutTiles.doorway);
+  mmap.set(new Vec2([rectA.right - 1, Math.floor(rectA.center_y)]), LayoutTiles.window);
+  const bedP = choose([...mmap.data.iterRect(rectB.shrinkBorders(1))]);
+  map.entities.set(map.posToIndex(bedP), new Bed(bedP));
+  const allPos = shuffle([...mmap.data.iterTypes([LayoutTiles.rocky, LayoutTiles.grassy], map.rect)]);
+  let i = 0;
+  for (let p of allPos.slice(0, 100)) {
+    if (mmap.layer[MetaLayers.layout].hasAdjacent(p, [LayoutTiles.doorway || LayoutTiles.window])) continue;
+    const tree = i < 10 ? new Berry(p) : i < 50 ? new StaticEntity(p, "Spruce", voxelNames.tree1) : new StaticEntity(p, "Fir", voxelNames.tree2);
+    map.entities.set(map.posToIndex(p), tree);
+    if (i < 10) mmap.set(p, LayoutTiles.rocky);
+    i++;
+  }
+  const grassy = choose([...mmap.data.iterTypes([LayoutTiles.grassy], map.rect)]);
+  map.entities.set(map.posToIndex(grassy), new Well(grassy));
+  for (let p of mmap.layer[MetaLayers.layout].iterAll()) {
+    map.updateTileInfo(p);
+  }
+  mmap.activeLayer = MetaLayers.layout;
+  tmap._vLayer = mmap._layerData[MetaLayers.seen];
+  tmap._aLayer = mmap._layerData[MetaLayers.visible];
+  tmap._maxElevation = mmap._layerData[MetaLayers.elevation];
+  tmap.clearCache();
+}
+function launchVolcano(map) {
+  const center = new Vec2([Math.ceil(map.w / 2), Math.ceil(map.h / 2)]).add([getRandomInt(-4, 5), -getRandomInt(10, 16)]);
+  const layout = map.metaTileMap.layer[MetaLayers.layout];
+  const elevation = map.metaTileMap.layer[MetaLayers.elevation];
+  const maxDist = Math.ceil(map.w / 4);
+  const centerPositions = [...layout.iterInRange(center, maxDist)];
+  for (let pos of centerPositions) {
+    const dist2 = center.dist(pos);
+    const noise = 0;
+    const height = Math.min(6, Math.floor(1 + 8 * (1 - dist2 / maxDist)) + noise);
+    elevation.set(pos, height);
+    layout.set(pos, LayoutTiles.rocky);
+  }
+  for (let pos of layout.iterInRange(center, 4)) {
+    elevation.set(pos, 5);
+    layout.set(pos, LayoutTiles.rocky);
+    map.entities.set(map.posToIndex(pos), new Lava(pos));
+  }
+  shuffle(centerPositions);
+  for (let i = 0; i < 20; i++) {
+    for (let pos of layout.iterInBetween(center, centerPositions[i])) {
+      map.entities.set(map.posToIndex(pos), new Lava(pos));
+    }
+  }
+  for (let pos of centerPositions) {
+    map.updateTileInfo(pos);
+  }
+  map.playerCharacter.elevation = elevation.get(map.playerCharacter.gpos);
+  map.playerCharacter.gpos = map.playerCharacter.gpos;
+}
+function launchBoat(map) {
+  const layout = map.metaTileMap.layer[MetaLayers.layout];
+  const oceanPositions = shuffle([...layout.iterTypes([LayoutTiles.ocean], map.rect)]);
+  for (let op of oceanPositions) {
+    if (layout.hasAdjacent(op, [LayoutTiles.sand])) continue;
+    map.entities.set(map.posToIndex(op), new Boat(op));
+    map.updateTileInfo(op);
+    break;
+  }
+}
+class DebugSelector extends SpriteWidget {
+  /**@type {eskv.Grid2D|null} */
+  elevGrid = null;
+  elev = 0;
+  gpos = new Vec2([-1, -1]);
+  on_gpos(e, o, v) {
+    if (this.elevGrid !== null) {
+      this.elev = this.elevGrid.get(this.gpos);
+    }
+    this.pos = this.gpos.add([0, -this.elev]);
+  }
+}
+class SkyBox extends Widget {
+  /**@type {eskv.Widget['draw']} */
+  draw(app, ctx) {
+    const oldOp = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = "multiply";
+    super.draw(app, ctx);
+    ctx.globalCompositeOperation = oldOp;
+  }
+}
+class GameMap extends Widget {
+  rng = new PRNG_sfc32();
+  //.setPRNG('sfc32');
+  clipRegion = new Rect();
+  tileMap = new VoxelTileMap({ voxelIndex });
+  metaTileMap = new LayeredTileMap();
+  enemies = [
+    new Character({ id: "alfred" }),
+    new Character({ id: "bennie" }),
+    new Character({ id: "charlie" }),
+    new Character({ id: "devon" })
+  ];
+  /**@type {Map<number, StaticEntity>} */
+  entities = /* @__PURE__ */ new Map();
+  playerCharacter = new PlayerCharacter({ id: "randy", activeCharacter: true });
+  characters = [...this.enemies, this.playerCharacter];
+  /**@type {Character|null} */
+  activeCharacter = this.playerCharacter;
+  /**@type {SpriteSheet|null} */
+  spriteSheet = null;
+  turn = 0;
+  day = 1;
+  dayLength = 400;
+  daytimeLength = 250;
+  sunset = 50;
+  sunrise = 50;
+  // bgColor = 'rgb(0,0,290)';
+  dailyEvents = [];
+  time = "Daybreak";
+  /**@type {DailyEvent[]} */
+  eventDeck = [];
+  /**@type {DailyEvent[]} */
+  activeEvents = [];
+  constructor(props = null) {
+    super();
+    this.debugSelector = new DebugSelector({ size: [1, 1], frames: [DecorationTiles.aimer] });
+    this.skyBox = new SkyBox({ hints: { w: 1, h: 1, x: 0, y: 0 } });
+    const timerCB = (e, o, v) => {
+      if (v > 0) {
+        setTimeout(() => {
+          if (o.canCancel) {
+            o.text = "";
+            o.x = -1;
+            o.y = -1;
+          }
+          o.canCancel = true;
+        }, v);
+        o.v = 0;
+      }
+    };
+    this.popup = new Label({ color: "white", bgColor: "rgba(60, 60, 60, 0.5)", align: "left", x: 100, y: 100, w: 6, hints: { h: null }, wrap: true, fontSize: 0.5, timer: 0, canCancel: false, on_timer: timerCB });
+    this.children = [this.tileMap, this.skyBox, this.debugSelector, this.popup];
+    this.tileMap.children = [...this.enemies, this.playerCharacter];
+    if (props) this.updateProperties(props);
+  }
+  popMessage(msg, time = 3e3) {
+    this.popup.canCancel = false;
+    this.popup.text = msg;
+    this.popup.pos = this.playerCharacter.pos.add([0, 2]);
+    this.popup.timer = time;
+  }
+  on_turn(e, o, v) {
+    for (let e2 of this.activeEvents) {
+      e2.onTurn(this);
+    }
+    this.playerCharacter.endTurn(this);
+    if (this.turn >= this.dayLength) {
+      this.endDay();
+    }
+    if (this.turn === 260) {
+      this.popMessage("Find somewhere to lie down and sleep", 5e3);
+    }
+    if (this.turn < 50) {
+      this.time = "Daybreak";
+    } else if (this.turn < 100) {
+      this.time = "Morning";
+    } else if (this.turn < 150) {
+      this.time = "Midday";
+    } else if (this.turn < 200) {
+      this.time = "Afternoon";
+    } else if (this.turn < 250) {
+      this.time = "Sunset";
+    } else if (this.turn < 300) {
+      this.time = "Evening";
+    } else if (this.turn < 250) {
+      this.time = "Night";
+    } else if (this.turn < 350) {
+      this.time = "Owl time";
+    }
+    if (this.turn >= this.daytimeLength) {
+      this.skyBox.bgColor = "rgba(100, 100, 180, 1)";
+      this.playerCharacter.visionRange = 3;
+      this.tileMap.alphaValue = 0.7;
+    } else if (this.turn >= this.daytimeLength - this.sunset) {
+      const sunsetFrac = (this.turn - (this.daytimeLength - this.sunset)) / this.sunset;
+      this.skyBox.bgColor = `rgba(${255 - 155 * sunsetFrac},${clamp(255 - 240 * sunsetFrac / 0.5, 100, 255)},${clamp(255 - 300 * sunsetFrac, 180, 255)},1)`;
+      this.playerCharacter.visionRange = 10 - Math.ceil(7 * sunsetFrac);
+      this.tileMap.alphaValue = 0.5 + 0.2 * sunsetFrac;
+    } else if (this.turn < this.sunrise) {
+      const sunriseFrac = this.turn / this.sunrise;
+      this.skyBox.bgColor = `rgba(${clamp(100 + 400 * sunriseFrac, 100, 255)},${100 + 155 * sunriseFrac},${clamp(180 + 300 * sunriseFrac, 180, 255)},1)`;
+      this.playerCharacter.visionRange = 5 + Math.ceil(5 * sunriseFrac);
+      this.tileMap.alphaValue = 0.5;
+    } else {
+      this.skyBox.bgColor = null;
+      this.playerCharacter.visionRange = 10;
+      this.tileMap.alphaValue = 0.5;
+    }
+  }
+  endDay() {
+    for (let e2 of this.activeEvents) {
+      if (e2.onDayEnd(this)) {
+        this.activeEvents = this.activeEvents.filter((ev) => ev != e2);
+      }
+    }
+    const e = this.eventDeck.shift();
+    if (e !== void 0) {
+      this.activeEvents.push(e);
+    }
+    const player = this.playerCharacter;
+    if (player.thirst === 0) {
+      player.state = "dead";
+      this.popMessage("You have died of thirst", 5e3);
+    } else {
+      player.thirst = player.thirst - 1;
+    }
+    if (player.hunger > 0) {
+      if (player.health < player.maxHealth && this.turn < 300) {
+        player.health++;
+      }
+      player.hunger--;
+    }
+    if (player.state !== "dead") {
+      player.moveHome(this);
+      if (this.turn < 300) {
+        this.popMessage("A new day begins...", 5e3);
+      } else {
+        this.popMessage("A restless sleep...", 5e3);
+      }
+    }
+    this.day = this.day + 1;
+    this.turn = 0;
+  }
+  /**
+   * 
+   * @param {import("eskv/lib/modules/geometry.js").VecLike} pos 
+   */
+  posToIndex(pos) {
+    return this.w * pos[1] + pos[0];
+  }
+  /**
+   * 
+   * @param {number} index
+   */
+  indexToPos(index) {
+    return new Vec2([index % this.w, Math.floor(index / this.w)]);
+  }
+  setupGame() {
+    this.entities.clear();
+    this.activeEvents = [new ShipWrecked()];
+    this.eventDeck = [new NullDay(), new Berries(), new End7DRL()];
+    generateIslandMap(this, this.rng);
+    this.debugSelector.elevGrid = this.metaTileMap.layer[MetaLayers.elevation];
+    this.turn = 0;
+    this.day = 1;
+    this.playerCharacter.setupForGameStart(this, this.rng);
+    this.enemies.forEach((e) => e.setupForGameStart(this, this.rng));
+    this.playerCharacter.actionInventory = App.get().findById("firstPlayerInventory");
+    this.popMessage('"Where am I? I remember a boat... a storm... falling..."', 5e3);
+  }
+  on_spriteSheet(e, o, v) {
+    this.tileMap.spriteSheet = this.spriteSheet;
+    this.debugSelector.spriteSheet = this.spriteSheet;
+  }
+  /**
+   * 
+   * @param {import("eskv/lib/modules/geometry.js").VecLike} pos 
+   */
+  updateTileInfo(pos) {
+    const layout = this.metaTileMap.layer[MetaLayers.layout].get(pos);
+    const mmap = this.metaTileMap;
+    mmap.activeLayer = MetaLayers.layout;
+    const tmap = this.tileMap;
+    tmap.activeLayer = 0;
+    if (layout in LayoutToVoxel) {
+      const elev = mmap.getFromLayer(MetaLayers.elevation, pos);
+      for (let i = 0; i < elev; i++) {
+        tmap.setInLayer(i, pos, voxelNames.rocky);
+      }
+      tmap.setInLayer(elev, pos, LayoutToVoxel[layout]);
+    } else {
+      const vpos = new Vec2(pos);
+      if (layout === LayoutTiles.doorway) {
+        tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos), pos, voxelNames.rocky);
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos) + 1;
+        IslandAutotiles.door.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.window) {
+        tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos), pos, voxelNames.rocky);
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos) + 1;
+        IslandAutotiles.window.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.building) {
+        tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos), pos, voxelNames.rocky);
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos) + 1;
+        IslandAutotiles.wall.autoTile(vpos, mmap, tmap);
+        IslandAutotiles.wallExt.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.ocean) {
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos);
+        IslandAutotiles.beachFront.autoTile(vpos, mmap, tmap);
+      }
+      if (layout === LayoutTiles.stream) {
+        tmap.activeLayer = mmap.getFromLayer(MetaLayers.elevation, pos);
+        IslandAutotiles.stream.autoTile(vpos, mmap, tmap);
+      }
+    }
+    let traversible = layout === LayoutTiles.building && mmap._data.hasAdjacent(pos, [LayoutTiles.rocky, LayoutTiles.grassy, LayoutTiles.sand]) || layout === LayoutTiles.window ? 0 : 15;
+    let sight = layout === LayoutTiles.building && mmap._data.hasAdjacent(pos, [LayoutTiles.rocky, LayoutTiles.grassy, LayoutTiles.sand], true) ? 0 : 15;
+    const e = this.entities.get(this.posToIndex(pos));
+    if (e instanceof StaticEntity) {
+      tmap.setInLayer(mmap.getFromLayer(MetaLayers.elevation, pos) + 1, pos, e.voxelIndex);
+      traversible &= e.traversible;
+      sight &= e.allowsSight;
+    }
+    this.metaTileMap.setInLayer(MetaLayers.traversible, pos, traversible);
+    this.metaTileMap.setInLayer(MetaLayers.allowsSight, pos, sight);
+  }
+  /**
+   * 
+   * @param {boolean} refresh 
+   */
+  updateCharacterVisibility(refresh = false) {
+    this.activeCharacter;
+    for (let e of this.enemies) {
+      if (refresh) e.visibleToPlayer = false;
+      e.visibleToPlayer = e.visibleToPlayer || this.activeCharacter?._visibleLayer.get(e.gpos) === 1;
+    }
+  }
+  /**
+   * 
+   * @param {string} message 
+   * @param {'enemy'|'position'|'posAdjacent'} targetType 
+   * @param {(map:GameMap, target:Vec2)=>void} callback 
+   */
+  targetSelector(message, targetType, callback) {
+  }
+  /**
+   * 
+   * @param {string} message 
+   * @param {'success'|'failure'|'info'} messageType 
+   */
+  prompt(message, messageType) {
+  }
+  /**
+   * 
+   * @param {Vec2} position 
+   */
+  getCharacterAt(position) {
+    for (let c of this.characters) {
+      if (c.gpos.equals(position)) return c;
+    }
+    return null;
+  }
+}
+class Camera extends ScrollView {
+  layoutChildren() {
+    this.updateClipRegion();
+    super.layoutChildren();
+  }
+  updateClipRegion() {
+    const gm = this.children[0];
+    if (gm instanceof GameMap) {
+      gm.tileMap.clipRegion = new Rect([
+        Math.floor(this._scrollX),
+        Math.floor(this._scrollY),
+        Math.ceil(this.w / this.zoom),
+        Math.ceil(this.h / this.zoom)
+      ]);
+    }
+  }
+  on_touch_down(e, o, v) {
+    App.get().showTouchControls();
+    super.on_touch_down(e, o, v);
+    return false;
+  }
+}
+const urlTileset = "" + new URL("colored_tilemap-CcCY-wA7.png", import.meta.url).href;
+setSeed(Date.now());
+window.onclick = () => {
+  window.focus();
+};
+class FPS extends Label {
+  _counter = 0;
+  _frames = 0;
+  _worst = 300;
+  _tref = Date.now();
+  _badFrameCount = 0;
+  /**@type {eskv.Label['update']} */
+  update(app, millis) {
+    super.update(app, millis);
+    const tref = Date.now();
+    this._counter += tref - this._tref;
+    this._frames += 1;
+    const currentFPS = 1e3 / (tref - this._tref);
+    this._tref = tref;
+    this._badFrameCount += currentFPS < 50 ? 1 : 0;
+    if (currentFPS < this._worst) this._worst = currentFPS;
+    if (this._counter >= 1e3) {
+      this.text = `FPS: ${Math.round(this._frames / this._counter * 1e3)} (worst: ${Math.round(this._worst)}, # >20ms: ${Math.round(this._badFrameCount)})`;
+      this._counter = 0;
+      this._frames = 0;
+      this._worst = 300;
+      this._badFrameCount = 0;
+    }
+    App.get().requestFrameUpdate();
+  }
+}
+class IslandApp extends App {
+  prefDimW = 20;
+  prefDimH = 23;
+  /**@type {[number, number]} */
+  playerPos = [8, 5];
+  /**@type {[number, number]} */
+  terrainSize = [80, 80];
+  score = 0;
+  gameOver = false;
+  showFPS = false;
+  constructor() {
+    super();
+    this.lastActionTime = 0;
+    this.spritesheet = new SpriteSheet(urlTileset, 8, 1);
+    App.resources["sprites"] = this.spritesheet;
+    this.gameMap = new GameMap({ hints: { w: null, h: null } });
+    this.gameMap.spriteSheet = this.spritesheet;
+    this.camera = new Camera({ id: "camera", uiZoom: false, hints: { y: "3", h: "20", w: 1 } });
+    this.camera.addChild(this.gameMap);
+    this.header = new Label({
+      text: `The Island`,
+      fontName: "serif",
+      align: "center",
+      hints: { center_x: 0.5, center_y: 0.05, w: 0.6, h: "2" }
+    });
+    this.healthLabel = new Label({
+      id: "healthStatus",
+      text: "test",
+      align: "left",
+      color: "pink",
+      hints: { w: null }
+    });
+    this.hungerLabel = new Label({
+      id: "hungerStatus",
+      color: "orange",
+      align: "center",
+      hints: { w: null }
+    });
+    this.thirstLabel = new Label({
+      id: "thirstStatus",
+      color: "lightblue",
+      align: "right",
+      hints: { w: null }
+    });
+    this.timeLabel = new Label({
+      id: "timeStatus",
+      color: "yellow",
+      align: "right",
+      hints: { w: null }
+    });
+    this.footer = new BoxLayout({
+      orientation: "horizontal",
+      hints: { h: "1", w: 1, y: "2", x: 0 },
+      spacingX: "1",
+      children: [
+        this.healthLabel,
+        this.hungerLabel,
+        this.thirstLabel,
+        new Widget(),
+        this.timeLabel
+      ]
+    });
+    this.gameMap.playerCharacter.bind(
+      "health",
+      (e, o, v) => {
+        this.healthLabel.text = `Health: ${v}/5`;
+        this.footer._needsLayout = true;
+      }
+    );
+    this.gameMap.playerCharacter.bind(
+      "hunger",
+      (e, o, v) => {
+        this.hungerLabel.text = `Hunger: ${v}/5`;
+        this.footer._needsLayout = true;
+      }
+    );
+    this.gameMap.playerCharacter.bind(
+      "thirst",
+      (e, o, v) => {
+        this.thirstLabel.text = `Thirst: ${v}/1`;
+        this.footer._needsLayout = true;
+      }
+    );
+    const timeCB = (e, o, v) => {
+      this.timeLabel.text = `${this.gameMap.time} ~ Day ${this.gameMap.day} ~ Turn ${this.gameMap.turn}`;
+      this.footer._needsLayout = true;
+    };
+    this.gameMap.bind("time", timeCB);
+    this.gameMap.bind("turn", timeCB);
+    this.gameMap.bind("day", timeCB);
+    this.fps = new FPS({ hints: { right: 1, y: "0.5", w: 0.2, h: "1" } });
+    this.debugSelectorLabel = new Label({ color: "white", hints: { x: 0, y: "0.5", w: 0.2, h: "1" } });
+    const selCB = (e, o, v) => {
+      if (v[0] >= 0 && v[1] >= 0) {
+        this.debugSelectorLabel.text = `(${v[0]}, ${v[1]}) -- index ${this.gameMap.posToIndex(v)}-- elev ${o.elev}`;
+      } else {
+        this.debugSelectorLabel.text = "";
+      }
+    };
+    this.gameMap.debugSelector.bind("gpos", selCB);
+    this.buttonLeft = new Button({ text: "<", hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("left") }), this.buttonRight = new Button({ text: ">", hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("right") }), this.buttonUp = new Button({ text: `/\\`, hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("up") });
+    this.buttonDown = new Button({ text: `\\/`, hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("down") }), this.buttonWait = new Button({ text: `O`, hints: { h: "3" }, bgColor: `rgba(100,100,100,0.5)`, on_press: (e, o, v) => this.takeAction("wait") }), this.touchController = new GridLayout({
+      hints: { x: 0, bottom: 1, h: "9", w: "9" },
+      orientation: "vertical",
+      numY: 3,
+      children: [
+        new Widget(),
+        this.buttonLeft,
+        new Widget(),
+        this.buttonUp,
+        this.buttonWait,
+        this.buttonDown,
+        new Widget(),
+        this.buttonRight,
+        new Widget()
+      ]
+    });
+    this.baseWidget.children = [
+      this.header,
+      this.footer,
+      this.camera,
+      this.debugSelectorLabel
+    ];
+    this.updateProperties({});
+    window.focus();
+    this.gameMap.setupGame();
+  }
+  /**
+   * 
+   * @param {boolean} show 
+   */
+  showTouchControls(show = true) {
+    if (show) {
+      if (!this._baseWidget.children.includes(this.touchController)) {
+        this._baseWidget.addChild(this.touchController);
+      }
+    } else {
+      this._baseWidget.children = this._baseWidget.children.filter((c) => c !== this.touchController);
+    }
+  }
+  layoutChildren() {
+    super.layoutChildren();
+    this.gameMap.playerCharacter.updateCamera(this.gameMap, false);
+  }
+  on_showFPS(e, o, v) {
+    if (this.showFPS) {
+      this.baseWidget.addChild(this.fps);
+    } else {
+      this.baseWidget.children = this.baseWidget.children.filter((v3) => v3 !== this.fps);
+    }
+  }
+  /**
+   * 
+   * @param {number} int 
+   */
+  intToPos(int) {
+    return (
+      /**@type {[number, number]}*/
+      [int % this.terrainSize[0], Math.floor(int / this.terrainSize[0])]
+    );
+  }
+  /**
+   * 
+   * @param {[number, number]} pos 
+   */
+  posToInt(pos) {
+    return pos[1] * this.terrainSize[0] + pos[0];
+  }
+  restart() {
+    this.gameMap.setupGame();
+    this.gameOver = false;
+  }
+  updateHeader() {
+  }
+  updateTerrain() {
+  }
+  updateVisible() {
+  }
+  updateTiles() {
+  }
+  on_key_down(e, o, v) {
+    if (Date.now() - this.lastActionTime < 250) {
+      return true;
+    }
+    this.showTouchControls(false);
+    this.lastActionTime = Date.now();
+    const ip = this.inputHandler;
+    this.gameMap.playerCharacter;
+    const gmap = this.gameMap;
+    if (ip === void 0) return;
+    if (this.gameOver) {
+      if (ip.isKeyDown("r")) {
+        this.restart();
+      } else {
+        gmap.popMessage("Game is over, press R to restart");
+      }
+      return;
+    } else {
+      if (gmap.popup.text !== "") {
+        if (gmap.popup.canCancel) {
+          gmap.popup.canCancel = false;
+          gmap.popup.text = "";
+          gmap.popup.x = -1;
+          gmap.popup.y = -1;
+        }
+      }
+      if (gmap.day === 1 && gmap.turn === 0) gmap.popMessage("W/A/S/D keys to move", 0);
+      {
+        const ds = gmap.debugSelector;
+        if (ip.isKeyDown("Q")) {
+          ds.gpos = new Vec2(gmap.playerCharacter.gpos);
+        }
+        if (ip.isKeyDown("W")) {
+          ds.gpos = ds.gpos.add([0, -1]);
+        }
+        if (ip.isKeyDown("A")) {
+          ds.gpos = ds.gpos.add([-1, 0]);
+        }
+        if (ip.isKeyDown("S")) {
+          ds.gpos = ds.gpos.add([0, 1]);
+        }
+        if (ip.isKeyDown("D")) {
+          ds.gpos = ds.gpos.add([1, 0]);
+        }
+        if (ip.isKeyDown("V")) {
+          gmap.metaTileMap.layer[MetaLayers.seen].fill(1);
+        }
+        if (ip.isKeyDown("Z")) {
+          this.camera.zoom = this.camera.zoom / 2;
+          if (this.camera.zoom < 0.25) {
+            this.camera.zoom = 1;
+          }
+        }
+      }
+      if (ip.isKeyDown("w")) {
+        this.takeAction("up");
+      } else if (ip.isKeyDown("s")) {
+        this.takeAction("down");
+      } else if (ip.isKeyDown("a")) {
+        this.takeAction("left");
+      } else if (ip.isKeyDown("d")) {
+        this.takeAction("right");
+      } else if (ip.isKeyDown(" ")) {
+        this.takeAction("wait");
+      } else if (ip.isKeyDown("f")) {
+        this.showFPS = !this.showFPS;
+      }
+    }
+  }
+  /**
+   * 
+   * @param {'left'|'right'|'up'|'down'|'wait'} action 
+   * @returns 
+   */
+  takeAction(action) {
+    const player = this.gameMap.playerCharacter;
+    const gmap = this.gameMap;
+    if (action === "up" && player.pos[1] > 0) {
+      player.move(Facing.north, gmap);
+    } else if (action === "down" && player.pos[1] < gmap.tileMap.tileDim[1] - 1) {
+      player.move(Facing.south, gmap);
+    } else if (action === "left" && player.pos[0] > 0) {
+      player.move(Facing.west, gmap);
+    } else if (action === "right" && player.pos[0] < gmap.tileMap.tileDim[0] - 1) {
+      player.move(Facing.east, gmap);
+    } else if (action === "right") {
+      player.rest(gmap);
+    }
+    gmap.updateCharacterVisibility();
+    if (player.actionsThisTurn === 0) {
+      for (let e of gmap.enemies) {
+        e.takeTurn(gmap);
+      }
+      gmap.turn = gmap.turn + 1;
+      gmap.updateCharacterVisibility(true);
+      player.actionsThisTurn = 1;
+    }
+    if (player.state === "dead") {
+      this.gameOver = true;
+    }
+    return true;
+  }
+  //TODO: Move this somewhere sensible
+  on_sheetLoaded(e, o, v) {
+    const renderer = this.gameMap.tileMap._renderer;
+    if (renderer instanceof WebGLSpriteRenderer) {
+      renderer.registerTexture("main", this.gameMap.spriteSheet.canvas, this.gameMap.spriteSheet.spriteSize, null, this.gameMap.spriteSheet.padding);
+    }
+  }
+}
+var islandApp = new IslandApp();
+islandApp.start();
