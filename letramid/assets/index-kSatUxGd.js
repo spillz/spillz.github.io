@@ -9545,16 +9545,20 @@ class LetterTile extends Widget {
       for (const t of row) {
         if (t === this) continue;
         if (t.collide(touch.rect) && t.active) {
+          t.correctRow;
+          this.correctRow;
           this.board.pyramid[t.row][t.col] = this;
           this.board.pyramid[this.row][this.col] = t;
           this.board.updatePyramidRowTiles(this.row);
           this.board.updatePyramidRowTiles(y);
           this.board.updateTileStates();
-          if (t.active && this.active) {
+          if (t.active && this.active && (!this.correctRow && !this.correctRow || t.row === this.row)) {
             this.board.scorebar.score += 1;
             sounds.CANCEL_SELECTION.play();
           } else {
-            sounds.CORRECT.play();
+            if (!t.active || !this.active) {
+              sounds.CORRECT.play();
+            }
           }
           this.board.checkCompletion(this.row);
           this.board.checkCompletion(t.row);
@@ -9635,26 +9639,6 @@ class Star extends Widget {
     ctx.closePath();
     ctx.fill();
   }
-  // /**@type {eskv.Widget['draw']} */
-  // draw(app, ctx) {
-  //     ctx.fillStyle = this.active? this.altColor:this.bgColor;
-  //     // Triangle:
-  //     //     points: [self.x, (self.y+self.center_y)/2, self.right, (self.y+self.center_y)/2, self.center_x, self.top]
-  //     ctx.beginPath()
-  //     ctx.moveTo(this.x, (this.y+this.center_y)/2);
-  //     ctx.lineTo(this.right, (this.y+this.center_y)/2);
-  //     ctx.lineTo(this.center_x, this.bottom);
-  //     ctx.closePath();
-  //     ctx.fill();
-  //     // Triangle:
-  //     //     points: [self.x, (self.top+self.center_y)/2, self.right, (self.top+self.center_y)/2, self.center_x, self.y]
-  //     ctx.beginPath()
-  //     ctx.moveTo(this.x, (this.bottom+this.center_y)/2);
-  //     ctx.lineTo(this.right, (this.bottom+this.center_y)/2);
-  //     ctx.lineTo(this.center_x, this.y);
-  //     ctx.closePath();
-  //     ctx.fill();
-  // }
 }
 const instructionsText = `🎯 Objective:
 Unscramble the 5 mystery words and keep as many stars as you can!
