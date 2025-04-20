@@ -9266,7 +9266,7 @@ const midnightTheme = {
   // deep midnight blue
   "tile": [92, 64, 153, 1],
   // soft muted navy
-  "tileSelected": [135, 94, 153, 1],
+  "tileSelected": [145, 74, 163, 1],
   // royal purple
   "tileInactive": [70, 70, 90, 1],
   // desaturated dark grey-blue
@@ -9400,7 +9400,7 @@ function loadTheme(themeName) {
   theme["id"] = themeName;
   return theme;
 }
-const urlWords = "" + new URL("TWL06-BX4RmYm2.txt", import.meta.url).href;
+const urlWords = "" + new URL("words-DCO7Isbw.txt", import.meta.url).href;
 const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
 const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
@@ -9450,8 +9450,8 @@ class LetterTile extends Widget {
         hints: { x: 0, y: 0, w: 1, h: 1 }
       })
     ];
-    this.bgColor = SevenWordsApp.get().colors["tile"];
-    SevenWordsApp.get().bind("colors", (e, o, v) => {
+    this.bgColor = LetramidApp.get().colors["tile"];
+    LetramidApp.get().bind("colors", (e, o, v) => {
       this.updateBgColor();
     });
     this.letter = letter;
@@ -9487,7 +9487,7 @@ class LetterTile extends Widget {
     this.children[0].text = value;
   }
   updateBgColor() {
-    let colors = SevenWordsApp.get().colors;
+    let colors = LetramidApp.get().colors;
     this.bgColor = this.active && this.correctRow ? colors["tileSelected"] : this.active ? colors["tile"] : colors["tileInactive"];
   }
   on_correctRow(event, object, value) {
@@ -9672,9 +9672,9 @@ When a letter is in the correct spot for its word, it will drop and lock in plac
 If neither swapped letter is in the correct spot, you'll lose a star. Make your swaps carefully!
 
 💡 Hints:
-- Scrabble rules apply -- no proper nouns or abbreviations are valid in the Letramid.
+- Proper nouns or abbreviations are not valid words in the Letramid.
 - One letter per row starts in the correct position — use them to guide your exchanges.
-- Letters that appear in a row where they can be placed correctly in that row are highlighted.
+- Highlighted letters in a row are in the current row but the wrong position.
 
 🏁 Winning:
 Complete the Letramid by locking all letters in place. Your remaining stars are your score. Play a new daily game each day, or try a random game anytime!
@@ -9737,7 +9737,7 @@ class MenuOption extends Label {
     this.updateProperties(props);
   }
   on_active(e, o, v) {
-    const app = SevenWordsApp.get();
+    const app = LetramidApp.get();
     this.color = this.active ? app.colors["menuButtonForeground"] : app.colors["menuButtonForegroundDisabled"];
   }
 }
@@ -9879,7 +9879,7 @@ class ScoreBar extends BoxLayout {
             id: "menubutton",
             hints: { h: "0.75h", w: "1wh" },
             bgColor: (app) => app.colors["menuButtonBackground"],
-            on_press: (e, o, v) => SevenWordsApp.get().showMenu()
+            on_press: (e, o, v) => LetramidApp.get().showMenu()
           })
         ]
       })
@@ -10010,7 +10010,7 @@ class Board extends Widget {
   }
   setupBoard() {
     this.children = this.children.filter((c) => !(c instanceof LetterTile));
-    const words = SevenWordsApp.get().words;
+    const words = LetramidApp.get().words;
     setSeed(stringToSeed(this.scorebar.gameId !== "" ? this.scorebar.gameId : String("RANDOM GAME " + Date.now())));
     this.targetWords = [];
     for (let r = 0; r < boardSize; r++) {
@@ -10022,18 +10022,46 @@ class Board extends Widget {
       this.targetWords.push(choose(filteredWords));
     }
     const fixedPositions = this.targetWords.map((row) => getRandomInt(0, row.length));
-    const freeLetters = this.targetWords.flatMap((word, rowIndex) => [...word.slice(0, fixedPositions[rowIndex]), ...word.slice(fixedPositions[rowIndex] + 1)]);
+    const freeLetters = this.targetWords.flatMap((word, rowIndex) => word.split("").filter((_, i) => i !== fixedPositions[rowIndex]));
     const scrambledLetters = shuffle(Array.from(freeLetters));
-    for (let k = 0; k < 999; k++) {
+    for (let k = 0; k < 9999; k++) {
       let done = true;
+      let row = 0;
+      let col = 0;
+      if (col === fixedPositions[row]) col++;
+      let correctRowCount = 0;
+      let activeWord = this.targetWords[row].split("").filter((_, n) => n !== fixedPositions[row]);
       for (let i = 0; i < scrambledLetters.length; i++) {
         if (scrambledLetters[i] === freeLetters[i]) {
-          const j = i === scrambledLetters.length - 1 ? 0 : i + 1;
-          [scrambledLetters[j], scrambledLetters[i]] = [scrambledLetters[i], scrambledLetters[j]];
           done = false;
+          break;
+        }
+        if (activeWord.includes(scrambledLetters[i])) {
+          const index2 = activeWord.indexOf(scrambledLetters[i]);
+          activeWord[index2] = " ";
+          correctRowCount++;
+        }
+        col++;
+        if (col === fixedPositions[row]) col++;
+        if (this.targetWords[row].length === col) {
+          if (correctRowCount === 0 && row > 0 || correctRowCount >= this.targetWords[row].length - 1) {
+            done = false;
+            break;
+          }
+          correctRowCount = 0;
+          row++;
+          col = 0;
+          if (row < this.targetWords.length) {
+            activeWord = this.targetWords[row].split("").filter((_, n) => n !== fixedPositions[row]);
+          }
         }
       }
-      if (done) break;
+      if (done) {
+        console.log("SUCCESSFUL SCRAMBLE AFTER", k, "TRIES");
+        console.log("SCRAMBLED LETTERS", scrambledLetters, "FREE LETTERS", freeLetters, "FIXED POSITIONS", fixedPositions);
+        break;
+      }
+      shuffle(scrambledLetters);
     }
     let index = 0;
     this.pyramid = [];
@@ -10122,8 +10150,12 @@ class Board extends Widget {
     this.pyramid.forEach((row, y) => {
       const word = this.targetWords[y];
       row.forEach((t, x) => {
+        t.correctRow = false;
+      });
+      row.forEach((t, x) => {
         t.active = this.targetWords[y][x] !== t.letter;
-        t.correctRow = word.split("").filter((w, i) => w === t.letter && row[i].letter !== t.letter).length > 0;
+        const correctThreshold = word.split("").filter((w, i) => row[i].letter === t.letter && row[i].active && row[i].correctRow && i < x).length;
+        t.correctRow = word.split("").filter((w, i) => w === t.letter && row[i].letter !== t.letter).length > correctThreshold;
       });
     });
   }
@@ -10172,12 +10204,11 @@ class Board extends Widget {
     [this.messagebar.x, this.messagebar.y] = [0, this.size[1]];
     [this.scorebar.w, this.scorebar.h] = [this.size[0], 0.12 * this.size[1]];
     [this.scorebar.x, this.scorebar.y] = [0, 0];
-    console.log("Laying out pyramid");
     this.pyramid.forEach((row, r) => {
-      console.log("row", r);
       row.forEach((tile, c) => {
         const pos = this.ppos2pos([c, r]);
-        console.log(tile.letter, c, r, pos[0], pos[1]);
+        tile.x = this.center_x;
+        tile.y = this.center_y;
         tile.opos = tile.gpos = tile.cpos = pos;
         [tile.w, tile.h] = new Vec2([this.tileSize, this.tileSize]);
       });
@@ -10207,7 +10238,7 @@ class Board extends Widget {
     return true;
   }
 }
-class SevenWordsApp extends App {
+class LetramidApp extends App {
   constructor(words) {
     var _a;
     super();
@@ -10281,17 +10312,17 @@ class SevenWordsApp extends App {
   }
   /**
    * 
-   * @returns {SevenWordsApp}
+   * @returns {LetramidApp}
    */
   static get() {
     return (
-      /**@type {SevenWordsApp}*/
+      /**@type {LetramidApp}*/
       super.get()
     );
   }
 }
 setPRNG("sfc32");
 loadWords(urlWords).then((words) => {
-  var app = new SevenWordsApp(words);
+  var app = new LetramidApp(words);
   app.start();
 });
