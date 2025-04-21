@@ -38,6 +38,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     fetch(link.href, fetchOpts);
   }
 })();
+function splitmix64(seed) {
+  let state = BigInt(seed) & /* @__PURE__ */ BigInt("0xFFFFFFFFFFFFFFFF");
+  return function next() {
+    state = state + /* @__PURE__ */ BigInt("0x9E3779B97F4A7C15") & /* @__PURE__ */ BigInt("0xFFFFFFFFFFFFFFFF");
+    let z = state;
+    z = (z ^ z >> /* @__PURE__ */ BigInt("30")) * /* @__PURE__ */ BigInt("0xBF58476D1CE4E5B9") & /* @__PURE__ */ BigInt("0xFFFFFFFFFFFFFFFF");
+    z = (z ^ z >> /* @__PURE__ */ BigInt("27")) * /* @__PURE__ */ BigInt("0x94D049BB133111EB") & /* @__PURE__ */ BigInt("0xFFFFFFFFFFFFFFFF");
+    z = z ^ z >> /* @__PURE__ */ BigInt("31");
+    return z;
+  };
+}
 class PRNG {
   constructor() {
     __publicField(this, "_seed", 0);
@@ -187,7 +198,8 @@ class PRNG_sfc32 extends PRNG {
   seed(seed) {
     this._seed = seed;
     this.xorSeed = seed ^ this.d;
-    this.random = sfc32(2654435769, 608135816, 3084996962, this.xorSeed);
+    const sm = splitmix64(this.xorSeed);
+    this.random = sfc32(sm(), sm(), sm(), sm());
   }
 }
 class PRNG_mulberry32 extends PRNG {
@@ -215,7 +227,8 @@ class PRNG_xoshiro128ss extends PRNG {
   seed(seed) {
     this._seed = seed;
     this.xorSeed = seed ^ this.d;
-    this.random = xoshiro128ss(2654435769, 608135816, 3084996962, this.xorSeed);
+    const sm = splitmix64(this.xorSeed);
+    this.random = xoshiro128ss(sm(), sm(), sm(), sm());
   }
 }
 class PRNG_jsf32 extends PRNG {
@@ -229,7 +242,8 @@ class PRNG_jsf32 extends PRNG {
   seed(seed) {
     this._seed = seed;
     this.xorSeed = seed ^ this.d;
-    this.random = jsf32(2654435769, 608135816, 3084996962, this.xorSeed);
+    const sm = splitmix64(this.xorSeed);
+    this.random = jsf32(sm(), sm(), sm(), sm());
   }
 }
 var defaultPRNG = new PRNG_sfc32();
@@ -279,6 +293,9 @@ function stringToSeed(str) {
     hash = hash & 4294967295;
   }
   return hash >>> 0;
+}
+function v2(vecLike) {
+  return new Vec2(vecLike);
 }
 class Vec2 extends Array {
   /**
@@ -9736,9 +9753,10 @@ class Menu extends ModalView {
     this.outlineColor = null;
     this.children = [
       // new MenuOption({text: 'Restart Game', value:1}),
-      new MenuOption({ text: "Daily Game", value: 2 }),
+      new MenuOption({ text: "Today's Game", value: 2 }),
+      new MenuOption({ text: "Yesterday's Game", value: 4 }),
       new MenuOption({ text: "Random Game", value: 3 }),
-      new MenuOption({ text: "Instructions", value: 4 }),
+      new MenuOption({ text: "Instructions", value: 5 }),
       new MenuOption({ text: "Theme", value: 7 })
     ];
   }
@@ -10064,8 +10082,12 @@ class Board extends Widget {
     this.updateTileStates();
     this.firstStart = true;
   }
-  dailyGame() {
-    this.scorebar.gameId = getUTCDateString();
+  /**
+   * 
+   * @param {string|null} date 
+   */
+  dailyGame(date = null) {
+    this.scorebar.gameId = date != null ? date : getUTCDateString();
     this.reset(true);
   }
   randomGame() {
@@ -10191,8 +10213,10 @@ class Board extends Widget {
     this.pyramid.forEach((row, r) => {
       row.forEach((tile, c) => {
         const pos = this.ppos2pos([c, r]);
-        tile.x = this.center_x;
-        tile.y = this.center_y;
+        if (!v2(tile.opos).equals(pos)) {
+          tile.x = this.center_x;
+          tile.y = this.center_y;
+        }
         tile.opos = tile.gpos = tile.cpos = pos;
         [tile.w, tile.h] = new Vec2([this.tileSize, this.tileSize]);
       });
@@ -10264,10 +10288,12 @@ class LetramidApp extends App {
         break;
       case 4:
         this.hideMenu();
-        this.instructions.popup();
+        const date = getUTCDateString(new Date(Date.now() - 24 * 60 * 60 * 1e3));
+        this.board.dailyGame(date);
         break;
       case 5:
         this.hideMenu();
+        this.instructions.popup();
         break;
       case 6:
         this.hideMenu();
@@ -10305,7 +10331,7 @@ class LetramidApp extends App {
     );
   }
 }
-setPRNG("sfc32");
+setPRNG("mulberry32");
 loadWords(urlWords).then((words) => {
   var app = new LetramidApp(words);
   app.start();
