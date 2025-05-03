@@ -10315,7 +10315,7 @@ class LetramidApp extends App {
     var _a;
     super();
     this.id = "app";
-    const themeName = (_a = localStorage.getItem("letramid/theme")) != null ? _a : "midnight";
+    const themeName = (_a = localStorage.getItem("letramid/theme")) != null ? _a : "wordlePlayful";
     this.colors = loadTheme(themeName);
     this.words = words;
     this.instructions = new Instructions();
