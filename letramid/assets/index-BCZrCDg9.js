@@ -9417,7 +9417,7 @@ function loadTheme(themeName) {
   theme["id"] = themeName;
   return theme;
 }
-const urlWords = "" + new URL("words-DCO7Isbw.txt", import.meta.url).href;
+const urlWords = "" + new URL("words-CSPQRky1.txt", import.meta.url).href;
 const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
 const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
@@ -10245,6 +10245,70 @@ class Board extends Widget {
     setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1e3);
     return true;
   }
+  loadState() {
+    const gameDataString = localStorage.getItem("LetramidApp/GameState");
+    if (!gameDataString) {
+      return false;
+    }
+    const game = JSON.parse(gameDataString);
+    const pyramidData = game.pyramidData;
+    if (this.tileWidgets === void 0) return;
+    if (pyramidData.length !== this.tileWidgets.length) {
+      console.info("Bad game data");
+      localStorage.removeItem("LetramidApp/GameState");
+      return false;
+    }
+    console.info("Loading game data");
+    this.gameId = game["gameId"];
+    this.scorebar.setGameId();
+    this.scorebar.score = game["score"];
+    this.blockGposUpdates = true;
+    this.originalGps = game["originalGps"];
+    this.children = this.children.filter((widget) => !(widget instanceof LetterTile));
+    this.tileWidgets = [];
+    for (const t of pyramidData) {
+      const tile = new LetterTile(this, 0, 0, t.letter, t.value, t.rpw, t.col, false);
+      this.addChild(tile);
+      tile.gpos = new Vec2(t.gpos);
+      tile.opos = new Vec2(t.opos);
+      tile.cpos = new Vec2(t.cpos);
+      tile.selected = t.selected;
+      this.tileWidgets.push(tile);
+      if (tile.gpos[0] !== -1 && tile.gpos[1] !== -1) {
+        this.setAtGpos(t.gpos, tile);
+      }
+    }
+    this.blockGposUpdates = false;
+    this._needsLayout = true;
+    this.gameOver = game["gameOver"];
+    return true;
+  }
+  saveState() {
+    if (this.gameOver) {
+      localStorage.removeItem("LetramidApp/GameState");
+      return;
+    }
+    this.tileWidgets.map((t) => {
+      return {
+        letter: t.letter,
+        value: t.value,
+        selected: t.selected,
+        gpos: Array.from(t.gpos),
+        cpos: Array.from(t.cpos),
+        opos: Array.from(t.opos)
+      };
+    });
+    const version = 1;
+    let data = {
+      version,
+      pyramidData: this.pyramid,
+      originalGps: this.originalGps,
+      score: this.scorebar.score,
+      gameOver: this.gameOver
+    };
+    localStorage.setItem("LetramidApp/GameState", JSON.stringify(data));
+    console.log("Saved game data");
+  }
 }
 class LetramidApp extends App {
   constructor(words) {
@@ -10264,6 +10328,7 @@ class LetramidApp extends App {
     this.baseWidget.children = [
       this.board
     ];
+    window.onbeforeunload = () => LetramidApp.get().onStop();
   }
   showMenu() {
     this.menu.selection = -1;
@@ -10319,6 +10384,9 @@ class LetramidApp extends App {
       this.colors = loadTheme(themes$1[ind]);
       localStorage.setItem("letramid/theme", themes$1[ind]);
     }
+  }
+  onStop() {
+    this.board.saveState();
   }
   /**
    * 
