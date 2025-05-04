@@ -10210,6 +10210,12 @@ class Board extends Widget {
   statusPressed(e, o, v) {
     if (this.statusbar.wordScore === -1) {
       this.saveState();
+      const date = this.gameIdDaily();
+      if (!this.loadState(date)) {
+        this.dailyGame();
+        return;
+      }
+      if (!this.gameOver) return;
       this.randomGame();
     }
   }
