@@ -9420,7 +9420,7 @@ function loadTheme(themeName) {
   theme["id"] = themeName;
   return theme;
 }
-const urlWords = "" + new URL("words-DfqZh1gB.txt", import.meta.url).href;
+const urlWords = "" + new URL("words-N3QuVe3C.txt", import.meta.url).href;
 const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
 const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
@@ -9565,24 +9565,29 @@ class LetterTile extends Widget {
       for (const t of row) {
         if (t === this) continue;
         if (t.collide(touch.rect) && t.active) {
-          t.correctRow;
-          this.correctRow;
+          const preCorrect = (t.active ? 0 : 1) + (this.active ? 0 : 1);
+          const preScore = preCorrect + (t.correctRow ? 1 : 0) + (this.correctRow ? 1 : 0);
           this.board.pyramid[t.row][t.col] = this;
           this.board.pyramid[this.row][this.col] = t;
           this.board.updatePyramidRowTiles(this.row);
           this.board.updatePyramidRowTiles(y);
           this.board.updateTileStates();
-          if (t.active && this.active && (!this.correctRow && !this.correctRow || t.row === this.row)) {
+          const postCorrect = (t.active ? 0 : 1) + (this.active ? 0 : 1);
+          const postScore = postCorrect + (t.correctRow ? 1 : 0) + (this.correctRow ? 1 : 0);
+          if (postScore <= preScore) {
             this.board.scorebar.score += 1;
             sounds.CANCEL_SELECTION.play();
-          } else {
-            if (!t.active || !this.active) {
-              sounds.CORRECT.play();
-            }
+          } else if (preCorrect < postCorrect) {
+            sounds.CORRECT.play();
           }
           this.board.checkCompletion(this.row);
-          this.board.checkCompletion(t.row);
-          this.board.checkGameOver();
+          if (this.row !== t.row) {
+            this.board.checkCompletion(t.row);
+          }
+          if (this.board.checkGameOver()) {
+            setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1e3);
+          }
+          this._needsLayout = true;
           return true;
         }
       }
@@ -10128,9 +10133,7 @@ class Board extends Widget {
     const isCompletedWord = word === letters;
     if (isCompletedWord) {
       this.checkGameOver();
-      if (!this.gameOver) {
-        setTimeout(() => sounds.WORD_COMPLETED.play(), 100);
-      }
+      setTimeout(() => sounds.WORD_COMPLETED.play(), 100);
     }
   }
   updateTileStates() {
@@ -10230,7 +10233,6 @@ class Board extends Widget {
     this.gameOver = true;
     this.statusbar.word = "NEW GAME";
     this.statusbar.wordScore = -1;
-    setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1e3);
     return true;
   }
   /**
