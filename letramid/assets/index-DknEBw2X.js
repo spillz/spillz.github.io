@@ -9566,14 +9566,14 @@ class LetterTile extends Widget {
         if (t === this) continue;
         if (t.collide(touch.rect) && t.active) {
           const preCorrect = (t.active ? 0 : 1) + (this.active ? 0 : 1);
-          const preScore = preCorrect + (t.correctRow ? 1 : 0) + (this.correctRow ? 1 : 0);
+          const preScore = preCorrect + (!t.active || t.correctRow ? 1 : 0) + (!this.active || this.correctRow ? 1 : 0);
           this.board.pyramid[t.row][t.col] = this;
           this.board.pyramid[this.row][this.col] = t;
           this.board.updatePyramidRowTiles(this.row);
           this.board.updatePyramidRowTiles(y);
           this.board.updateTileStates();
           const postCorrect = (t.active ? 0 : 1) + (this.active ? 0 : 1);
-          const postScore = postCorrect + (t.correctRow ? 1 : 0) + (this.correctRow ? 1 : 0);
+          const postScore = postCorrect + (!t.active || t.correctRow ? 1 : 0) + (!this.active || this.correctRow ? 1 : 0);
           if (postScore <= preScore) {
             this.board.scorebar.score += 1;
             sounds.CANCEL_SELECTION.play();
