@@ -283,6 +283,9 @@ function shuffle(arr) {
 function choose(array) {
   return defaultPRNG.choose(array);
 }
+function chooseN(array, n) {
+  return defaultPRNG.chooseN(array, n);
+}
 function setSeed(seed) {
   return defaultPRNG.seed(seed);
 }
@@ -9417,7 +9420,7 @@ function loadTheme(themeName) {
   theme["id"] = themeName;
   return theme;
 }
-const urlWords = "" + new URL("words-CSPQRky1.txt", import.meta.url).href;
+const urlWords = "" + new URL("words-DfqZh1gB.txt", import.meta.url).href;
 const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
 const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
@@ -9453,11 +9456,11 @@ class LetterTile extends Widget {
    * @param {number} x 
    * @param {number} y 
    * @param {string} letter 
-   * @param {number} value 
    * @param {number} row 
+   * @param {number} col
    * @param {boolean} active 
    */
-  constructor(board, x, y, letter, value, row, col, active = true) {
+  constructor(board, x, y, letter, row, col, active = true) {
     super();
     this.children = [
       new Label({
@@ -9916,28 +9919,6 @@ class ScoreBar extends BoxLayout {
     console.info(`Played game ${this.gameId} ${this.played} times`);
   }
   setGameId() {
-    var _a, _b;
-    console.info(`Setting game ${this.gameId}`);
-    if (this.gameId !== "") {
-      try {
-        localStorage.setItem("letramid/status", JSON.stringify({ gameId: this.gameId }));
-      } catch (error) {
-      }
-    }
-    try {
-      const store = localStorage.getItem("letramid/games/" + String(this.gameId));
-      if (store) {
-        const data = JSON.parse(store);
-        this.hiScore = (_a = data.highScore) != null ? _a : 0;
-        this.played = (_b = data.played) != null ? _b : 0;
-      } else {
-        throw new Error();
-      }
-    } catch (error) {
-      this.hiScore = 0;
-      this.played = 0;
-    }
-    console.info(`High score ${this.hiScore}`);
     this.score = 0;
   }
   gameOver() {
@@ -10005,9 +9986,9 @@ class Board extends Widget {
     this.blockGposUpdates = false;
     this.scorebar.getStatus();
     this.pyramid = [];
-    this.opyramid = [];
     this.targetWords = [];
     this.gameOver = false;
+    if (this.loadState()) return;
     this.setupBoard();
   }
   setupBoard() {
@@ -10018,11 +9999,19 @@ class Board extends Widget {
     for (let r = 0; r < boardSize; r++) {
       const wordLength = 3 + r;
       const filteredWords = Array.from(words).filter((word) => wordLength === word.length);
-      if (wordLength === 3) {
-        console.log("FILTERED WORDS", filteredWords);
-      }
       this.targetWords.push(choose(filteredWords));
     }
+    const endsInS = this.targetWords.map((w, i) => w.endsWith("S") ? i : void 0).filter((w) => w !== void 0);
+    if (endsInS.length > 1) {
+      const toReplace = chooseN(endsInS, endsInS.length - 1);
+      for (let ind of toReplace) {
+        const wordLength = this.targetWords[ind].length;
+        const oldWord = this.targetWords[ind];
+        this.targetWords[ind] = choose(Array.from(words).filter((w) => !w.endsWith("S") && wordLength === w.length));
+        console.log("REPLACING WORD", oldWord, "WITH", this.targetWords[ind]);
+      }
+    }
+    console.log("SELECTED WORDS", this.targetWords);
     const fixedPositions = this.targetWords.map((row) => getRandomInt(0, row.length));
     const freeLetters = this.targetWords.flatMap((word, rowIndex) => word.split("").filter((_, i) => i !== fixedPositions[rowIndex]));
     const scrambledLetters = shuffle(Array.from(freeLetters));
@@ -10072,46 +10061,38 @@ class Board extends Widget {
       this.pyramid.push([]);
       for (let c = 0; c < word.length; c++) {
         let [x, y] = this.ppos2pos([c, r]);
-        const tile = c === fixedPositions[r] ? new LetterTile(this, x, y, word[c], 1, r, c, true) : new LetterTile(this, x, y, scrambledLetters[index], 1, r, c, true);
+        const tile = c === fixedPositions[r] ? new LetterTile(this, x, y, word[c], r, c, true) : new LetterTile(this, x, y, scrambledLetters[index], r, c, true);
         if (c !== fixedPositions[r]) index++;
         this.pyramid[r].push(tile);
         this.addChild(tile);
       }
     }
-    this.opyramid = this.pyramid.map((p) => p.slice());
     this.updateTileStates();
     this.firstStart = true;
+  }
+  gameIdDaily() {
+    return getUTCDateString();
+  }
+  gameIdDailyYesterday() {
+    return getUTCDateString(new Date(Date.now() - 24 * 60 * 60 * 1e3));
   }
   /**
    * 
    * @param {string|null} date 
    */
   dailyGame(date = null) {
-    this.scorebar.gameId = date != null ? date : getUTCDateString();
-    this.reset(true);
+    this.scorebar.gameId = date != null ? date : this.gameIdDaily();
+    this.resetUI();
   }
   randomGame() {
     this.scorebar.gameId = "";
-    this.reset(true);
+    this.resetUI();
   }
-  restartGame() {
-    this.reset();
-  }
-  reset(redraw = false) {
+  resetUI() {
     this.scorebar.score = 0;
     this.statusbar.word = "";
     this.statusbar.wordScore = 0;
-    if (redraw) {
-      this.setupBoard();
-    } else {
-      this.pyramid = this.opyramid.map((p) => p.slice());
-      for (const row of this.pyramid) {
-        for (const t of row) {
-          t.cpos = [-1, -1];
-          t.gpos = [-1, -1];
-        }
-      }
-    }
+    this.setupBoard();
     this._needsLayout = true;
     this.gameOver = false;
     this.updateTileStates();
@@ -10228,6 +10209,7 @@ class Board extends Widget {
   }
   statusPressed(e, o, v) {
     if (this.statusbar.wordScore === -1) {
+      this.saveState();
       this.randomGame();
     }
   }
@@ -10245,78 +10227,131 @@ class Board extends Widget {
     setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1e3);
     return true;
   }
-  loadState() {
-    const gameDataString = localStorage.getItem("LetramidApp/GameState");
-    if (!gameDataString) {
+  /**
+   * @param {string|null} [gameId=null] gameId to load, or null to load the last game
+   * @returns {boolean}
+   */
+  loadState(gameId = null) {
+    var _a;
+    const gameState = (
+      /**@type {GameState}*/
+      JSON.parse((_a = localStorage.getItem("LetramidApp/GameState")) != null ? _a : "{}")
+    );
+    if (Object.keys(gameState).length === 0) {
       return false;
     }
-    const game = JSON.parse(gameDataString);
-    const pyramidData = game.pyramidData;
-    if (this.tileWidgets === void 0) return;
-    if (pyramidData.length !== this.tileWidgets.length) {
-      console.info("Bad game data");
-      localStorage.removeItem("LetramidApp/GameState");
-      return false;
-    }
-    console.info("Loading game data");
-    this.gameId = game["gameId"];
-    this.scorebar.setGameId();
-    this.scorebar.score = game["score"];
-    this.blockGposUpdates = true;
-    this.originalGps = game["originalGps"];
-    this.children = this.children.filter((widget) => !(widget instanceof LetterTile));
-    this.tileWidgets = [];
-    for (const t of pyramidData) {
-      const tile = new LetterTile(this, 0, 0, t.letter, t.value, t.rpw, t.col, false);
-      this.addChild(tile);
-      tile.gpos = new Vec2(t.gpos);
-      tile.opos = new Vec2(t.opos);
-      tile.cpos = new Vec2(t.cpos);
-      tile.selected = t.selected;
-      this.tileWidgets.push(tile);
-      if (tile.gpos[0] !== -1 && tile.gpos[1] !== -1) {
-        this.setAtGpos(t.gpos, tile);
+    if (gameId !== null) {
+      if (gameState["todayGame"].gameId === gameId) {
+        gameState.activeGame = "todayGame";
+      } else if (gameState["yesterdayGame"].gameId === gameId) {
+        gameState.activeGame = "yesterdayGame";
+      } else if (gameState["randomGame"].gameId === gameId) {
+        gameState.activeGame = "randomGame";
+      } else {
+        return false;
       }
     }
+    const game = gameState[gameState.activeGame];
+    const letterData = game.letterData;
+    this.gameId = game["gameId"];
+    this.scorebar.gameId = this.gameId;
+    this.scorebar.score = game["score"];
+    this.targetWords = game["targetWords"];
+    this.blockGposUpdates = true;
+    this.children = this.children.filter((widget) => !(widget instanceof LetterTile));
+    this.pyramid = [[], [], [], [], []];
+    for (const t of letterData) {
+      const tile = new LetterTile(this, 0, 0, t.letter, t.row, t.col, false);
+      this.addChild(tile);
+      this.pyramid[t.row][t.col] = tile;
+      tile.gpos = new Vec2([t.col, t.row]);
+      tile.opos = new Vec2([t.col, t.row]);
+      tile.cpos = new Vec2([t.col, t.row]);
+      tile.selected = t.selected;
+    }
+    this.updateTileStates();
     this.blockGposUpdates = false;
     this._needsLayout = true;
+    this.firstStart = true;
     this.gameOver = game["gameOver"];
+    this.checkGameOver();
     return true;
   }
   saveState() {
-    if (this.gameOver) {
-      localStorage.removeItem("LetramidApp/GameState");
-      return;
-    }
-    this.tileWidgets.map((t) => {
-      return {
-        letter: t.letter,
-        value: t.value,
-        selected: t.selected,
-        gpos: Array.from(t.gpos),
-        cpos: Array.from(t.cpos),
-        opos: Array.from(t.opos)
-      };
+    var _a, _b, _c, _d, _e, _f;
+    this.letterTiles = this.children.filter((c) => c instanceof LetterTile);
+    const letterData = this.letterTiles.map((t) => {
+      return (
+        /**@type {LetterTileObj}*/
+        {
+          letter: t.letter,
+          selected: t.selected,
+          row: t.row,
+          col: t.col
+        }
+      );
     });
-    const version = 1;
-    let data = {
-      version,
-      pyramidData: this.pyramid,
-      originalGps: this.originalGps,
+    const loadGameData = (
+      /**@type {GameState}*/
+      JSON.parse((_a = localStorage.getItem("LetramidApp/GameState")) != null ? _a : "{}")
+    );
+    const activeGame = {
+      gameId: this.scorebar.gameId,
       score: this.scorebar.score,
+      letterData,
+      targetWords: this.targetWords,
       gameOver: this.gameOver
     };
-    localStorage.setItem("LetramidApp/GameState", JSON.stringify(data));
+    const gameIdDaily = this.gameIdDaily();
+    const gameIdDailyYesterday = this.gameIdDailyYesterday();
+    let version = (_b = loadGameData["version"]) != null ? _b : 1;
+    let todayGame = (_c = loadGameData["todayGame"]) != null ? _c : {};
+    let yesterdayGame = (_d = loadGameData["yesterdayGame"]) != null ? _d : {};
+    let randomGame = (_e = loadGameData["randomGame"]) != null ? _e : {};
+    let activeGameType = (_f = loadGameData["activeGame"]) != null ? _f : "";
+    if (activeGame.gameId === gameIdDaily) {
+      todayGame = activeGame;
+      activeGameType = "todayGame";
+    } else if (activeGame.gameId === gameIdDailyYesterday) {
+      yesterdayGame = activeGame;
+      activeGameType = "yesterdayGame";
+    } else {
+      randomGame = activeGame;
+      activeGameType = "randomGame";
+    }
+    if (todayGame.gameId !== gameIdDaily) {
+      if (todayGame.gameId === gameIdDailyYesterday) {
+        yesterdayGame = { ...todayGame };
+      }
+      todayGame = {};
+    }
+    if (yesterdayGame.gameId !== gameIdDailyYesterday) {
+      yesterdayGame = {};
+    }
+    version = 1;
+    const saveGameData = {
+      version,
+      activeGame: activeGameType,
+      todayGame,
+      yesterdayGame,
+      randomGame
+    };
+    localStorage.setItem("LetramidApp/GameState", JSON.stringify(saveGameData));
     console.log("Saved game data");
   }
 }
 class LetramidApp extends App {
+  /**
+   * 
+   * @param {Set<string>|undefined} words 
+   */
   constructor(words) {
     var _a;
     super();
     this.id = "app";
     const themeName = (_a = localStorage.getItem("letramid/theme")) != null ? _a : "wordlePlayful";
     this.colors = loadTheme(themeName);
+    if (words === void 0) throw new Error("No words provided");
     this.words = words;
     this.instructions = new Instructions();
     this.menu = new Menu();
@@ -10339,22 +10374,30 @@ class LetramidApp extends App {
   }
   menuChoice(menu, selection) {
     switch (selection) {
-      case 1:
-        this.hideMenu();
-        this.board.restartGame();
-        break;
       case 2:
         this.hideMenu();
-        this.board.dailyGame();
+        this.board.saveState();
+        {
+          const date = this.board.gameIdDaily();
+          if (!this.board.loadState(date)) {
+            this.board.dailyGame(date);
+          }
+        }
         break;
       case 3:
         this.hideMenu();
+        this.board.saveState();
         this.board.randomGame();
         break;
       case 4:
         this.hideMenu();
-        const date = getUTCDateString(new Date(Date.now() - 24 * 60 * 60 * 1e3));
-        this.board.dailyGame(date);
+        {
+          this.board.saveState();
+          const date = this.board.gameIdDailyYesterday();
+          if (!this.board.loadState(date)) {
+            this.board.dailyGame(date);
+          }
+        }
         break;
       case 5:
         this.hideMenu();
