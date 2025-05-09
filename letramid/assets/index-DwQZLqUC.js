@@ -9489,15 +9489,44 @@ class LetterTile extends Widget {
     this.active = active;
     this.correctRow = false;
   }
+  /**@type {eskv.Widget['draw']} */
   draw(app, ctx) {
     if (this.active) {
       const oldColor = ctx.fillStyle;
-      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(255, 255, 255), 0.5);
-      ctx.fillRect(this.x, this.y, this.w, this.h);
-      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.5);
-      ctx.fillRect(this.x + 0.05 * this.w, this.y + 0.05 * this.h, this.w * 0.95, this.h * 0.95);
       ctx.fillStyle = this.bgColor;
-      ctx.fillRect(this.x + 0.05 * this.w, this.y + 0.05 * this.h, this.w * 0.9, this.h * 0.9);
+      ctx.fillRect(this.x, this.y, this.w, this.h);
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x + this.w, this.y);
+      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + 0.05 * this.h);
+      ctx.lineTo(this.x + 0.05 * this.w, this.y + 0.05 * this.h);
+      ctx.closePath();
+      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(255, 255, 255), 0.75).toString();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x + 0.05 * this.w, this.y + 0.05 * this.h);
+      ctx.lineTo(this.x + 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x, this.y + this.h);
+      ctx.closePath();
+      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(255, 255, 255), 0.5).toString();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.w, this.y);
+      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + 0.05 * this.h);
+      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x + this.w, this.y + this.h);
+      ctx.closePath();
+      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.5).toString();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.w, this.y + this.h);
+      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x + 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x, this.y + this.h);
+      ctx.closePath();
+      ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.75).toString();
+      ctx.fill();
       ctx.fillStyle = oldColor;
     } else {
       super.draw(app, ctx);
