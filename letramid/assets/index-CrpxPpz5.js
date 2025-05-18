@@ -9420,7 +9420,7 @@ function loadTheme(themeName) {
   theme["id"] = themeName;
   return theme;
 }
-const urlWords = "" + new URL("words-N3QuVe3C.txt", import.meta.url).href;
+const urlWords = "" + new URL("words-Bih_bB0f.txt", import.meta.url).href;
 const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
 const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
 const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
@@ -9656,6 +9656,7 @@ class Star extends Widget {
     __publicField(this, "textColor", "rgba(255,255,255,1)");
     __publicField(this, "target", 999);
     __publicField(this, "active", false);
+    __publicField(this, "visible", false);
     this.updateProperties(props);
     const label = new Label({
       fontSize: "0.3wh",
@@ -9673,6 +9674,7 @@ class Star extends Widget {
   }
   /**@type {eskv.Widget['draw']} */
   draw(app, ctx) {
+    if (!this.visible) return;
     const radiusOuter = this.center_y / 2;
     const radiusInner = this.center_y / 4;
     const spikes = 7;
@@ -9866,34 +9868,35 @@ class ScoreBar extends BoxLayout {
             valign: "middle"
           }),
           new BoxLayout({
+            id: "starbox",
             hints: { h: 0.67 },
             spacing: "0.02ah",
             padding: "0.02ah",
             orientation: "horizontal",
             children: [
               new Star({
-                active: (scorebar) => scorebar.score < 5,
+                active: (scorebar) => scorebar.score < 11,
                 target: 1,
                 bgColor: (app) => app.colors["bronzeOff"],
                 altColor: (app) => app.colors["bronze"],
                 hints: { h: "1h", w: "1wh" }
               }),
               new Star({
-                active: (scorebar) => scorebar.score < 4,
+                active: (scorebar) => scorebar.score < 7,
                 target: 2,
                 bgColor: (app) => app.colors["bronzeOff"],
                 altColor: (app) => app.colors["bronze"],
                 hints: { h: "1h", w: "1wh" }
               }),
               new Star({
-                active: (scorebar) => scorebar.score < 3,
+                active: (scorebar) => scorebar.score < 5,
                 target: 3,
                 bgColor: (app) => app.colors["bronzeOff"],
                 altColor: (app) => app.colors["bronze"],
                 hints: { h: "1h", w: "1wh" }
               }),
               new Star({
-                active: (scorebar) => scorebar.score < 2,
+                active: (scorebar) => scorebar.score < 3,
                 target: 4,
                 bgColor: (app) => app.colors["silverOff"],
                 altColor: (app) => app.colors["silver"],
@@ -9954,15 +9957,19 @@ class ScoreBar extends BoxLayout {
   }
   setGameId() {
     this.score = 0;
+    this.setStarVisibility(false);
   }
   gameOver() {
-    console.info(`Setting game score ${this.score} for completed game ${this.gameId}`);
-    if (this.score > this.hiScore) {
-      this.hiScore = this.score;
-      try {
-        localStorage.setItem("letramid/games/" + String(this.gameId), JSON.stringify({ score: this.score }));
-      } catch (error) {
-      }
+    this.setStarVisibility(true);
+  }
+  setStarVisibility(visible = true) {
+    var _a, _b;
+    const stars = (
+      /**@type {Star[]}*/
+      (_b = (_a = this.findById("starbox")) == null ? void 0 : _a.children) != null ? _b : []
+    );
+    for (let star of stars) {
+      star.visible = visible;
     }
   }
 }
@@ -10029,11 +10036,25 @@ class Board extends Widget {
     this.children = this.children.filter((c) => !(c instanceof LetterTile));
     const words = LetramidApp.get().words;
     setSeed(stringToSeed(this.scorebar.gameId !== "" ? this.scorebar.gameId : String("RANDOM GAME " + Date.now())));
+    const pyramidShapes = [
+      [3, 4, 5, 6, 7],
+      [4, 4, 5, 6, 6],
+      [4, 5, 5, 5, 6],
+      [5, 5, 5, 5, 5]
+    ];
+    const shape = choose(pyramidShapes);
     this.targetWords = [];
     for (let r = 0; r < boardSize; r++) {
-      const wordLength = 3 + r;
+      const wordLength = shape[r];
       const filteredWords = Array.from(words).filter((word) => wordLength === word.length);
-      this.targetWords.push(choose(filteredWords));
+      while (true) {
+        const candidate = choose(filteredWords);
+        const isValid = this.targetWords.every((w) => w.slice(0, 3) !== candidate.slice(0, 3) && w.slice(-3) !== candidate.slice(-3));
+        if (isValid) {
+          this.targetWords.push(candidate);
+          break;
+        }
+      }
     }
     const endsInS = this.targetWords.map((w, i) => w.endsWith("S") ? i : void 0).filter((w) => w !== void 0);
     if (endsInS.length > 1) {
@@ -10056,6 +10077,7 @@ class Board extends Widget {
       if (col === fixedPositions[row]) col++;
       let correctRowCount = 0;
       let activeWord = this.targetWords[row].split("").filter((_, n) => n !== fixedPositions[row]);
+      let totalFree = freeLetters.length;
       for (let i = 0; i < scrambledLetters.length; i++) {
         if (scrambledLetters[i] === freeLetters[i]) {
           done = false;
@@ -10065,21 +10087,27 @@ class Board extends Widget {
           const index2 = activeWord.indexOf(scrambledLetters[i]);
           activeWord[index2] = " ";
           correctRowCount++;
+          totalFree--;
         }
         col++;
         if (col === fixedPositions[row]) col++;
-        if (this.targetWords[row].length === col) {
-          if (correctRowCount === 0 && row > 0 || correctRowCount >= this.targetWords[row].length - 1) {
+        const wLen = this.targetWords[row].length;
+        if (wLen === col) {
+          if (correctRowCount === 0 && wLen > 3 || correctRowCount >= wLen - 1 || correctRowCount >= wLen - 2 && wLen > 3) {
             done = false;
             break;
           }
           correctRowCount = 0;
           row++;
           col = 0;
+          if (col === fixedPositions[row]) col++;
           if (row < this.targetWords.length) {
             activeWord = this.targetWords[row].split("").filter((_, n) => n !== fixedPositions[row]);
           }
         }
+      }
+      if (totalFree < 0.35 * freeLetters.length || totalFree > 0.65 * freeLetters.length) {
+        done = false;
       }
       if (done) {
         console.log("SUCCESSFUL SCRAMBLE AFTER", k, "TRIES");
@@ -10260,6 +10288,7 @@ class Board extends Widget {
       }
     }
     this.gameOver = true;
+    this.scorebar.gameOver();
     this.statusbar.word = "NEW GAME";
     this.statusbar.wordScore = -1;
     return true;
@@ -10311,6 +10340,9 @@ class Board extends Widget {
     this._needsLayout = true;
     this.firstStart = true;
     this.gameOver = game["gameOver"];
+    if (this.gameOver) {
+      this.scorebar.gameOver();
+    }
     this.checkGameOver();
     return true;
   }
