@@ -268,6 +268,9 @@ function setPRNG(name) {
       throw Error(`Unknown PRNG ${name}`);
   }
 }
+function random() {
+  return defaultPRNG.random();
+}
 function getRandomInt(m1, m2 = 0) {
   return defaultPRNG.getRandomInt(m1, m2);
 }
@@ -9697,7 +9700,7 @@ class Star extends Widget {
   }
 }
 const instructionsText = `🎯 Objective:
-Unscramble the 5 mystery words and keep as many stars as you can!
+Unscramble the 5 mystery words and earn as many stars as you can!
 
 🔺 Letramid:
 The Letramid is a five-tiered stack of mystery words, each 3 to 7 letters long. Your goal is to restore them by swapping the incorrectly placed raised letters.
@@ -9708,16 +9711,18 @@ Drag one raised letter onto another in the same or a different row to exchange t
 ✅ Correct Placement:
 When a letter is in the correct spot for its word, it will drop and lock in place. 
 
-❌ Incorrect Placement:
-If neither swapped letter is in the correct spot, you'll lose a star. Make your swaps carefully!
+🟨 Correct Row:
+If a letter is in the correct row but not the correct position, it will be highlighted in that row.
+
+❌ Incorrect Exchange:
+Your "incorrect" tally increses if neither swapped letter is in the correct spot and the number of letters in the correct row did not increase. Make your swaps carefully!
 
 💡 Hints:
-- Proper nouns or abbreviations are not valid words in the Letramid.
+- Proper nouns or abbreviations are not valid words in the Letramid. (If you see a mistake, please report it!)
 - One letter per row starts in the correct position — use them to guide your exchanges.
-- Highlighted letters in a row are in the current row but the wrong position.
 
 🏁 Winning:
-Complete the Letramid by locking all letters in place. Your remaining stars are your score. Play a new daily game each day, or try a random game anytime!
+Complete the Letramid by locking all letters in place. The fewer mistakes you make the more stars you will earn. Play a new daily game each day, or try a random game anytime!
 
 Good luck, wordsmith! 🏆`;
 class Instructions extends ModalView {
@@ -9875,28 +9880,28 @@ class ScoreBar extends BoxLayout {
             orientation: "horizontal",
             children: [
               new Star({
-                active: (scorebar) => scorebar.score < 11,
+                active: (scorebar) => scorebar.score < 10,
                 target: 1,
                 bgColor: (app) => app.colors["bronzeOff"],
                 altColor: (app) => app.colors["bronze"],
                 hints: { h: "1h", w: "1wh" }
               }),
               new Star({
-                active: (scorebar) => scorebar.score < 7,
+                active: (scorebar) => scorebar.score < 6,
                 target: 2,
                 bgColor: (app) => app.colors["bronzeOff"],
                 altColor: (app) => app.colors["bronze"],
                 hints: { h: "1h", w: "1wh" }
               }),
               new Star({
-                active: (scorebar) => scorebar.score < 5,
+                active: (scorebar) => scorebar.score < 3,
                 target: 3,
                 bgColor: (app) => app.colors["bronzeOff"],
                 altColor: (app) => app.colors["bronze"],
                 hints: { h: "1h", w: "1wh" }
               }),
               new Star({
-                active: (scorebar) => scorebar.score < 3,
+                active: (scorebar) => scorebar.score < 2,
                 target: 4,
                 bgColor: (app) => app.colors["silverOff"],
                 altColor: (app) => app.colors["silver"],
@@ -10036,13 +10041,27 @@ class Board extends Widget {
     this.children = this.children.filter((c) => !(c instanceof LetterTile));
     const words = LetramidApp.get().words;
     setSeed(stringToSeed(this.scorebar.gameId !== "" ? this.scorebar.gameId : String("RANDOM GAME " + Date.now())));
+    for (let i = 0; i < 1e3; i++) {
+      random();
+    }
     const pyramidShapes = [
       [3, 4, 5, 6, 7],
+      [3, 4, 5, 6, 7],
+      [3, 4, 4, 6, 7],
+      [3, 4, 5, 6, 7],
+      [3, 4, 5, 6, 7],
       [4, 4, 5, 6, 6],
-      [4, 5, 5, 5, 6],
-      [5, 5, 5, 5, 5]
+      [3, 4, 5, 6, 7],
+      [3, 4, 5, 6, 7],
+      [4, 4, 5, 6, 7],
+      [3, 4, 5, 6, 7],
+      [3, 4, 5, 6, 7],
+      [4, 5, 5, 6, 6],
+      [3, 4, 5, 6, 7],
+      [3, 4, 6, 6, 7]
     ];
     const shape = choose(pyramidShapes);
+    console.log("SHAPE", shape);
     this.targetWords = [];
     for (let r = 0; r < boardSize; r++) {
       const wordLength = shape[r];
