@@ -3011,7 +3011,7 @@ const _App = class _App extends Widget {
     this.y = 0;
     this.w = window.innerWidth;
     this.h = window.innerHeight;
-    if (this.prefDimH >= 0 && this.prefDimW >= 0) this.tileSize = this.getTileScale();
+    if (this.prefDimH >= 0 || this.prefDimW >= 0) this.tileSize = this.getTileScale();
     this.fitDimensionsToTileSize(this.tileSize);
     this.setupCanvas();
     try {
@@ -4086,14 +4086,19 @@ class BoxLayout extends Widget {
       }
       let ch = (h - fixedh) / num;
       let cw = w;
-      if (num === 0 && h > 0) paddingY = (h - fixedh) / 2;
+      if (num === 0 && h > 0 || ch < 0) paddingY = (h - fixedh) / 2;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
       for (let c of this.iterChildren()) {
         c.y = y;
-        if (!("x" in c.hints) && !("center_x" in c.hints) && !("right" in c.hints)) c.x = x;
         if (!("w" in c.hints)) c.w = cw;
         if (!("h" in c.hints)) c.h = ch;
+        if (!("x" in c.hints) && !("center_x" in c.hints) && !("right" in c.hints)) {
+          c.x = x;
+          if (w !== c.w) {
+            c.x += (w - c.w) / 2;
+          }
+        }
         c.layoutChildren();
         y += spacingY + c.h;
       }
@@ -4122,14 +4127,19 @@ class BoxLayout extends Widget {
       }
       let ch = h;
       let cw = (w - fixedw) / num;
-      if (num === 0 && w > 0) paddingX = (w - fixedw) / 2;
+      if (num === 0 && w > 0 || cw < 0) paddingX = (w - fixedw) / 2;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
       for (let c of this.iterChildren()) {
         c.x = x;
-        if (!("y" in c.hints) && !("center_y" in c.hints) && !("bottom" in c.hints)) c.y = y;
         if (!("w" in c.hints)) c.w = cw;
         if (!("h" in c.hints)) c.h = ch;
+        if (!("y" in c.hints) && !("center_y" in c.hints) && !("bottom" in c.hints)) {
+          c.y = y;
+          if (h !== c.h) {
+            c.y += (h - c.h) / 2;
+          }
+        }
         c.layoutChildren();
         x += spacingX + c.w;
       }
@@ -9413,9 +9423,9 @@ function loadTheme(themeName) {
   theme["bronze"] = [205, 127, 50, 1];
   theme["silver"] = [208, 208, 208, 1];
   theme["gold"] = [255, 215, 0, 1];
-  theme["bronzeOff"] = [128, 128, 128, 0.1];
-  theme["silverOff"] = [128, 128, 128, 0.1];
-  theme["goldOff"] = [128, 128, 128, 0.1];
+  theme["bronzeOff"] = [64, 64, 64, 0.1];
+  theme["silverOff"] = [64, 64, 64, 0.1];
+  theme["goldOff"] = [64, 64, 64, 0.1];
   for (let t in theme) {
     let [r, g, b, a] = theme[t];
     theme[t] = `rgba(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)},${a})`;
@@ -9424,17 +9434,20 @@ function loadTheme(themeName) {
   return theme;
 }
 const urlWords = "" + new URL("words-Bih_bB0f.txt", import.meta.url).href;
-const urlSoundCancelSelection = "" + new URL("select-CMgqBDdo.mp3", import.meta.url).href;
-const urlSoundLevelCompleted = "" + new URL("level_completed-BwaWAI54.mp3", import.meta.url).href;
-const urlSoundLevelFailed = "" + new URL("level_failed-DG77Ixvh.mp3", import.meta.url).href;
+const urlSoundLevelCompleted = "" + new URL("level_completed-DjSDhiWL.mp3", import.meta.url).href;
 const urlSoundMenu = "" + new URL("menu-Wio-ugm1.mp3", import.meta.url).href;
-const urlSoundWordCompleted = "" + new URL("word_completed-Bu2Q1kXb.mp3", import.meta.url).href;
+const urlSoundExchangeCancel = "" + new URL("exchange-DAuwQ7ul.mp3", import.meta.url).href;
+const urlSoundExchangeIncorrect = "" + new URL("exchange_incorrect-BjA33jK3.mp3", import.meta.url).href;
+const urlSoundExchangeOK = "" + new URL("exchange_ok-BdGdzx2N.mp3", import.meta.url).href;
+const urlSoundExchangeCorrect = "" + new URL("exchange_correct-CbW7BASF.mp3", import.meta.url).href;
+const urlSoundWordCompleted = "" + new URL("word_completed-yOThgMmj.mp3", import.meta.url).href;
 const sounds = {
-  CANCEL_SELECTION: new Audio(urlSoundCancelSelection),
+  EXCHANGE: new Audio(urlSoundExchangeCancel),
+  EXCHANGE_INCORRECT: new Audio(urlSoundExchangeIncorrect),
+  EXCHANGE_OK: new Audio(urlSoundExchangeOK),
   LEVEL_COMPLETED: new Audio(urlSoundLevelCompleted),
-  LEVEL_FAILED: new Audio(urlSoundLevelFailed),
   MENU: new Audio(urlSoundMenu),
-  CORRECT: new Audio(urlSoundWordCompleted),
+  EXCHANGE_CORRECT: new Audio(urlSoundExchangeCorrect),
   WORD_COMPLETED: new Audio(urlSoundWordCompleted)
 };
 const boardSize = 5;
@@ -9488,52 +9501,61 @@ class LetterTile extends Widget {
     this.board = board;
     this.row = row;
     this.col = col;
-    this.selected = false;
     this.active = active;
     this.correctRow = false;
+    this.inset = 0.1;
+    this.animationColor = LetramidApp.get().colors["tileSelected"];
   }
   /**@type {eskv.Widget['draw']} */
   draw(app, ctx) {
-    if (this.active) {
-      const oldColor = ctx.fillStyle;
+    let oldBgColor = this.bgColor;
+    if (!this.active && this._animation !== null) {
+      this.bgColor = this.animationColor;
+    }
+    const oldColor = ctx.fillStyle;
+    if (this.inset > 0) {
+      const inset = this.inset;
       ctx.fillStyle = this.bgColor;
       ctx.fillRect(this.x, this.y, this.w, this.h);
       ctx.beginPath();
       ctx.moveTo(this.x, this.y);
       ctx.lineTo(this.x + this.w, this.y);
-      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + 0.05 * this.h);
-      ctx.lineTo(this.x + 0.05 * this.w, this.y + 0.05 * this.h);
+      ctx.lineTo(this.x + this.w - inset * this.w, this.y + inset * this.h);
+      ctx.lineTo(this.x + inset * this.w, this.y + inset * this.h);
       ctx.closePath();
       ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(255, 255, 255), 0.75).toString();
       ctx.fill();
       ctx.beginPath();
       ctx.moveTo(this.x, this.y);
-      ctx.lineTo(this.x + 0.05 * this.w, this.y + 0.05 * this.h);
-      ctx.lineTo(this.x + 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x + inset * this.w, this.y + inset * this.h);
+      ctx.lineTo(this.x + inset * this.w, this.y + this.h - inset * this.h);
       ctx.lineTo(this.x, this.y + this.h);
       ctx.closePath();
       ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(255, 255, 255), 0.5).toString();
       ctx.fill();
       ctx.beginPath();
       ctx.moveTo(this.x + this.w, this.y);
-      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + 0.05 * this.h);
-      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x + this.w - inset * this.w, this.y + inset * this.h);
+      ctx.lineTo(this.x + this.w - inset * this.w, this.y + this.h - inset * this.h);
       ctx.lineTo(this.x + this.w, this.y + this.h);
       ctx.closePath();
       ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.5).toString();
       ctx.fill();
       ctx.beginPath();
       ctx.moveTo(this.x + this.w, this.y + this.h);
-      ctx.lineTo(this.x + this.w - 0.05 * this.w, this.y + this.h - 0.05 * this.h);
-      ctx.lineTo(this.x + 0.05 * this.w, this.y + this.h - 0.05 * this.h);
+      ctx.lineTo(this.x + this.w - inset * this.w, this.y + this.h - inset * this.h);
+      ctx.lineTo(this.x + inset * this.w, this.y + this.h - inset * this.h);
       ctx.lineTo(this.x, this.y + this.h);
       ctx.closePath();
       ctx.fillStyle = Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.75).toString();
       ctx.fill();
-      ctx.fillStyle = oldColor;
     } else {
       super.draw(app, ctx);
     }
+    if (this._animation !== null) {
+      this.bgColor = oldBgColor;
+    }
+    ctx.fillStyle = oldColor;
   }
   on_letter(event, object, value) {
     this.children[0].text = value;
@@ -9547,18 +9569,30 @@ class LetterTile extends Widget {
   }
   on_active(event, object, value) {
     this.updateBgColor();
-  }
-  on_selected(event, object, value) {
-    this.updateBgColor();
+    if (!this.active) {
+      if (this._animation !== null) {
+        this._animation.add({ inset: 0 }, 250);
+      } else {
+        this.inset = 0;
+      }
+    } else {
+      this.inset = 0.1;
+    }
   }
   on_gpos(event, object, value) {
     if (this.cpos[0] === -1 && this.cpos[1] === -1) {
       this.opos = [...this.gpos];
       this.cpos = [...this.gpos];
     }
-    const a = new WidgetAnimation();
-    a.add({ x: this.gpos[0], y: this.gpos[1] }, 250);
-    a.start(this);
+    if (this.active) {
+      const a = new WidgetAnimation();
+      a.add({ x: this.gpos[0], y: this.gpos[1] }, 250);
+      a.start(this);
+    } else {
+      this.x = this.gpos[0];
+      this.y = this.gpos[1];
+    }
+    this.active = this.active;
   }
   /**@type {eskv.Widget['on_touch_down']} */
   on_touch_down(event, object, touch) {
@@ -9606,24 +9640,29 @@ class LetterTile extends Widget {
           this.board.updateTileStates();
           const postCorrect = (t.active ? 0 : 1) + (this.active ? 0 : 1);
           const postScore = postCorrect + (!t.active || t.correctRow ? 1 : 0) + (!this.active || this.correctRow ? 1 : 0);
+          sounds.EXCHANGE.play();
           if (postScore <= preScore) {
             this.board.scorebar.score += 1;
-            sounds.CANCEL_SELECTION.play();
+            setTimeout(() => sounds.EXCHANGE_INCORRECT.play(), 500);
           } else if (preCorrect < postCorrect) {
-            sounds.CORRECT.play();
+            setTimeout(() => sounds.EXCHANGE_CORRECT.play(), 500);
           }
           this.board.checkCompletion(this.row);
           if (this.row !== t.row) {
             this.board.checkCompletion(t.row);
           }
           if (this.board.checkGameOver()) {
-            setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1e3);
+            setTimeout(() => sounds.LEVEL_COMPLETED.play(), 1500);
           }
           this._needsLayout = true;
           return true;
         }
       }
       y++;
+    }
+    console.log(this.gpos, this.pos, this.board.pos2gpos(this.pos));
+    if (v2(this.gpos).dist(this.pos) > 0.25) {
+      sounds.EXCHANGE.play();
     }
     this.gpos = this.opos.slice();
     this.cpos = this.opos.slice();
@@ -9653,7 +9692,7 @@ class LetterTile extends Widget {
 class Star extends Widget {
   constructor(props = {}) {
     super();
-    __publicField(this, "bgColor", "rgba(128,128,128,1.0)");
+    __publicField(this, "bgColor", "rgba(64,64,64,1.0)");
     __publicField(this, "altColor", "rgba(52,192,52,1.0)");
     __publicField(this, "numberColor", "rgba(252,252,0,1.0)");
     __publicField(this, "textColor", "rgba(255,255,255,1)");
@@ -9678,17 +9717,39 @@ class Star extends Widget {
   /**@type {eskv.Widget['draw']} */
   draw(app, ctx) {
     if (!this.visible) return;
-    const radiusOuter = this.center_y / 2;
-    const radiusInner = this.center_y / 4;
-    const spikes = 7;
+    const radiusOuter = this.h / 2;
+    const radiusInner = this.h / 4;
+    const spikes = 5;
     const step = Math.PI / spikes;
-    ctx.fillStyle = this.active ? this.altColor : this.bgColor;
+    let color = this.active ? this.altColor : this.bgColor;
+    if (this.active) {
+      const base = Color.fromString(color);
+      const highlight = base.mix(new Color(255, 255, 255), 0.75).toString();
+      const mid = base.toString();
+      const shadow = base.mix(new Color(64, 64, 64), 0.8).toString();
+      const radius = this.h / 2;
+      this.center_x;
+      const y = this.center_y;
+      const grad = ctx.createLinearGradient(0, y - 2 * radius, 0, y + 2 * radius);
+      grad.addColorStop(0, shadow);
+      grad.addColorStop(0.4, mid);
+      grad.addColorStop(0.5, highlight);
+      grad.addColorStop(0.6, mid);
+      grad.addColorStop(1, shadow);
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = color;
+    }
+    ctx.strokeStyle = `rgba(0,0,0,0.3)`;
+    Color.fromString(this.bgColor).mix(new Color(0, 0, 0), 0.5).toString();
+    const lw = ctx.lineWidth;
+    ctx.lineWidth = app.tileSize * 5e-4;
     ctx.beginPath();
     for (let i = 0; i < spikes * 2; i++) {
       const angle = i * step;
       const radius = i % 2 === 0 ? radiusOuter : radiusInner;
-      const x = this.center_x + Math.cos(angle) * radius;
-      const y = this.center_y + Math.sin(angle) * radius;
+      const x = this.center_x + Math.sin(angle) * radius;
+      const y = this.center_y - Math.cos(angle) * radius;
       if (i === 0) {
         ctx.moveTo(x, y);
       } else {
@@ -9696,7 +9757,11 @@ class Star extends Widget {
       }
     }
     ctx.closePath();
-    ctx.fill();
+    if (this.active) {
+      ctx.fill();
+    }
+    ctx.stroke();
+    ctx.lineWidth = lw;
   }
 }
 const instructionsText = `🎯 Objective:
@@ -9835,7 +9900,6 @@ class ScoreBar extends BoxLayout {
     __publicField(this, "id", "scorebar");
     /**@type {'horizontal'|'vertical'}*/
     __publicField(this, "orientation", "horizontal");
-    __publicField(this, "target", [50, 150, 300]);
     this.score = 0;
     this.hiScore = 0;
     this.gameId = getUTCDateString();
@@ -9845,36 +9909,41 @@ class ScoreBar extends BoxLayout {
         orientation: "vertical",
         children: [
           new Label({
-            hints: { h: 0.33 },
-            text: "INCORRECT",
-            color: (app) => app.colors["scoreText"],
-            align: "left",
-            valign: "bottom"
-          }),
-          new Label({
-            hints: { h: 0.67 },
+            hints: { h: "1" },
+            fontSize: "0.75",
             text: (scorebar) => "" + scorebar.score,
             color: (app) => app.colors["scoreText"],
             align: "left",
+            valign: "middle"
+          }),
+          new Label({
+            hints: { h: "0.75" },
+            text: "INCORRECT",
+            color: (app) => app.colors["scoreText"],
+            align: "left",
             valign: "top"
-          })
+          }),
+          new Widget({})
         ]
       }),
       new BoxLayout({
         orientation: "vertical",
+        hints: { w: 0.1 },
         children: [
           new Label({
-            hints: { h: 0.33 },
+            hints: { h: "1" },
+            fontSize: "0.5",
             text: (scorebar) => {
               return scorebar.gameId !== "" ? `GAME ${scorebar.gameId}` : "RANDOM GAME";
             },
             color: (app) => app.colors["scoreText"],
-            halign: "center",
+            align: "center",
             valign: "middle"
           }),
+          new Widget({}),
           new BoxLayout({
             id: "starbox",
-            hints: { h: 0.67 },
+            hints: { h: "0.2ww", w: 1 },
             spacing: "0.02ah",
             padding: "0.02ah",
             orientation: "horizontal",
@@ -9883,51 +9952,47 @@ class ScoreBar extends BoxLayout {
                 active: (scorebar) => scorebar.score < 10,
                 target: 1,
                 bgColor: (app) => app.colors["bronzeOff"],
-                altColor: (app) => app.colors["bronze"],
-                hints: { h: "1h", w: "1wh" }
+                altColor: (app) => app.colors["bronze"]
               }),
               new Star({
                 active: (scorebar) => scorebar.score < 6,
                 target: 2,
                 bgColor: (app) => app.colors["bronzeOff"],
-                altColor: (app) => app.colors["bronze"],
-                hints: { h: "1h", w: "1wh" }
+                altColor: (app) => app.colors["bronze"]
               }),
               new Star({
                 active: (scorebar) => scorebar.score < 3,
                 target: 3,
                 bgColor: (app) => app.colors["bronzeOff"],
-                altColor: (app) => app.colors["bronze"],
-                hints: { h: "1h", w: "1wh" }
+                altColor: (app) => app.colors["bronze"]
               }),
               new Star({
                 active: (scorebar) => scorebar.score < 2,
                 target: 4,
                 bgColor: (app) => app.colors["silverOff"],
-                altColor: (app) => app.colors["silver"],
-                hints: { h: "1h", w: "1wh" }
+                altColor: (app) => app.colors["silver"]
               }),
               new Star({
                 active: (scorebar) => scorebar.score < 1,
                 target: 5,
                 bgColor: (app) => app.colors["goldOff"],
-                altColor: (app) => app.colors["gold"],
-                hints: { h: "1h", w: "1wh" }
+                altColor: (app) => app.colors["gold"]
               })
             ]
-          })
+          }),
+          new Widget({})
         ]
       }),
       new BoxLayout({
-        orientation: "horizontal",
+        orientation: "vertical",
         children: [
-          new Widget({}),
           new MenuButton({
             id: "menubutton",
-            hints: { h: "0.75h", w: "1wh" },
+            hints: { right: 1, h: "1", w: "1wh" },
             bgColor: (app) => app.colors["menuButtonBackground"],
             on_press: (e, o, v) => LetramidApp.get().showMenu()
-          })
+          }),
+          new Widget({})
         ]
       })
     ];
@@ -9992,6 +10057,10 @@ class StatusBar extends Button {
       bgColor: (app, statusbar) => statusbar.word !== "" ? app.colors["wordScoreBackground"] : app.colors["background"],
       text: (statusbar) => statusbar.wordScore > 0 ? `${statusbar.word} for ${statusbar.wordScore}` : statusbar.wordScore < 0 ? `${statusbar.word}` : ""
     });
+  }
+  draw(app, ctx) {
+    if (this.word === "") return;
+    super.draw(app, ctx);
   }
 }
 class MessageBar extends BoxLayout {
@@ -10209,7 +10278,6 @@ class Board extends Widget {
     const isCompletedWord = word === letters;
     if (isCompletedWord) {
       this.checkGameOver();
-      setTimeout(() => sounds.WORD_COMPLETED.play(), 100);
     }
   }
   updateTileStates() {
@@ -10219,7 +10287,8 @@ class Board extends Widget {
         t.correctRow = false;
       });
       row.forEach((t, x) => {
-        t.active = this.targetWords[y][x] !== t.letter;
+        const active = this.targetWords[y][x] !== t.letter;
+        if (t.active !== active) t.active = active;
         const correctThreshold = word.split("").filter((w, i) => row[i].letter === t.letter && row[i].active && row[i].correctRow && i < x).length;
         t.correctRow = word.split("").filter((w, i) => w === t.letter && row[i].letter !== t.letter).length > correctThreshold;
       });
@@ -10235,7 +10304,8 @@ class Board extends Widget {
       t.row = row;
       t.col = col;
       const pos = this.ppos2pos([col, row]);
-      t.cpos = t.opos = t.gpos = pos;
+      if (!v2(t.gpos).equals(pos)) t.gpos = pos;
+      t.cpos = t.opos = pos;
     });
   }
   pos2gpos(pos) {
@@ -10252,23 +10322,30 @@ class Board extends Widget {
       return [this.size[0] / 2, this.size[1]];
     } else {
       return [
-        this.center_x + this.tileSpaceSize * (ppos[0] - 0.5 * this.pyramid[ppos[1]].length),
+        this.center_x + this.offX + this.tileSpaceSize * (ppos[0] - 0.5 * this.pyramid[ppos[1]].length),
         this.size[1] - (0.25 * this.size[1] + this.tileSpaceSize * (boardSize - 1 - ppos[1]))
       ];
     }
   }
   /**@type {eskv.Widget['layoutChildren']} */
   layoutChildren() {
-    this.tileSpaceSize = Math.min(this.size[0] / (boardSize + 3), 0.7 * this.size[1] / boardSize);
-    this.tileSize = this.tileSpaceSize - 0.01 * this.size[1];
+    this.tileSpaceSize = Math.min(this.size[0] / (boardSize + 2), this.size[1] / (boardSize + 2));
+    this.tileSize = this.tileSpaceSize * 0.96;
     this.pyramidSize = boardSize * this.tileSpaceSize;
-    this.offX = 0;
+    this.offX = 0.02 * this.tileSpaceSize;
     this.offY = 0;
+    this.findById("starbox").hints["h"] = `${this.tileSpaceSize}`;
+    this.findById("starbox").hints["w"] = `${this.tileSpaceSize * 5}`;
+    const top = this.size[1] - (0.25 * this.size[1] + this.tileSpaceSize * (boardSize - 1));
     [this.statusbar.w, this.statusbar.h] = [this.size[0] * 3 / 4, 0.06 * this.size[1]];
     [this.statusbar.x, this.statusbar.y] = [this.size[0] / 8, this.size[1] - (0.04 * this.size[1] + (this.offY + 0.04 * this.size[1] + 0.06 * this.size[1]) / 2)];
     [this.messagebar.w, this.messagebar.h] = [this.size[0], 0.04 * this.size[1]];
     [this.messagebar.x, this.messagebar.y] = [0, this.size[1]];
-    [this.scorebar.w, this.scorebar.h] = [this.size[0], 0.12 * this.size[1]];
+    [this.scorebar.w, this.scorebar.h] = [
+      this.size[0],
+      top
+      /*0.12 * this.size[1]*/
+    ];
     [this.scorebar.x, this.scorebar.y] = [0, 0];
     this.pyramid.forEach((row, r) => {
       row.forEach((tile, c) => {
@@ -10352,7 +10429,6 @@ class Board extends Widget {
       tile.gpos = new Vec2([t.col, t.row]);
       tile.opos = new Vec2([t.col, t.row]);
       tile.cpos = new Vec2([t.col, t.row]);
-      tile.selected = t.selected;
     }
     this.updateTileStates();
     this.blockGposUpdates = false;
@@ -10373,7 +10449,6 @@ class Board extends Widget {
         /**@type {LetterTileObj}*/
         {
           letter: t.letter,
-          selected: t.selected,
           row: t.row,
           col: t.col
         }
@@ -10437,6 +10512,8 @@ class LetramidApp extends App {
     var _a;
     super();
     this.id = "app";
+    this.prefDimW = -1;
+    this.prefDimH = 14;
     const themeName = (_a = localStorage.getItem("letramid/theme")) != null ? _a : "wordlePlayful";
     this.colors = loadTheme(themeName);
     if (words === void 0) throw new Error("No words provided");
