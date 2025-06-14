@@ -1,0 +1,16 @@
+{
+  "name": "The Footy",
+  "short_name": "footy",
+  "description": "Fast-paced Aussie Rules football game",
+  "start_url": "index.html",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/images/footy_192x192_icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
