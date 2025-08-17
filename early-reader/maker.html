@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<script type="module" crossorigin src="/wordbyword/assets/maker-D7VhNMMO.js"></script>
+<link rel="modulepreload" crossorigin href="/wordbyword/assets/eskv-BvQgZPp6.js">
+
+<title>Word by Word Book Maker</title>
+<meta charset="utf-8"/>
+<style>
+  html, body, #eskvapp, canvas { margin:0; padding:0; position:absolute; inset:0; background:#0b0b10; }
+  body { text-align:center; }
+  .eskvdiv { position:absolute; inset:0; }
+  .eskvdiv > * { position:absolute; }
+  /* Hidden DOM helpers for file inputs */
+  #hidden-inputs { position: fixed; inset: 0; pointer-events: none; }
+  #hidden-inputs input { position: absolute; opacity: 0; }
+</style>
+
+<div class="eskvdiv" id="eskvapp">
+  <canvas id="canvas"></canvas>
+</div>
+<div id="hidden-inputs">
+  <input type="file" id="file-cover" accept="image/*">
+  <input type="file" id="file-page" accept="image/*">
+  <input type="file" id="file-import" accept=".json,application/json">
+</div>
+
