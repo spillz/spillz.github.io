@@ -2344,21 +2344,21 @@ const _EventSink = class _EventSink {
             try {
               this[p] = func(...objs);
             } catch (error) {
-              console.log("Dynamic binding error", this, p, error);
+              /* @__PURE__ */ console.log("Dynamic binding error", this, p, error);
             }
           });
           else if (ob in obmap) this.listen(`${ob}.${pr}`, (evt, obj, data) => {
             try {
               this[p] = func(...objs);
             } catch (error) {
-              console.log("Dynamic binding error", this, p, error);
+              /* @__PURE__ */ console.log("Dynamic binding error", this, p, error);
             }
           });
         }
         try {
           this[p] = func(...objs);
         } catch (error) {
-          console.log("Dynamic binding error", this, p, error);
+          /* @__PURE__ */ console.log("Dynamic binding error", this, p, error);
         }
       }
     }
@@ -2653,7 +2653,7 @@ const _Widget = class _Widget extends Rect {
             try {
               this[p] = func(...objs);
             } catch (error) {
-              console.log("Dynamic binding error", this, p, error);
+              /* @__PURE__ */ console.log("Dynamic binding error", this, p, error);
             }
           });
           else if (ob in obmap) {
@@ -2662,18 +2662,18 @@ const _Widget = class _Widget extends Rect {
                 try {
                   this[p] = func(...objs);
                 } catch (error) {
-                  console.log("Dynamic binding error", this, p, error);
+                  /* @__PURE__ */ console.log("Dynamic binding error", this, p, error);
                 }
               });
             } catch (error) {
-              console.log(`Warning: ${ob} cannot be bound on`, this, "\nproperty", p, "\nerror", error);
+              /* @__PURE__ */ console.log(`Warning: ${ob} cannot be bound on`, this, "\nproperty", p, "\nerror", error);
             }
           }
         }
         try {
           this[p] = func(...objs);
         } catch (error) {
-          console.log("Dynamic binding error", this, p, error);
+          /* @__PURE__ */ console.log("Dynamic binding error", this, p, error);
         }
       }
     }
@@ -7852,13 +7852,13 @@ class GameScreen extends Widget {
         ModalView.a({ hints: { x: 0.2, y: 0.2, w: 0.6, h: 0.6 }, bgColor: "rgba(75, 152, 203, 0.8)" }).c(Label.a({
           text: `Welcome to the Island Chains Prototype
                     
-Overview: Island Chains is a turn based city building game where you manage production chains between buildings. You play the game over 10 rounds and in each round you can place up to 5 buildings (aka tiles) onto the hex squares. Instead of stockpiling resources, the production chaining in the game is centered in input fulfillment to activate buildings. So for example, there are villages, farms, and mines that respectively produce 3 workers, 2 food (if placed on a plain), and 1 ore. Most buildings will require workers to activate and some will additionally require ore and food. A village requires food and a farm requires workers so if you place them side by side you will activate both. Place a mine next to them and it will start producing ore. 
+Overview: Island Chains is a turn based city building game where you manage production chains between buildings. You play the game over 10 rounds and in each round you can place up to 5 buildings (aka tiles) onto the hex squares. Instead of stockpiling resources, the production chaining in the game is centered in input fulfillment to activate buildings. So for example, there are villages, farms, and mines that respectively produce 2 workers, 2 food (if placed on a plain), and 1 or more ore. Most buildings will require workers to activate and some will additionally require ore and food. A village requires food and a farm requires workers so if you place them side by side you will activate both. Place a mine next to them and it will start producing ore. 
 
 Once activated, buildings produce their resource(s), which can then be fed into other buildings. By default, buildings can only share their resources with adjacent tiles, but ships and castles let you break that rule by essentially acting as a resource router between everything they are connected to. Castles are also interconnected with other castles so every building they are routing can share resources with buildings routed to other castles. There are also Strongholds, providing defenses, and Abbeys, providing blessings (aka building productivity boost). The game handles figuring out what resources to rout to what buildings but I'm thinking about allowing players to override that per building in a future update.
 
 Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an available place on the map to place it. The +1 indicator give you a production if the building is placed in that spot.
 
-Building and activations: buildings are activated when they have been supplied with the required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it on the map.
+Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
 
 Military: Also between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will destroy nearby buildings. 
 
@@ -8083,10 +8083,10 @@ End game: The game will end at the conclusion of your 10th round. In this protot
       deactivatedUsers.set(t, /* @__PURE__ */ new Set());
     }
     let loops = 0;
-    console.log("==============Starting resource production allocation==============");
+    /* @__PURE__ */ console.log("==============Starting resource production allocation==============");
     while (changes && loops < 10) {
       ++loops;
-      console.log("--------------Loop", loops, "-----------------------------------------------");
+      /* @__PURE__ */ console.log("--------------Loop", loops, "-----------------------------------------------");
       changes = false;
       for (let tile of placedTiles) {
         let terr0 = this.board._terrainMap.atPos(tile.hexPos[0], tile.hexPos[1]);
@@ -8111,7 +8111,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
             tile.productionFilled.addConnection(need, adjTile);
             adjTile.needsFilled.addConnection(need, tile);
             changes = true;
-            console.log("connected", tile, ...tile.hexPos, "->", adjTile, ...adjTile.hexPos, need);
+            /* @__PURE__ */ console.log("connected", tile, ...tile.hexPos, "->", adjTile, ...adjTile.hexPos, need);
           }
         }
       }
@@ -8128,7 +8128,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
             for (let is of inactiveSuppliers) {
               is.productionFilled.removeConnection(need, tile);
               deactivatedUsers.get(is)?.add(tile);
-              console.log("deactivated", is, ...is.hexPos, "->", need, tile, ...tile.hexPos);
+              /* @__PURE__ */ console.log("deactivated", is, ...is.hexPos, "->", need, tile, ...tile.hexPos);
             }
             changes = true;
           }
@@ -8140,7 +8140,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
               if (nfts === void 0) continue;
               for (let nft of nfts) {
                 if (nft.productionFilled.removeConnection(n, tile)) {
-                  console.log("unlinked", nft, ...nft.hexPos, "->", tile, ...tile.hexPos, n);
+                  /* @__PURE__ */ console.log("unlinked", nft, ...nft.hexPos, "->", tile, ...tile.hexPos, n);
                 }
               }
             }
@@ -8149,7 +8149,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
               if (users !== void 0) {
                 for (let p of users) {
                   if (p.needsFilled.removeConnection(n, tile)) {
-                    console.log("unlinked", tile, ...tile.hexPos, "->", p, ...p.hexPos, n);
+                    /* @__PURE__ */ console.log("unlinked", tile, ...tile.hexPos, "->", p, ...p.hexPos, n);
                   }
                 }
               }
@@ -8164,7 +8164,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
       }
     }
     if (loops >= 1e3) {
-      console.log("Exceeded loop limit during resource produciton allocation");
+      /* @__PURE__ */ console.log("Exceeded loop limit during resource produciton allocation");
     }
     for (let tile of placedTiles) {
       tile.updateResourceStatusIcons();
