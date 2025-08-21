@@ -7858,7 +7858,7 @@ Overview: Island Chains is a turn based city building game where you manage prod
 
 Once activated, buildings produce their resource(s), which can then be fed into other buildings. By default, buildings can only share their resources with adjacent tiles, but ships and castles let you break that rule by essentially acting as a resource router between everything they are connected to. Castles are also interconnected with other nearby castles so every building they are routing can share resources with buildings routed to other castles. There are also Strongholds, providing defenses, and Abbeys, providing blessings (aka building productivity boost). The game handles figuring out what resources to rout to what buildings but I'm thinking about allowing players to override the allocations building in a future update.
 
-Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an available place on the map to place it. The +1 indicator give you a production if the building is placed in that spot.
+Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an circled place on the map to place it. The +X indicator gives you a production boost if the building is placed in that spot.
 
 Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
 
@@ -8515,9 +8515,9 @@ class PlayerScore extends Label {
   }
   updateStatus() {
     if (this.turn > 1) {
-      this.text = `Buildings to place: ${5 - this.tilesPlacedThisTurn} -- Turn: ${11 - this.turn}/10 -- Score: ${this.score}`;
+      this.text = `Buildings to place: ${5 - this.tilesPlacedThisTurn} -- Round: ${11 - this.turn}/10 -- Score: ${this.score}`;
     } else if (this.turn === 1) {
-      this.text = `Buildings to place: ${5 - this.tilesPlacedThisTurn} -- Last turn -- Score: ${this.score}`;
+      this.text = `Buildings to place: ${5 - this.tilesPlacedThisTurn} -- Last round -- Score: ${this.score}`;
     } else {
       this.text = `Game over -- Score: ${this.score}`;
     }
