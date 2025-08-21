@@ -7862,7 +7862,7 @@ Playing a round: To play a round you will simply click on a building on the left
 
 Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
 
-Military: Also between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will destroy nearby buildings. 
+Military: Between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will continue to spread out and destroy nearby buildings. 
 
 End game: The game will end at the conclusion of your 10th round. In this prototype, you score points by activating as many castles as you can, with each active castle producing power points at the end of the round. 
                     `,
@@ -8243,7 +8243,9 @@ End game: The game will end at the conclusion of your 10th round. In this protot
           }
         }
       }
-      info.push(NetworkTileOverlay.a({ w: this.board.hexSide, h: this.board.hexSide, hexPos: terr.hexPos, input, output, primary: terr === terrain }));
+      const nto = NetworkTileOverlay.a({ w: this.board.hexSide, h: this.board.hexSide, hexPos: terr.hexPos, input, output, primary: terr === terrain });
+      nto.updateIO();
+      info.push(nto);
     }
     this.placementLayer.children = info;
   }
