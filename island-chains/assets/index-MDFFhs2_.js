@@ -7568,8 +7568,10 @@ class Board extends Widget {
     this.terrainMap = new TerrainMap(level, this.boardSize, this.orientation);
   }
   on_orientation(event, object, value) {
-    for (let t of this.terrainMap.iter()) {
-      t.orientation = value;
+    if (this.terrainMap) {
+      for (let t of this.terrainMap.iter()) {
+        t.orientation = value;
+      }
     }
   }
   /**
