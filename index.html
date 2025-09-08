@@ -105,27 +105,56 @@
         ctx.closePath();
         ctx.fill();
         // tail
+        const Dx = x + bodyBase;
+        const Dy = baseY;
         ctx.beginPath();
-        ctx.moveTo(x + bodyBase, baseY - bodyHeight * 0.3);
-        ctx.quadraticCurveTo(x + bodyBase + 25, baseY - bodyHeight * 0.4, x + bodyBase + 10, baseY - bodyHeight * 0.8);
-        ctx.lineTo(x + bodyBase - 5, baseY - bodyHeight * 0.55);
+        ctx.moveTo(Dx, Dy);
+        ctx.lineTo(Dx - bodyBase * 0.15, Dy);
+        ctx.lineTo(Dx + bodyBase * 1.5, Dy - bodyBase * 0.1);
         ctx.closePath();
         ctx.fill();
         // head
-        const neckX = x + offset;
-        const neckY = baseY - bodyHeight;
+        const Ax = x + offset;
+        const Ay = baseY - bodyHeight;
+        const Bx = Ax + bodyTop;
+        const By = Ay;
+        const Ex = Bx + bodyTop * 0.1;
+        const Ey = By - bodyTop * 0.3;
+        const Fx = Ex - bodyTop * 2;
+        const Fy = Ey - bodyTop * 1.0;
+        const Gx = Fx;
+        const Gy = Fy + bodyTop * 0.2;
         ctx.beginPath();
-        ctx.moveTo(neckX, neckY);
-        ctx.lineTo(neckX - 20, neckY - 5);
-        ctx.lineTo(neckX - 30, neckY - 25);
-        ctx.lineTo(neckX - 10, neckY - 30);
+        ctx.moveTo(Ax, Ay);
+        ctx.lineTo(Bx, By);
+        ctx.lineTo(Ex, Ey);
+        ctx.lineTo(Fx, Fy);
+        ctx.lineTo(Gx, Gy);
         ctx.closePath();
         ctx.fill();
         // ear
+        const EFx = Fx - Ex;
+        const EFy = Fy - Ey;
+        const E2x = Ex + EFx * 0.2;
+        const E2y = Ey + EFy * 0.2;
+        const efLen = Math.hypot(EFx, EFy);
         ctx.beginPath();
-        ctx.moveTo(neckX - 8, neckY - 28);
-        ctx.lineTo(neckX - 3, neckY - 45);
-        ctx.lineTo(neckX + 2, neckY - 28);
+        ctx.moveTo(Ex, Ey);
+        ctx.lineTo(E2x, E2y);
+        ctx.lineTo(E2x + efLen * 0.2, E2y - efLen * 0.2);
+        ctx.closePath();
+        ctx.fill();
+        // mandible
+        const AGx = Gx - Ax;
+        const AGy = Gy - Ay;
+        const M1x = Ax + AGx * 0.2;
+        const M1y = Ay + AGy * 0.2;
+        const M2x = M1x + bodyTop * 1.5;
+        const M2y = M1y;
+        ctx.beginPath();
+        ctx.moveTo(Ax, Ay);
+        ctx.lineTo(M1x, M1y);
+        ctx.lineTo(M2x, M2y);
         ctx.closePath();
         ctx.fill();
       }
