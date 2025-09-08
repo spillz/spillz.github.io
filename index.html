@@ -5,7 +5,7 @@
   <title>spillz.github.io</title>
   <style>
     body { font-family: Arial, sans-serif; background-color: #111; color: #eee; margin:0; padding:0; text-align:center; }
-    #banner { width:100%; height:200px; display:block; }
+    #banner { width:100%; height:300px; display:block; }
     table { margin: 20px auto; border-collapse: collapse; width:90%; max-width:1000px; }
     th, td { border:1px solid #555; padding:8px; }
     th { background-color:#222; }
@@ -14,13 +14,13 @@
   </style>
 </head>
 <body>
-  <canvas id="banner" width="800" height="200"></canvas>
+  <canvas id="banner" width="800" height="300"></canvas>
   <script>
     const canvas = document.getElementById('banner');
     const ctx = canvas.getContext('2d');
     function draw(){
       canvas.width = canvas.offsetWidth;
-      canvas.height = 200;
+      canvas.height = 300;
       // background gradient
       const grad = ctx.createLinearGradient(0,0,0,canvas.height);
       grad.addColorStop(0,'#210035');
@@ -32,39 +32,76 @@
       ctx.beginPath();
       ctx.arc(canvas.width-80,60,30,0,Math.PI*2);
       ctx.fill();
+      // mesas
+      function mesa(x, w, h){
+        const baseY = canvas.height - 60;
+        ctx.fillStyle = '#d2b48c';
+        ctx.strokeStyle = '#800080';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(x + w*0.1, baseY - h);
+        ctx.lineTo(x + w*0.9, baseY - h);
+        ctx.lineTo(x + w, baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      mesa(canvas.width*0.15, 100, 40);
+      mesa(canvas.width*0.55, 140, 60);
       // canyons
+      const groundY = canvas.height - 50;
       ctx.fillStyle = '#c8a167';
       ctx.beginPath();
-      ctx.moveTo(0,150);
-      ctx.lineTo(canvas.width*0.3,120);
-      ctx.lineTo(canvas.width*0.6,140);
-      ctx.lineTo(canvas.width*0.8,130);
-      ctx.lineTo(canvas.width,150);
-      ctx.lineTo(canvas.width,200);
-      ctx.lineTo(0,200);
+      ctx.moveTo(0, groundY);
+      ctx.lineTo(canvas.width*0.3, canvas.height - 80);
+      ctx.lineTo(canvas.width*0.6, canvas.height - 60);
+      ctx.lineTo(canvas.width*0.8, canvas.height - 70);
+      ctx.lineTo(canvas.width, groundY);
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.lineTo(0, canvas.height);
       ctx.closePath();
       ctx.fill();
       // cacti
       function cactus(x){
-        ctx.fillStyle = '#4b2e5a';
-        ctx.fillRect(x,110,10,40);
-        ctx.fillRect(x-10,120,10,10);
-        ctx.fillRect(x+10,120,10,10);
+        const baseY = canvas.height - 50;
+        ctx.strokeStyle = '#4b2e5a';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(x, baseY - 40);
+        ctx.moveTo(x, baseY - 20);
+        ctx.lineTo(x - 15, baseY - 35);
+        ctx.moveTo(x, baseY - 30);
+        ctx.lineTo(x + 15, baseY - 45);
+        ctx.stroke();
       }
       cactus(60);
       cactus(canvas.width*0.45);
       // howling wolf
-      ctx.fillStyle = '#2b1833';
-      ctx.beginPath();
-      ctx.moveTo(canvas.width*0.75,150);
-      ctx.lineTo(canvas.width*0.78,130);
-      ctx.lineTo(canvas.width*0.82,125);
-      ctx.lineTo(canvas.width*0.8,145);
-      ctx.lineTo(canvas.width*0.85,150);
-      ctx.lineTo(canvas.width*0.8,150);
-      ctx.lineTo(canvas.width*0.78,160);
-      ctx.closePath();
-      ctx.fill();
+      function wolf(x){
+        const baseY = canvas.height - 50;
+        ctx.fillStyle = '#2b1833';
+        ctx.beginPath();
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(x - 20, baseY - 10);
+        ctx.lineTo(x - 10, baseY - 15);
+        ctx.lineTo(x, baseY - 25);
+        ctx.lineTo(x + 20, baseY - 30);
+        ctx.lineTo(x + 30, baseY - 55);
+        ctx.lineTo(x + 40, baseY - 65);
+        ctx.lineTo(x + 55, baseY - 55);
+        ctx.lineTo(x + 45, baseY - 45);
+        ctx.lineTo(x + 50, baseY - 35);
+        ctx.lineTo(x + 45, baseY);
+        ctx.lineTo(x + 30, baseY);
+        ctx.lineTo(x + 25, baseY - 20);
+        ctx.lineTo(x + 20, baseY);
+        ctx.closePath();
+        ctx.fill();
+      }
+      wolf(canvas.width*0.75);
     }
     window.addEventListener('load', draw);
     window.addEventListener('resize', draw);
