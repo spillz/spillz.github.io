@@ -91,22 +91,41 @@
       // howling wolf
       function wolf(x){
         const baseY = canvas.height - 50;
+        const bodyBase = 30;
+        const bodyTop = 20;
+        const bodyHeight = 60;
+        const offset = (bodyBase - bodyTop) / 2;
         ctx.fillStyle = '#4b2e5a';
+        // body
         ctx.beginPath();
         ctx.moveTo(x, baseY);
-        ctx.lineTo(x - 20, baseY - 10);
-        ctx.lineTo(x - 10, baseY - 15);
-        ctx.lineTo(x, baseY - 25);
-        ctx.lineTo(x + 20, baseY - 30);
-        ctx.lineTo(x + 30, baseY - 55);
-        ctx.lineTo(x + 40, baseY - 65);
-        ctx.lineTo(x + 55, baseY - 55);
-        ctx.lineTo(x + 45, baseY - 45);
-        ctx.lineTo(x + 50, baseY - 35);
-        ctx.lineTo(x + 45, baseY);
-        ctx.lineTo(x + 30, baseY);
-        ctx.lineTo(x + 25, baseY - 20);
-        ctx.lineTo(x + 20, baseY);
+        ctx.lineTo(x + bodyBase, baseY);
+        ctx.lineTo(x + bodyBase - offset, baseY - bodyHeight);
+        ctx.lineTo(x + offset, baseY - bodyHeight);
+        ctx.closePath();
+        ctx.fill();
+        // tail
+        ctx.beginPath();
+        ctx.moveTo(x + bodyBase, baseY - bodyHeight * 0.3);
+        ctx.quadraticCurveTo(x + bodyBase + 25, baseY - bodyHeight * 0.4, x + bodyBase + 10, baseY - bodyHeight * 0.8);
+        ctx.lineTo(x + bodyBase - 5, baseY - bodyHeight * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        // head
+        const neckX = x + offset;
+        const neckY = baseY - bodyHeight;
+        ctx.beginPath();
+        ctx.moveTo(neckX, neckY);
+        ctx.lineTo(neckX - 20, neckY - 5);
+        ctx.lineTo(neckX - 30, neckY - 25);
+        ctx.lineTo(neckX - 10, neckY - 30);
+        ctx.closePath();
+        ctx.fill();
+        // ear
+        ctx.beginPath();
+        ctx.moveTo(neckX - 8, neckY - 28);
+        ctx.lineTo(neckX - 3, neckY - 45);
+        ctx.lineTo(neckX + 2, neckY - 28);
         ctx.closePath();
         ctx.fill();
       }
