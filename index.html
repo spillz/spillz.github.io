@@ -33,11 +33,12 @@
       ctx.arc(canvas.width-80,60,30,0,Math.PI*2);
       ctx.fill();
       // mesas
-      function mesa(x, w, h){
-        const baseY = canvas.height - 60;
+      function mesa(x, w, h, sink = 0){
+        const baseY = canvas.height - 60 + sink;
+        ctx.save();
         ctx.fillStyle = '#d2b48c';
         ctx.strokeStyle = '#800080';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(x, baseY);
         ctx.lineTo(x + w*0.1, baseY - h);
@@ -46,9 +47,17 @@
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+        ctx.lineWidth = 1;
+        for (let i = x + w * 0.2; i < x + w * 0.8; i += w * 0.2){
+          ctx.beginPath();
+          ctx.moveTo(i, baseY);
+          ctx.lineTo(i, baseY - h);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
-      mesa(canvas.width*0.15, 100, 40);
-      mesa(canvas.width*0.55, 140, 60);
+      mesa(canvas.width*0.15, 200, 80);
+      mesa(canvas.width*0.55, 280, 120, 20);
       // canyons
       const groundY = canvas.height - 50;
       ctx.fillStyle = '#c8a167';
@@ -82,7 +91,7 @@
       // howling wolf
       function wolf(x){
         const baseY = canvas.height - 50;
-        ctx.fillStyle = '#2b1833';
+        ctx.fillStyle = '#4b2e5a';
         ctx.beginPath();
         ctx.moveTo(x, baseY);
         ctx.lineTo(x - 20, baseY - 10);
