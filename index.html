@@ -91,9 +91,9 @@
       // howling wolf
       function wolf(x){
         const baseY = canvas.height - 50;
-        const bodyBase = 30;
-        const bodyTop = 20;
-        const bodyHeight = 60;
+        const bodyBase = 25;
+        const bodyTop = 15;
+        const bodyHeight = 40;
         const offset = (bodyBase - bodyTop) / 2;
         ctx.fillStyle = '#4b2e5a';
         // body
@@ -109,8 +109,8 @@
         const Dy = baseY;
         ctx.beginPath();
         ctx.moveTo(Dx, Dy);
-        ctx.lineTo(Dx, Dy - bodyBase * 0.25);
-        ctx.lineTo(Dx + bodyBase * 1.5, Dy - bodyBase * 0.5);
+        ctx.lineTo(Dx - bodyBase * 0.25, Dy - bodyBase * 0.25);
+        ctx.lineTo(Dx + bodyBase * 2.0, Dy - bodyBase);
         ctx.closePath();
         ctx.fill();
         // head
@@ -150,7 +150,7 @@
         const M1x = Ax - AGx * 0.2;
         const M1y = Ay - AGy * 0.2;
         const M2x = M1x - bodyTop * 1.5;
-        const M2y = M1y;
+        const M2y = M1y - bodyTop * 0.3;
         ctx.beginPath();
         ctx.moveTo(Ax, Ay);
         ctx.lineTo(M1x, M1y);
