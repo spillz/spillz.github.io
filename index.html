@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>spillz.github.io</title>
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #111; color: #eee; margin:0; padding:0; text-align:center; }
+      #banner { width:100%; height:300px; display:block; }
+      table { margin: 20px auto; border-collapse: collapse; width:90%; max-width:1000px; }
+      th, td { border:1px solid #555; padding:8px; }
+      th { background-color:#222; }
+      tr:nth-child(even) { background-color:#1a1a1a; }
+      a { color:#c8a167; }
+    </style>
+  </head>
+  <body>
+    <canvas id="banner" width="800" height="300"></canvas>
+    <script>
+      const canvas = document.getElementById('banner');
+      const ctx = canvas.getContext('2d');
+      function draw(){
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 300;
+        // background gradient
+        const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+        grad.addColorStop(0,'#210035');
+        grad.addColorStop(1,'#4c0123');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        // moon
+        ctx.fillStyle = '#f2e0c7';
+        ctx.beginPath();
+        ctx.arc(canvas.width-80,60,30,0,Math.PI*2);
+        ctx.fill();
+        // mesas
+        function mesa(x, w, h, sink = 0){
+          const baseY = canvas.height - 60 + sink;
+          ctx.save();
+          ctx.fillStyle = '#d2b48c';
+          ctx.strokeStyle = '#800080';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, baseY);
+          ctx.lineTo(x + w*0.1, baseY - h);
+          ctx.lineTo(x + w*0.9, baseY - h);
+          ctx.lineTo(x + w, baseY);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.lineWidth = 1;
+          for (let i = x + w * 0.2; i < x + w * 0.8; i += w * 0.2){
+            ctx.beginPath();
+            ctx.moveTo(i - (x + w*0.5 - i)*0.2, baseY);
+            ctx.lineTo(i, baseY - h);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+        mesa(canvas.width*0.15, canvas.width*0.45, 80);
+        mesa(canvas.width*0.55, canvas.width*0.35, 120, 20);
+        // canyons
+        const groundY = canvas.height - 50;
+        ctx.fillStyle = '#c8a167';
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        ctx.lineTo(canvas.width*0.3, canvas.height - 80);
+        ctx.lineTo(canvas.width*0.6, canvas.height - 60);
+        ctx.lineTo(canvas.width*0.8, canvas.height - 70);
+        ctx.lineTo(canvas.width, groundY);
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.lineTo(0, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+        // cacti
+        function cactus(x){
+          const baseY = canvas.height - 50;
+          ctx.strokeStyle = '#4b2e5a';
+          ctx.lineWidth = 6;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x, baseY);
+          ctx.lineTo(x, baseY - 40);
+          ctx.moveTo(x, baseY - 20);
+          ctx.lineTo(x - 15, baseY - 35);
+          ctx.moveTo(x, baseY - 30);
+          ctx.lineTo(x + 15, baseY - 45);
+          ctx.stroke();
+        }
+        cactus(60);
+        cactus(canvas.width*0.45);
+        // howling wolf
+        function wolf(x){
+          const baseY = canvas.height - 160;
+          const bodyBase = 25;
+          const bodyTop = 15;
+          const bodyHeight = 40;
+          const offset = (bodyBase - bodyTop) / 2;
+          ctx.fillStyle = '#4b2e5a';
+          // body
+          ctx.beginPath();
+          ctx.moveTo(x, baseY);
+          ctx.lineTo(x + bodyBase, baseY);
+          ctx.lineTo(x + bodyBase - offset, baseY - bodyHeight);
+          ctx.lineTo(x + offset, baseY - bodyHeight);
+          ctx.closePath();
+          ctx.fill();
+          // tail
+          const Dx = x + bodyBase;
+          const Dy = baseY;
+          ctx.beginPath();
+          ctx.moveTo(Dx, Dy);
+          ctx.lineTo(Dx - bodyBase * 0.25, Dy - bodyBase * 0.25);
+          ctx.lineTo(Dx + bodyBase * 2.0, Dy - bodyBase);
+          ctx.closePath();
+          ctx.fill();
+          // head
+          const Ax = x + offset;
+          const Ay = baseY - bodyHeight;
+          const Bx = Ax + bodyTop;
+          const By = Ay;
+          const Ex = Bx + bodyTop * 0.1;
+          const Ey = By - bodyTop * 0.3;
+          const Fx = Ex - bodyTop * 2;
+          const Fy = Ey - bodyTop * 1.0;
+          const Gx = Fx;
+          const Gy = Fy + bodyTop * 0.2;
+          ctx.beginPath();
+          ctx.moveTo(Ax, Ay);
+          ctx.lineTo(Bx, By);
+          ctx.lineTo(Ex, Ey);
+          ctx.lineTo(Fx, Fy);
+          ctx.lineTo(Gx, Gy);
+          ctx.closePath();
+          ctx.fill();
+          // ear
+          const EFx = Fx - Ex;
+          const EFy = Fy - Ey;
+          const E2x = Ex + EFx * 0.2;
+          const E2y = Ey + EFy * 0.2;
+          const efLen = Math.hypot(EFx, EFy);
+          ctx.beginPath();
+          ctx.moveTo(Ex, Ey);
+          ctx.lineTo(E2x, E2y);
+          ctx.lineTo(E2x + efLen * 0.2, E2y - efLen * 0.2);
+          ctx.closePath();
+          ctx.fill();
+          // mandible
+          const AGx = Gx - Ax;
+          const AGy = Gy - Ay;
+          const M1x = Ax - AGx * 0.3;
+          const M1y = Ay - AGy * 0.3;
+          const M2x = M1x - bodyTop * 1.5;
+          const M2y = M1y - bodyTop * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(Ax, Ay);
+          ctx.lineTo(M1x, M1y);
+          ctx.lineTo(M2x, M2y);
+          ctx.lineTo(M2x, M2y - bodyTop*0.2);
+          ctx.closePath();
+          ctx.fill();
+        }
+        wolf(canvas.width*0.75);
+      }
+      window.addEventListener('load', draw);
+      window.addEventListener('resize', draw);
+    </script>
+
+    <p>
+      Status key: Complete = finished; Playable/Usable = working but unfinished;
+      Prototype = early build; Planned = concept only.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Link</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Video Games</b></td>
+        </tr>
+        <tr>
+          <td>1776: Washington's Crossing</td>
+          <td>Bullet Hell set to Washington's Crossing.</td>
+          <td>Playable</td>
+          <td><a href="1776-washdel/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Washington's Crossing (Alt)</td>
+          <td>Early build of the 1776 game.</td>
+          <td>Prototype</td>
+          <td><a href="washdel/">Play</a></td>
+        </tr>
+        <tr>
+          <td>7DRL 2023 - LLLOOOT!</td>
+          <td>7 Day Roguelike about gathering loot.</td>
+          <td>Complete</td>
+          <td><a href="7drl-2023/">Play</a></td>
+        </tr>
+        <tr>
+          <td>7DRL 2024 - Breach in Time</td>
+          <td>Time-warping cover shooter roguelike</td>
+          <td>Planned</td>
+          <td><a href="7drl-2024/">Play</a></td>
+        </tr>
+        <tr>
+          <td>7DRL 2025 Prep</td>
+          <td>Simple tile-based game (ESKV WebGL rendering example).</td>
+          <td>Prototype</td>
+          <td><a href="7drl-2025-prep/">View</a></td>
+        </tr>
+        <tr>
+          <td>7DRL 2025 - The Island</td>
+          <td>Roguelike adventure on an island.</td>
+          <td>Planned</td>
+          <td><a href="7drl-2025/">Play</a></td>
+        </tr>
+        <tr>
+          <td>The Footy Testing</td>
+          <td>Test build of the Footy.</td>
+          <td>Playable</td>
+          <td><a href="footy-testing/">View</a></td>
+        </tr>
+        <tr>
+          <td>The Footy Concept</td>
+          <td>The intiial Footy prototype.</td>
+          <td>Prototype</td>
+          <td><a href="footy/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Island Chains</td>
+          <td>Puzzly production chain game.</td>
+          <td>Prototype</td>
+          <td><a href="island-chains/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Oarstrong</td>
+          <td>Bullet Hell on a Pirate Island.</td>
+          <td>Prototype</td>
+          <td><a href="oarstrong/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Puzzle Kingdom</td>
+          <td>Tile laying strategy puzzle game.</td>
+          <td>Playable</td>
+          <td><a href="puzzlekingdom/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Amulet Raider</td>
+          <td>James McNeil's 2022 7DRL entry with some gamepad experiments.</td>
+          <td>Playable</td>
+          <td><a href="amulet/">Play</a></td>
+        </tr>
+        <tr>
+          <td><b>Word Games</b></td>
+        </tr>
+        <tr>
+          <td>7 Words</td>
+          <td>Word puzzle game.</td>
+          <td>Playable</td>
+          <td><a href="7words/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Letramid</td>
+          <td>Word puzzle game.</td>
+          <td>Playable</td>
+          <td><a href="letramid/">Play</a></td>
+        </tr>
+        <tr>
+          <td>SlideWords</td>
+          <td>Sliding the letters word game.</td>
+          <td>Complete</td>
+          <td><a href="slidewords/">Play</a></td>
+        </tr>
+        <tr>
+          <td><b>Tools and other</b></td>
+        </tr>
+        <tr>
+          <td>ESKV</td>
+          <td>A reimagined KIVY UI library but for JavaScript</td>
+          <td>Usable</td>
+          <td><a href="eskv/">View</a></td>
+        </tr>
+        <tr>
+          <td>ESKV Pong</td>
+          <td>Pong example using ESKV.</td>
+          <td>Complete</td>
+          <td><a href="eskv-pong/">View</a></td>
+        </tr>
+        <tr>
+          <td>Quik Draw</td>
+          <td>A browser based vector drawing tool built using ESKV.</td>
+          <td>Playable</td>
+          <td><a href="quikdraw/">Play</a></td>
+        </tr>
+        <tr>
+          <td>Tile Mapper</td>
+          <td>Sprite tilemap creation tool.</td>
+          <td>Prototype</td>
+          <td><a href="tilemapper/">Use</a></td>
+        </tr>
+        <tr>
+          <td>Alphabetical</td>
+          <td>Simple letter cue reading game for PreK.</td>
+          <td>Planned</td>
+          <td><a href="alphabetical/">View</a></td>
+        </tr>
+        <tr>
+          <td>Word by Word</td>
+          <td>Interactive book maker and reader targeting PreK.</td>
+          <td>Prototype</td>
+          <td><a href="wordbyword/reader.html">Read</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>
