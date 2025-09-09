@@ -109,8 +109,8 @@
         const Dy = baseY;
         ctx.beginPath();
         ctx.moveTo(Dx, Dy);
-        ctx.lineTo(Dx - bodyBase * 0.15, Dy);
-        ctx.lineTo(Dx + bodyBase * 1.5, Dy - bodyBase * 0.1);
+        ctx.lineTo(Dx, Dy - bodyBase * 0.15);
+        ctx.lineTo(Dx + bodyBase * 1.5, Dy - bodyBase * 0.25);
         ctx.closePath();
         ctx.fill();
         // head
