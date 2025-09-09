@@ -109,8 +109,8 @@
         const Dy = baseY;
         ctx.beginPath();
         ctx.moveTo(Dx, Dy);
-        ctx.lineTo(Dx, Dy - bodyBase * 0.15);
-        ctx.lineTo(Dx + bodyBase * 1.5, Dy - bodyBase * 0.25);
+        ctx.lineTo(Dx, Dy - bodyBase * 0.25);
+        ctx.lineTo(Dx + bodyBase * 1.5, Dy - bodyBase * 0.5);
         ctx.closePath();
         ctx.fill();
         // head
@@ -147,9 +147,9 @@
         // mandible
         const AGx = Gx - Ax;
         const AGy = Gy - Ay;
-        const M1x = Ax + AGx * 0.2;
-        const M1y = Ay + AGy * 0.2;
-        const M2x = M1x + bodyTop * 1.5;
+        const M1x = Ax - AGx * 0.2;
+        const M1y = Ay - AGy * 0.2;
+        const M2x = M1x - bodyTop * 1.5;
         const M2y = M1y;
         ctx.beginPath();
         ctx.moveTo(Ax, Ay);
