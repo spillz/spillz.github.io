@@ -212,7 +212,7 @@
                 this.active = on;
                 const m = this.mesh.material;
                 if (on) {
-                    m.color.setHex(player.position.y < 0? PLAYER_PURPLE : PLAYER_ORANGE);
+                    m.color.setHex(player.position.y < 0 ? PLAYER_PURPLE : PLAYER_ORANGE);
                     m.emissive.setHex(0x004400);
                     m.emissiveIntensity = 1.0;
                 } else {
@@ -759,7 +759,11 @@
             const m = new THREE.MeshStandardMaterial({ color: 0x0b0f16, metalness: 0.0, roughness: 1.0 });
             const ground = new THREE.Mesh(g, m);
             ground.rotation.x = -Math.PI / 2;
-            ground.position.y = 0;
+
+            // Put ground safely below the rotating tiles
+            const lowestY = octaY - (tilePitch * 0.5 + squareThickness * 0.5);
+            ground.position.y = lowestY - 0.5; // extra margin (0.5m)
+
             ground.receiveShadow = true;
             scene.add(ground);
         }
