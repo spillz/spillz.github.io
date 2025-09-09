@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Tyler's 3D Grid Flip</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #0c0f13;
+        }
+
+        #hud {
+            position: fixed;
+            left: 12px;
+            bottom: 12px;
+            color: #cfd6e6;
+            font: 12px/1.4 system-ui, sans-serif;
+            background: rgba(0, 0, 0, .35);
+            padding: 8px 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(2px);
+            user-select: none;
+        }
+
+        #hud b {
+            color: #fff
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="hud">
+        <div><b>Arrow Up/Down</b> or <b>W/S</b> move • <b>Arrow Left/Right</b> or <b>A/D</b> strafe</div>
+        <div><b>Ctrl/Left Click + Direction</b> flip tile group
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        // -----------------------------
+        // Tunable measurements (meters)
+        // -----------------------------
+        const TILE_COUNT_X = 8;
+        const TILE_COUNT_Z = 8;
+
+        const squareSize = 3.5;     // square side length
+        const squareThickness = 0.1;
+        const squareGap = 0.5;
+        const tilePitch = squareSize + squareGap;
+
+        const diamondSize = 2.0;
+        const diamondInset = 0.003;
+        const diamondAlpha = 0.38; // 0..1 (higher = more opaque)
+
+        const octaSize = 0.25;
+        const octaY = octaSize / 2; //squareThickness * 0.5 + octaSize;
+
+        const playerHeight = 1.5;
+        const playerBase = 0.75;
+        const playerHover = 0.5;
+        const playerSpeed = 3.0;
+        const playerStrafeSpeed = 3.0;
+        const collideRadiusXZ = 0.35;
+
+        const cameraBack = 10.0;
+        const cameraDistance = cameraBack; // behind distance in player's local space
+        const cameraLerp = 0.15;           // smoothing [0..1]
+        const cameraPitchMinDeg = 10;
+        const cameraPitchMaxDeg = 80;
+        let cameraPitchDeg = 38;         // initial tilt
+
+        const flipDuration = 1.0;   // seconds
+        const mouseTurnScale = 0.004;// radians per pixel
+
+        let flipRotQ = new THREE.Quaternion(); // current flip rotation R(t)
+        const preFlip = {
+            rootQuat: new THREE.Quaternion(),
+            yaw: 0,
+            pos: new THREE.Vector3(),
+            pivot: new THREE.Vector3()
+        };
+
+
+        // Colors
+        const COLOR_SQUARE = 0x2a2f38;
+        const DIAMOND_COLORS = [0x7d4df1, 0xff6ca8, 0x5aa7ff, 0x38dfc9];
+        const OCTA_SILVER = 0xbfc7d5;
+        const OCTA_ACTIVE = 0x00e676;
+        const PLAYER_COLOR = 0xff8c2b;
+        const PLAYER_ORANGE = 0xff8c2b;     // default
+        const PLAYER_PURPLE = 0x7d4df1;     // “dark side” color
+
+        // -----------------------------
+        // Scene & Renderer
+        // -----------------------------
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight, false);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0e1219);
+
+        // Lights: warm top, cool bottom
+        const hemi = new THREE.HemisphereLight(0xfff2d6, 0x4a32d0, 0.9);
+        let dirKey, dirFill;
+        {
+            scene.add(hemi);
+
+            dirKey = new THREE.DirectionalLight(0xffe2b5, 0.75);   // key from "sky"
+            dirKey.target.position.set(0, 0, 0);
+            scene.add(dirKey, dirKey.target);
+
+            dirFill = new THREE.DirectionalLight(0x8080b5, 0.20);  // gentle fill from "ground"
+            dirFill.target.position.set(0, 0, 0);
+            scene.add(dirFill, dirFill.target);
+        }
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 200);
+        scene.add(camera);
+
+        // -----------------------------
+        // World bounds
+        // -----------------------------
+        const halfWidth = (TILE_COUNT_X - 1) * tilePitch * 0.5 + squareSize * 0.5;
+        const halfDepth = (TILE_COUNT_Z - 1) * tilePitch * 0.5 + squareSize * 0.5;
+        function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+        // -----------------------------
+        // Entity base
+        // -----------------------------
+        class Entity {
+            constructor(mesh) { this.mesh = mesh; }
+            setPosition(x, y, z) { this.mesh.position.set(x, y, z); }
+            get position() { return this.mesh.position; }
+            addTo(parent) { parent.add(this.mesh); }
+        }
+
+        // -----------------------------
+        // Square
+        // -----------------------------
+        class Square extends Entity {
+            constructor(colorIndex) {
+                const group = new THREE.Group();
+
+                const geo = new THREE.BoxGeometry(squareSize, squareThickness, squareSize);
+                const mat = new THREE.MeshStandardMaterial({ color: COLOR_SQUARE, metalness: 0.05, roughness: 0.9 });
+                const slab = new THREE.Mesh(geo, mat);
+                slab.receiveShadow = true;
+                group.add(slab);
+
+                const dGeo = new THREE.PlaneGeometry(diamondSize, diamondSize);
+                const dMat = new THREE.MeshStandardMaterial({
+                    color: DIAMOND_COLORS[colorIndex],
+                    emissive: new THREE.Color(DIAMOND_COLORS[colorIndex]).multiplyScalar(0.14),
+                    side: THREE.DoubleSide,
+                    metalness: 0.2,
+                    roughness: 0.5,
+                    transparent: true,
+                    opacity: diamondAlpha,
+                    depthWrite: false   // helps avoid sorting artifacts on many thin planes
+                });
+                const top = new THREE.Mesh(dGeo, dMat);
+                top.rotation.x = -Math.PI / 2;
+                top.rotation.z = Math.PI / 4;
+                top.position.y = squareThickness / 2 + diamondInset;
+                group.add(top);
+
+                const bottom = new THREE.Mesh(dGeo, dMat.clone());
+                bottom.rotation.x = Math.PI / 2;
+                bottom.rotation.z = Math.PI / 4;
+                bottom.position.y = -squareThickness / 2 - diamondInset;
+                group.add(bottom);
+
+                top.renderOrder = 1;
+                bottom.renderOrder = 1;
+
+
+                super(group);
+                this.slab = slab;
+
+                // logical grid index bookkeeping
+                this.gridX = 0;
+                this.gridZ = 0;
+            }
+        }
+
+        // -----------------------------
+        // Octahedron
+        // -----------------------------
+        class Octa extends Entity {
+            constructor() {
+                const geo = new THREE.OctahedronGeometry(octaSize, 0);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: OCTA_SILVER, metalness: 0.4, roughness: 0.25, emissive: 0x000000
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.castShadow = true; mesh.receiveShadow = true;
+                super(mesh);
+                this.active = false;
+            }
+            setActive(on) {
+                if (this.active === on) return;
+                this.active = on;
+                const m = this.mesh.material;
+                if (on) {
+                    m.color.setHex(player.position.y < 0? PLAYER_PURPLE : PLAYER_ORANGE);
+                    m.emissive.setHex(0x004400);
+                    m.emissiveIntensity = 1.0;
+                } else {
+                    m.color.setHex(OCTA_SILVER);
+                    m.emissive.setHex(0x000000);
+                    m.emissiveIntensity = 0.0;
+                }
+                m.needsUpdate = true;
+            }
+        }
+
+        // -----------------------------
+        // Player (orange cone) — we’ll boost emissive when on active octa
+        // -----------------------------
+        class Player extends Entity {
+            constructor() {
+                const root = new THREE.Group();      // carries flips + position
+                const yawNode = new THREE.Group();   // carries heading (mouse yaw)
+                root.add(yawNode);
+
+                const geo = new THREE.ConeGeometry(playerBase * 0.5, playerHeight, 28, 1);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: PLAYER_COLOR, metalness: 0.2, roughness: 0.5,
+                    emissive: 0x331000, emissiveIntensity: 0.25
+                });
+                const cone = new THREE.Mesh(geo, mat);
+                cone.castShadow = true; cone.receiveShadow = true;
+                yawNode.add(cone);
+
+                super(root);               // IMPORTANT: entity.mesh === root
+                this.root = root;
+                this.yawNode = yawNode;
+                this.model = cone;         // for glow
+
+                this.root.position.y = playerHover + playerHeight * 0.5;
+                this.yaw = 0;
+                this.yawNode.rotation.y = this.yaw;
+            }
+            setYaw(y) {
+                this.yaw = y;
+                this.yawNode.rotation.y = y;
+            }
+            setGlow(on) {
+                const m = this.model.material;
+                if (on) { m.emissive.setHex(0x552200); m.emissiveIntensity = 0.9; }
+                else { m.emissive.setHex(0x331000); m.emissiveIntensity = 0.25; }
+            }
+        }
+
+        // -----------------------------
+        // Grid
+        // -----------------------------
+        const squares = [];
+        const squaresGroup = new THREE.Group();
+        scene.add(squaresGroup);
+
+        for (let ix = 0; ix < TILE_COUNT_X; ix++) {
+            squares[ix] = [];
+            for (let iz = 0; iz < TILE_COUNT_Z; iz++) {
+                const sq = new Square((Math.floor(Math.random() * 100)) % 4);
+                const x = (ix - (TILE_COUNT_X - 1) / 2) * tilePitch;
+                const z = (iz - (TILE_COUNT_Z - 1) / 2) * tilePitch;
+                sq.setPosition(x, squareThickness * 0.5, z);
+                sq.gridX = ix; sq.gridZ = iz;
+                sq.addTo(squaresGroup);
+                squares[ix][iz] = sq;
+            }
+        }
+
+        // Octa nodes (between 4 squares)
+        const octas = [];
+        const octaGroup = new THREE.Group();
+        scene.add(octaGroup);
+
+        for (let ix = 0; ix < TILE_COUNT_X - 1; ix++) {
+            octas[ix] = [];
+            for (let iz = 0; iz < TILE_COUNT_Z - 1; iz++) {
+                const oc = new Octa();
+                const x = (ix - (TILE_COUNT_X - 1) / 2) * tilePitch + tilePitch * 0.5;
+                const z = (iz - (TILE_COUNT_Z - 1) / 2) * tilePitch + tilePitch * 0.5;
+                oc.setPosition(x, octaY, z);
+                oc.addTo(octaGroup);
+                octas[ix][iz] = oc;
+            }
+        }
+
+        // -----------------------------
+        // Player & camera follow (with roll tracking)
+        // -----------------------------
+        const player = new Player();
+        player.addTo(scene);
+        player.position.set(-halfWidth + 1.0, player.position.y, -halfDepth + 1.0);
+
+        const tmpVec = new THREE.Vector3();
+        const tmpQuat = new THREE.Quaternion();
+        const upLocal = new THREE.Vector3(0, 1, 0);
+        const fwdLocal = new THREE.Vector3(0, 0, 1);
+        const rightLocal = new THREE.Vector3(1, 0, 0);
+
+        function getCamAxesXZ() {
+            const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const r = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            f.y = 0; r.y = 0;
+            if (f.lengthSq() < 1e-8) f.set(0, 0, 1);
+            if (r.lengthSq() < 1e-8) r.set(1, 0, 0);
+            f.normalize(); r.normalize();
+            return { f, r }; // screen-forward (XZ), screen-right (XZ)
+        }
+
+
+        function snapCameraToFollow() {
+            const pitchRad = THREE.MathUtils.degToRad(cameraPitchDeg);
+            const back = cameraDistance * Math.cos(pitchRad);
+            const up = cameraDistance * Math.sin(pitchRad);
+
+            player.yawNode.getWorldQuaternion(tmpQuat);
+
+            const normal = new THREE.Vector3(0, 1, 0)
+                .applyQuaternion(player.mesh.quaternion)
+                .normalize();
+
+            const fwd3D = new THREE.Vector3(0, 0, 1).applyQuaternion(tmpQuat);
+            const forward = fwd3D.clone().sub(normal.clone().multiplyScalar(fwd3D.dot(normal))).normalize();
+
+            const pos = player.position.clone()
+                .add(forward.clone().multiplyScalar(-back))
+                .add(normal.clone().multiplyScalar(up));
+
+            camera.position.copy(pos);
+            camera.up.copy(normal);
+            camera.lookAt(player.position.clone().add(normal.clone().multiplyScalar(playerHover + 0.8)));
+        }
+
+        function updateCamera(dt) {
+            const pitchRad = THREE.MathUtils.degToRad(cameraPitchDeg);
+            const back = cameraDistance * Math.cos(pitchRad);
+            const up = cameraDistance * Math.sin(pitchRad);
+
+            // Compute the player frame the camera should follow:
+            let rootQ, playerPos;
+
+            if (flipping) {
+                // Virtual root orientation & position: R(t) * preFlip
+                rootQ = flipRotQ.clone().multiply(preFlip.rootQuat);
+
+                // rotate player position about pivot: p' = pivot + R(t)*(p - pivot)
+                playerPos = preFlip.pos.clone().sub(preFlip.pivot).applyQuaternion(flipRotQ).add(preFlip.pivot);
+            } else {
+                rootQ = player.mesh.quaternion;
+                playerPos = player.position;
+            }
+
+            // Yaw is relative to root; lock to preFlip.yaw while flipping
+            const yawLocal = flipping ? preFlip.yaw : player.yaw;
+            const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawLocal);
+
+            // World orientation for "forward": root * yaw
+            const worldQ = rootQ.clone().multiply(yawQ);
+
+            // Normal = root's up (includes flips)
+            const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(rootQ).normalize();
+            hemi.position.copy(normal); // sky is along the board's current 'up'
+
+            const dist = 24;
+            dirKey.position.copy(normal).multiplyScalar(dist);
+            dirKey.target.position.set(0, 0, 0); dirKey.target.updateMatrixWorld();
+
+            dirFill.position.copy(normal).multiplyScalar(-dist);
+            dirFill.target.position.set(0, 0, 0); dirFill.target.updateMatrixWorld();
+
+            // Forward = projected onto the platform plane (robust even when upside-down)
+            const fwd3D = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQ);
+            const forward = fwd3D.clone().sub(normal.clone().multiplyScalar(fwd3D.dot(normal))).normalize();
+
+            const desiredPos = playerPos.clone()
+                .add(forward.clone().multiplyScalar(-back))
+                .add(normal.clone().multiplyScalar(up));
+
+            const lerpAmt = flipping ? 1.0 : cameraLerp;
+            camera.position.lerp(desiredPos, lerpAmt);
+            camera.up.copy(normal);
+            camera.lookAt(playerPos.clone().add(normal.clone().multiplyScalar(playerHover + 0.8)));
+
+            updatePlayerVisuals(normal, dt);
+        }
+
+        // -----------------------------
+        // Input
+        // -----------------------------
+        const keys = new Set();
+        let mouseCaptured = false;
+        let mouseLeftDown = false;
+
+        const isDown = (...names) => names.some(n => keys.has(n));
+
+
+        addEventListener('keydown', (e) => {
+            // prevent default for arrows/space; WASD is harmless but include if you like
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+
+            const k = (e.key.length === 1) ? e.key.toLowerCase() : e.key;  // letters -> lowercase
+            keys.add(k);
+        });
+
+        addEventListener('keyup', (e) => {
+            const k = (e.key.length === 1) ? e.key.toLowerCase() : e.key;
+            keys.delete(k);
+        });
+
+        canvas.addEventListener('click', () => canvas.requestPointerLock?.());
+        // Track left mouse as a modifier
+        addEventListener('mousedown', (e) => {
+            if (e.button === 0) mouseLeftDown = true;
+        });
+        addEventListener('mouseup', (e) => {
+            if (e.button === 0) mouseLeftDown = false;
+        });
+
+        // Be safe on focus/lock changes
+        addEventListener('blur', () => { mouseLeftDown = false; });
+        document.addEventListener('pointerlockchange', () => {
+            mouseCaptured = (document.pointerLockElement === canvas);
+            if (!mouseCaptured) mouseLeftDown = false;
+        });
+
+        addEventListener('mousemove', (e) => {
+            if (!mouseCaptured || flipping) return;
+            const dx = e.movementX ?? 0;
+            const dy = e.movementY ?? 0;
+
+            // yaw from horizontal motion
+            player.setYaw(player.yaw - dx * mouseTurnScale);
+
+            // pitch from vertical motion
+            cameraPitchDeg = clamp(
+                cameraPitchDeg - dy * 0.15, // scale factor for sensitivity
+                cameraPitchMinDeg,
+                cameraPitchMaxDeg
+            );
+        });
+        // -----------------------------
+        // Movement & bounds
+        // -----------------------------
+        function movePlayer(dt) {
+            let f = 0, s = 0;
+            if (isDown('ArrowUp', 'w')) f += 1;
+            if (isDown('ArrowDown', 's')) f -= 1;
+
+            // If on active octa and flip wasn’t triggered, allow strafing
+            if (!tryFlipFromInput()) {
+                if (isDown('ArrowLeft', 'a')) s -= 1;
+                if (isDown('ArrowRight', 'd')) s += 1;
+            }
+
+            // Basis from current world pose (no movement during flip anyway)
+            player.yawNode.getWorldQuaternion(tmpQuat);
+            const rootQ = player.mesh.quaternion;
+            const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(rootQ).normalize();
+            const fwd3D = new THREE.Vector3(0, 0, 1).applyQuaternion(tmpQuat);
+            const forward = fwd3D.clone().sub(normal.clone().multiplyScalar(fwd3D.dot(normal))).normalize();
+            const right = new THREE.Vector3().crossVectors(forward, normal).normalize();
+
+            const v = new THREE.Vector3();
+            if (f !== 0) v.addScaledVector(forward, f * playerSpeed * dt);
+            if (s !== 0) v.addScaledVector(right, s * playerStrafeSpeed * dt);
+
+            player.position.add(v);
+
+            const margin = 0.2;
+            player.position.x = clamp(player.position.x, -halfWidth + margin, halfWidth - margin);
+            player.position.z = clamp(player.position.z, -halfDepth + margin, halfDepth - margin);
+        }
+
+        // -----------------------------
+        // Octa activation & flipping
+        // -----------------------------
+        let flipSign = 1;            // +1 or -1 based on Left/Right
+        let flipAxisKind = 'x';      // 'x' or 'z' (chosen per player facing)
+
+        let activeOcta = null;
+        let flipping = false;
+        let flipT = 0;
+        let flipAxis = new THREE.Vector3(1, 0, 0); // set at startFlip
+        let flipGroup = null;
+        let flipParticipants = null; // {sqs:[Square,Square,Square,Square], oc:Octa, playerMesh:Mesh, ix,iz, centers:[..]}
+        let playerGlowOn = false;
+
+        const tmpV1 = new THREE.Vector3();
+        const tmpV2 = new THREE.Vector3();
+
+        function nearestOctaDistance(playerWorldPos) {
+            let best = Infinity;
+            for (let ix = 0; ix < TILE_COUNT_X - 1; ix++) {
+                for (let iz = 0; iz < TILE_COUNT_Z - 1; iz++) {
+                    octas[ix][iz].mesh.getWorldPosition(tmpV1);
+                    const d = tmpV1.distanceTo(playerWorldPos);
+                    if (d < best) best = d;
+                }
+            }
+            return best;
+        }
+
+        // Update cone color (orange vs purple) and hard on/off glow when a flip is possible
+        function updatePlayerVisuals(boardUpNormal, dt) {
+            const mat = player.model.material;
+
+            // Side color: world “dark side” => purple, else orange
+            const worldUp = new THREE.Vector3(0, 1, 0);
+            const onDarkSide = boardUpNormal.dot(worldUp) < 0;
+            const baseColor = onDarkSide ? PLAYER_PURPLE : PLAYER_ORANGE;
+            mat.color.setHex(baseColor);
+
+            // Glow: ON whenever a flip is available (activeOcta set by updateOctaActivation)
+            const canFlipNow = !!activeOcta && !flipping;
+            const glow = canFlipNow ? 2.2 : 0.3;
+
+            mat.emissive.setHex(baseColor);
+            mat.emissiveIntensity = glow;
+        }
+
+
+        function findOverlappedOcta() {
+            let best = null, bestD2 = collideRadiusXZ * collideRadiusXZ;
+            for (let ix = 0; ix < TILE_COUNT_X - 1; ix++) {
+                for (let iz = 0; iz < TILE_COUNT_Z - 1; iz++) {
+                    const oc = octas[ix][iz];
+                    const dx = oc.position.x - player.position.x;
+                    const dz = oc.position.z - player.position.z;
+                    const d2 = dx * dx + dz * dz;
+                    if (d2 <= bestD2) {
+                        best = { ix, iz, oc };
+                        bestD2 = d2;
+                    }
+                }
+            }
+            return best;
+        }
+
+        function updateOctaActivation() {
+            const hit = findOverlappedOcta();
+
+            if (activeOcta && (!hit || hit.oc !== activeOcta.oc)) {
+                activeOcta.oc.setActive(false);
+                activeOcta = null;
+            }
+            if (hit && !flipping) {
+                activeOcta = hit;
+                activeOcta.oc.setActive(true);
+            }
+        }
+
+        function tryFlipFromInput() {
+            if (!activeOcta || flipping) return false;
+
+            // Modifier: hold Ctrl OR hold Left Mouse
+            const modifier = keys.has('Control') || mouseLeftDown;
+            if (!modifier) return false;
+
+            let dir = null;
+            if (isDown('ArrowLeft', 'a')) dir = 'left';
+            else if (isDown('ArrowRight', 'd')) dir = 'right';
+            else if (isDown('ArrowUp', 'w')) dir = 'forward';
+            else if (isDown('ArrowDown', 's')) dir = 'back';
+
+            if (!dir) return false;
+
+            startFlip(dir);
+
+            // Swallow movement keys this frame so we don’t also strafe/move
+            ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'a', 'd', 'w', 's'].forEach(k => keys.delete(k));
+            return true;
+        }
+
+        function startFlip(command /* 'left'|'right'|'forward'|'back' */) {
+            flipping = true;
+            flipT = 0;
+
+            const { ix, iz, oc } = activeOcta;
+
+            // Record pre-flip reference pose
+            preFlip.rootQuat.copy(player.mesh.quaternion);
+            preFlip.yaw = player.yaw;
+            preFlip.pos.copy(player.position);
+            preFlip.pivot.copy(oc.position);
+
+            // Camera-relative planar axes (respect camera roll)
+            const { f: camFwdXZ, r: camRightXZ } = getCamAxesXZ();
+
+            // Board's current "up" in world (could be ±Y)
+            const upBoard = new THREE.Vector3(0, 1, 0).applyQuaternion(preFlip.rootQuat).normalize();
+
+            // Choose hinge axis from the intended flip family
+            let axisKind, desiredTangentXZ;
+            if (command === 'left' || command === 'right') {
+                axisKind = (Math.abs(camFwdXZ.x) >= Math.abs(camFwdXZ.z)) ? 'x' : 'z';
+                desiredTangentXZ = (command === 'right') ? camRightXZ : camRightXZ.clone().multiplyScalar(-1);
+            } else { // 'forward' | 'back'
+                axisKind = (Math.abs(camRightXZ.x) >= Math.abs(camRightXZ.z)) ? 'x' : 'z';
+                desiredTangentXZ = (command === 'forward') ? camFwdXZ : camFwdXZ.clone().multiplyScalar(-1);
+            }
+
+            const worldAxis = (axisKind === 'x') ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
+            flipAxisKind = axisKind;
+            flipAxis.copy(worldAxis);
+
+            // SIGN: initial in-plane motion of the board's up under +ω is (axis × upBoard)
+            const baseTangentXZ = worldAxis.clone().cross(upBoard).setY(0).normalize(); // XZ
+            let sgn = Math.sign(baseTangentXZ.dot(desiredTangentXZ));
+            if (sgn === 0) sgn = 1;  // tie-break
+            flipSign = sgn;
+
+            // --- Create flip group and attach participants (unchanged) ---
+            flipGroup = new THREE.Group();
+            flipGroup.position.copy(oc.position);
+            scene.add(flipGroup);
+
+            function attachPreserveWorld(obj, newParent) {
+                const m = obj.matrixWorld.clone();
+                newParent.updateMatrixWorld();
+                newParent.add(obj);
+                obj.matrix.copy(new THREE.Matrix4().copy(newParent.matrixWorld).invert().multiply(m));
+                obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+            }
+
+            const sqA = squares[ix][iz];
+            const sqB = squares[ix + 1][iz];
+            const sqC = squares[ix][iz + 1];
+            const sqD = squares[ix + 1][iz + 1];
+
+            flipParticipants = { ix, iz, sqA, sqB, sqC, sqD, oc: oc.mesh, playerMesh: player.mesh };
+
+            attachPreserveWorld(player.mesh, flipGroup);
+            attachPreserveWorld(oc.mesh, flipGroup);
+            attachPreserveWorld(sqA.mesh, flipGroup);
+            attachPreserveWorld(sqB.mesh, flipGroup);
+            attachPreserveWorld(sqC.mesh, flipGroup);
+            attachPreserveWorld(sqD.mesh, flipGroup);
+            // keep camera out of the group
+        }
+
+        function sqCenterWorld(ix, iz) {
+            return new THREE.Vector3(
+                (ix - (TILE_COUNT_X - 1) / 2) * tilePitch,
+                squareThickness * 0.5,
+                (iz - (TILE_COUNT_Z - 1) / 2) * tilePitch
+            );
+        }
+
+        function updateFlip(dt) {
+            if (!flipping) return;
+
+            const tNorm = Math.min((flipT += dt / flipDuration), 1.0);
+            const u = tNorm * tNorm * (3 - 2 * tNorm);        // smoothstep
+            const angle = flipSign * Math.PI * u;
+            flipRotQ.setFromAxisAngle(flipAxis, angle);
+            flipGroup.quaternion.copy(flipRotQ);
+
+            if (tNorm >= 1.0) {
+                finalizeFlip();
+                flipping = false;
+            }
+        }
+
+        function finalizeFlip() {
+            function detachPreserveWorld(obj, newParent) {
+                const m = obj.matrixWorld.clone();
+                newParent.updateMatrixWorld();
+                newParent.add(obj);
+                obj.matrix.copy(new THREE.Matrix4().copy(newParent.matrixWorld).invert().multiply(m));
+                obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+            }
+
+            const kids = [...flipGroup.children];
+            for (const ch of kids) detachPreserveWorld(ch, scene);
+            scene.remove(flipGroup);
+            flipGroup = null;
+
+            // Deterministic swap of the 2x2 squares around the octa based on axis
+            const { ix, iz, sqA, sqB, sqC, sqD } = flipParticipants;
+
+            // Current logical references:
+            //  A=(ix,iz), B=(ix+1,iz), C=(ix,iz+1), D=(ix+1,iz+1)
+            let A = squares[ix][iz];
+            let B = squares[ix + 1][iz];
+            let C = squares[ix][iz + 1];
+            let D = squares[ix + 1][iz + 1];
+
+            // After a 180° around X: swap along Z (A<->C, B<->D)
+            // After a 180° around Z: swap along X (A<->B, C<->D)
+            if (flipAxisKind === 'x') {
+                [A, C] = [C, A];
+                [B, D] = [D, B];
+            } else { // 'z'
+                [A, B] = [B, A];
+                [C, D] = [D, C];
+            }
+
+            // Write back mapping
+            squares[ix][iz] = A; A.gridX = ix; A.gridZ = iz;
+            squares[ix + 1][iz] = B; B.gridX = ix + 1; B.gridZ = iz;
+            squares[ix][iz + 1] = C; C.gridX = ix; C.gridZ = iz + 1;
+            squares[ix + 1][iz + 1] = D; D.gridX = ix + 1; D.gridZ = iz + 1;
+
+            // Snap centers (keeps tiny numeric drift from accumulating)
+            A.position.copy(sqCenterWorld(ix, iz));
+            B.position.copy(sqCenterWorld(ix + 1, iz));
+            C.position.copy(sqCenterWorld(ix, iz + 1));
+            D.position.copy(sqCenterWorld(ix + 1, iz + 1));
+
+            snapCameraToFollow();
+        }
+
+        // -----------------------------
+        // Animation
+        // -----------------------------
+        const clock = new THREE.Clock();
+        function tick() {
+            const dt = Math.min(clock.getDelta(), 0.033);
+
+            if (!flipping) movePlayer(dt);
+            updateFlip(dt);
+            updateOctaActivation();
+            updateCamera(dt);
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(tick);
+        }
+        tick();
+
+        // -----------------------------
+        // Resize
+        // -----------------------------
+        addEventListener('resize', () => {
+            renderer.setSize(innerWidth, innerHeight, false);
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        // -----------------------------
+        // Ground
+        // -----------------------------
+        {
+            const g = new THREE.PlaneGeometry((halfWidth + 2) * 2, (halfDepth + 2) * 2);
+            const m = new THREE.MeshStandardMaterial({ color: 0x0b0f16, metalness: 0.0, roughness: 1.0 });
+            const ground = new THREE.Mesh(g, m);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = 0;
+            ground.receiveShadow = true;
+            scene.add(ground);
+        }
+
+        // -----------------------------
+        // Fog
+        // -----------------------------
+        scene.fog = new THREE.FogExp2(0x0e1219, 0.01);
+    </script>
+</body>
+
+</html>
