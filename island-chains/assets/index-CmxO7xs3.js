@@ -1174,6 +1174,7 @@ function drawText(ctx, textData, color = null) {
   if (size < minFontSize$1) ctx.restore();
 }
 function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordwrap = true) {
+  if (!text) return [rect.w, size];
   let scale = 1;
   if (size < minFontSize$1) {
     scale = 1 / scaleFactor$1;
@@ -1183,10 +1184,13 @@ function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordw
   ctx.font = (size >= minFontSize$1 ? size : Math.ceil(size / scale)) + "px " + fontName;
   let h = 0;
   let paraText = "";
-  let guess = Math.min(Math.max(1, Math.ceil(text.length * rect.w / ctx.measureText(text).width / scale)), text.length);
-  while (text != "" || paraText != "") {
-    if (paraText == "") {
-      let n = text.indexOf("\n");
+  let guess = Math.min(
+    Math.max(1, Math.ceil(text.length * (rect.w / (ctx.measureText(text).width || 1)) / scale)),
+    text.length
+  );
+  while (text !== "" || paraText !== "") {
+    if (paraText === "") {
+      const n = text.indexOf("\n");
       if (n >= 0) {
         paraText = text.slice(0, n);
         text = text.slice(n + 1);
@@ -1195,6 +1199,7 @@ function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordw
         text = "";
       }
     }
+    guess = Math.max(1, Math.min(guess, paraText.length));
     let nextLine = paraText.slice(0, guess);
     let w = scale * ctx.measureText(nextLine).width;
     if (w > rect.w && guess > 1) {
@@ -1210,25 +1215,25 @@ function sizeWrappedText(ctx, text, size, fontName, centered, rect, color, wordw
         nextLine = paraText.slice(0, guess);
         w = scale * ctx.measureText(nextLine).width;
       }
-      if (w > rect.w) {
-        guess--;
-      }
+      if (w > rect.w) guess--;
     }
-    if (wordwrap) {
-      if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
-        let lastIndex = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
-        if (lastIndex >= 0) {
-          guess -= nextLine.length - lastIndex - 1;
+    if (wordwrap && guess > 0) {
+      const lastChar = nextLine.at ? nextLine.at(-1) ?? "" : nextLine[nextLine.length - 1] ?? "";
+      const nextChar = guess < paraText.length ? paraText[guess] : " ";
+      const isSpace = (c) => c === " " || c === "	";
+      if (!isSpace(lastChar) && !isSpace(nextChar)) {
+        const lastSpace = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
+        if (lastSpace >= 0) {
+          guess -= nextLine.length - lastSpace - 1;
         }
       }
     }
     guess = Math.max(1, guess);
     nextLine = paraText.slice(0, guess);
     paraText = paraText.slice(guess);
-    if (wordwrap) {
-      paraText = paraText.trimStart();
-    }
+    if (wordwrap) paraText = paraText.trimStart();
     h += size;
+    guess = Math.min(guess, Math.max(1, paraText.length));
   }
   h += size;
   if (size < minFontSize$1) ctx.restore();
@@ -1244,12 +1249,16 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
   ctx.fillStyle = color;
   ctx.font = (size >= minFontSize$1 ? size : Math.ceil(size / scale)) + "px " + fontName;
   let y = rect.y;
-  let outText = [];
+  const outText = [];
   let paraText = "";
-  let guess = Math.min(Math.max(1, Math.ceil(text.length * (rect.w / ctx.measureText(text).width) / scale)), text.length);
-  while (text != "" || paraText != "") {
-    if (paraText == "") {
-      let n = text.indexOf("\n");
+  const totalW = ctx.measureText(text).width || 1;
+  let guess = Math.min(
+    Math.max(1, Math.ceil(text.length * (rect.w / totalW / scale))),
+    Math.max(1, text.length)
+  );
+  while (text !== "" || paraText !== "") {
+    if (paraText === "") {
+      const n = text.indexOf("\n");
       if (n >= 0) {
         paraText = text.slice(0, n);
         text = text.slice(n + 1);
@@ -1258,7 +1267,7 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
         text = "";
       }
     }
-    let x = rect.x;
+    guess = Math.max(1, Math.min(guess, paraText.length));
     let nextLine = paraText.slice(0, guess);
     let w = scale * ctx.measureText(nextLine).width;
     if (w > rect.w && guess > 1) {
@@ -1274,28 +1283,26 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
         nextLine = paraText.slice(0, guess);
         w = scale * ctx.measureText(nextLine).width;
       }
-      if (w > rect.w) {
-        guess--;
-      }
+      if (w > rect.w) guess--;
     }
-    if (wordwrap && guess < paraText.length) {
-      if (nextLine[-1] != "" && paraText[guess] != " " && paraText[guess] != "	") {
-        let lastIndex = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
-        if (lastIndex >= 0) {
-          guess -= nextLine.length - lastIndex - 1;
+    if (wordwrap && guess < paraText.length && guess > 0) {
+      const lastChar = nextLine.at ? nextLine.at(-1) ?? "" : nextLine[nextLine.length - 1] ?? "";
+      const nextChar = guess < paraText.length ? paraText[guess] : " ";
+      const isSpace = (c) => c === " " || c === "	";
+      if (!isSpace(lastChar) && !isSpace(nextChar)) {
+        const lastSpace = Math.max(nextLine.lastIndexOf(" "), nextLine.lastIndexOf("	"));
+        if (lastSpace >= 0) {
+          guess -= nextLine.length - lastSpace - 1;
         }
       }
     }
-    guess = Math.max(1, guess);
+    guess = Math.max(1, Math.min(guess, paraText.length));
     nextLine = paraText.slice(0, guess);
     paraText = paraText.slice(guess);
-    if (wordwrap) {
-      paraText = paraText.trimStart();
-    }
+    if (wordwrap) paraText = paraText.trimStart();
     w = scale * ctx.measureText(nextLine).width;
+    let x = rect.x;
     switch (halign) {
-      case "left":
-        break;
       case "center":
         x += (rect.w - w) / 2;
         break;
@@ -1305,23 +1312,31 @@ function getWrappedTextData(ctx, text, size, fontName, halign, valign, rect, col
     }
     outText.push([nextLine, x / scale, y / scale]);
     y += size;
+    guess = Math.min(guess, Math.max(1, paraText.length));
   }
-  let h = y - rect.y;
+  const h = y - rect.y;
   let off = 0;
   switch (valign) {
-    case "top":
-      off = 0;
-      break;
     case "middle":
       off = (rect.h - h) / 2 + size / 2;
       break;
     case "bottom":
       off = rect.h - h + size;
+      break;
+    case "top":
+    default:
+      off = 0;
+      break;
   }
-  let textData = { size, fontName, outText, off: off / scale, color, valign };
-  if (size < minFontSize$1) {
-    ctx.restore();
-  }
+  const textData = {
+    size,
+    fontName,
+    outText,
+    off: off / scale,
+    color,
+    valign
+  };
+  if (size < minFontSize$1) ctx.restore();
   return textData;
 }
 function drawWrappedText(ctx, textData, color = null) {
@@ -1831,6 +1846,8 @@ class Timer {
     if (time >= 0) this.timer = time;
     if (initElapsed > 0) {
       this.tick(initElapsed);
+    } else {
+      this.elapsed = 0;
     }
   }
 }
@@ -1930,7 +1947,7 @@ function wrapRich(ctx, atoms, baseSize, fontName, maxWidth) {
       }
     }
     lines.push(merged);
-    line = [];
+    line.length = 0;
     lineWidth = 0;
   };
   for (const atom of atoms) {
@@ -2193,6 +2210,8 @@ class WidgetAnimation {
     __publicField(this, "widget", null);
     /**@type {AnimationProperties} */
     __publicField(this, "props", {});
+    /**@type {AnimationProperties} */
+    __publicField(this, "initProps", {});
     /**@type {number} */
     __publicField(this, "elapsed", 0);
   }
@@ -2207,6 +2226,7 @@ class WidgetAnimation {
   }
   /**
    * Update the animation. Completed animations are poped off the stack.
+   * @param {App} app The application instance
    * @param {number} millis Time in millisecond that have elapsed since last update
    */
   update(app, millis) {
@@ -2570,6 +2590,7 @@ const _Widget = class _Widget extends Rect {
    * This widget will react when the bound object's property changes, like an event listener.
    *
    * The callback receives the event name, the source object, the new value, and this widget itself.
+   * The dependency source must be defined in `deferredProps` using a string like "someOtherId.prop".
    *
    * Example:
    *   .d("enabled", "controller.running")
@@ -2577,12 +2598,14 @@ const _Widget = class _Widget extends Rect {
    *
    * @template {Widget} T
    * @param {string} property - The name of the property to listen for on the source object.
-   * @param {EventCallbackNullable} callback - Function to invoke when the source property changes.
+   * @param {(event: string, object: Widget, value: any, self: T) => any} callback - Function to invoke when the source property changes.
    */
   b(property, callback) {
+    if (!this._deferredProps) this._deferredProps = {};
+    this._deferredProps[property] = callback;
     return (
       /** @type {this} */
-      this.listen(property, callback)
+      this
     );
   }
   /**
@@ -2630,6 +2653,7 @@ const _Widget = class _Widget extends Rect {
    * a relationship linking this property to properties of this or another widget. It then 
    * binds that callback to all of those properties in the App widget tree. This function
    * is called by the framework and does not need to be called by user code.
+   * @param {App} app
    */
   deferredProperties(app) {
     let properties = this._deferredProps;
@@ -2967,6 +2991,7 @@ const _Widget = class _Widget extends Rect {
    * Handler for wheel events activated on the widget. This method will be called recursively on the widget tree
    * and stop if any of the widget instances of on_wheel return false.
    * @param {string} event 
+   * @param {Widget} object
    * @param {Touch} wheel 
    * @returns {boolean} true if event was handled and should stop propagating, false otherwise
    */
@@ -2978,6 +3003,7 @@ const _Widget = class _Widget extends Rect {
    * Handler for touch or mouse down events activated on the widget. This method will be called recursively on the widget tree
    * and stop if any of the widget instances of on_touch_down return false.
    * @param {string} event 
+   * @param {Widget} object
    * @param {Touch} touch
    * @returns {boolean} true if event was handled and should stop propagating, false otherwise
    */
@@ -2998,6 +3024,7 @@ const _Widget = class _Widget extends Rect {
    * and stop if any of the widget instances of on_touch_up return false. The touches are traversed through children
    * in reverse order to match the intuitiion that the topmost widget should be processed first.
    * @param {string} event 
+   * @param {Widget} object
    * @param {Touch} touch
    * @returns {boolean} true if event was handled and should stop propagating, false otherwise
    */
@@ -3017,6 +3044,7 @@ const _Widget = class _Widget extends Rect {
    * Handler for touch or mouse move events activated on the widget This method will be called recursively on the widget tree
    * and stop if any of the widget instances of on_touch_move return false.
    * @param {string} event 
+   * @param {Widget} object
    * @param {Touch} touch
    * @returns {boolean} true if event was handled and should stop propagating, false otherwise
    */
@@ -3036,7 +3064,8 @@ const _Widget = class _Widget extends Rect {
    * Handler for touch or mouse cancel events activated on the widget This method will be called recursively on the widget tree
    * and stop if any of the widget instances of on_touch_cancel return false.
    * @param {string} event 
-   * @param {Touch} touch
+  * @param {Widget} object
+    * @param {Touch} touch
    * @returns {boolean} true if event was handled and should stop propagating, false otherwise
    */
   on_touch_cancel(event, object, touch) {
@@ -3055,6 +3084,7 @@ const _Widget = class _Widget extends Rect {
    * Handler for back button (DO NOT USE, DOES NOT WORK) This method will be called recursively on the widget tree
    * and stop if any of the widget instances of on_wheel return false.
    * @param {string} event 
+   * @param {Widget} object
    * @param {*} history
    * @returns {boolean} true if event was handled and should stop propagating, false otherwise
    */
@@ -3324,6 +3354,8 @@ const _App = class _App extends Widget {
     this.id = "app";
     this.canvas = null;
     this.canvasName = "canvas";
+    this.canvas = null;
+    this.canvasName = "canvas";
     this.w = -1;
     this.h = -1;
     this._baseWidget = a(Widget, { hints: { x: 0, y: 0, w: 1, h: 1 } });
@@ -3338,8 +3370,10 @@ const _App = class _App extends Widget {
     this.dimW = this.prefDimW;
     this.dimH = this.prefDimH;
     this.tileSize = this.getTileScale() * this.pixelSize;
+    this.tileSize = this.getTileScale() * this.pixelSize;
     this.offsetX = 0;
     this.offsetY = 0;
+    this.shakeX = 0;
     this.shakeX = 0;
     this.shakeY = 0;
     this.shakeAmount = 0;
@@ -3372,6 +3406,7 @@ const _App = class _App extends Widget {
    */
   removeTimer(timer) {
     this.timers = this.timers.filter((t) => t != timer);
+    this.timers = this.timers.filter((t) => t != timer);
   }
   /**
    * Adds a ModalView object to the App, which will overlays the main app UI and take control of user interaction.
@@ -3386,6 +3421,7 @@ const _App = class _App extends Widget {
    * @param {ModalView} modal 
    */
   removeModal(modal) {
+    this._modalWidgets = this._modalWidgets.filter((m) => m != modal);
     this._modalWidgets = this._modalWidgets.filter((m) => m != modal);
   }
   /**
@@ -3406,11 +3442,13 @@ const _App = class _App extends Widget {
     window.onresize = () => that.updateWindowSize();
     this.updateWindowSize();
     setTimeout(() => this._start(), 1);
+    setTimeout(() => this._start(), 1);
   }
   /**
    * Internal function to actually start the main application loop once the main window has been loaded
    */
   _start() {
+    this.update();
     this.update();
   }
   /**
@@ -3545,12 +3583,15 @@ const _App = class _App extends Widget {
   getTransform(recurse = true) {
     return new DOMMatrix().translate(this.offsetX + this.shakeX, this.offsetY + this.shakeY).scale(this.tileSize, this.tileSize);
   }
+  /**@type {EventCallbackNullable} */
   on_prefDimW(e, o, v) {
     this.updateWindowSize();
   }
+  /**@type {EventCallbackNullable} */
   on_prefDimH(e, o, v) {
     this.updateWindowSize();
   }
+  /**@type {EventCallbackNullable} */
   on_tileSize(e, o, v) {
     if (this.prefDimH < 0 && this.prefDimW < 0) this.updateWindowSize();
   }
@@ -3737,27 +3778,35 @@ class Label extends Widget {
     __publicField(this, "color", "white");
     this._textData = null;
   }
+  /**@type {EventCallbackNullable} */
   on_align(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_valign(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_wrap(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_richText(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_wrapAtWord(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_text(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_fontSize(e, object, v) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_fontName(e, object, v) {
     this._needsLayout = true;
   }
@@ -3818,6 +3867,11 @@ class Label extends Widget {
     }
     super.layoutChildren();
   }
+  /**
+   * 
+   * @param {CanvasRenderingContext2D|OffscreenCanvasRenderingContext2D} ctx 
+   * @returns 
+   */
   sizeToGroup(ctx) {
     if (this._bestFontSize === void 0) return;
     let fontSize = Infinity;
@@ -4609,24 +4663,31 @@ class BoxLayout extends Widget {
       }
     }
   }
+  /**@type {EventCallbackNullable} */
   on_numX(event, object, data) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_numY(event, object, data) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_spacingX(event, object, data) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_spacingY(event, object, data) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_paddingX(event, object, data) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_paddingY(event, object, data) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_orientation(event, object, data) {
     this._needsLayout = true;
   }
@@ -4653,7 +4714,7 @@ class BoxLayout extends Widget {
       }
       let ch = (h - fixedh) / num;
       let cw = w;
-      if (this.hints["h"] !== null && (num === 0 && h > 0 || ch < 0)) paddingY = (h - fixedh) / 2;
+      if ((num === 0 && h > 0 || ch < 0) && this.hints["h"] !== null) paddingY = (h - fixedh) / 2;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
       for (let c of this.iterChildren()) {
@@ -4669,9 +4730,9 @@ class BoxLayout extends Widget {
         c.layoutChildren();
         y += spacingY + c.h;
       }
-      if (num === 0 && "h" in this.hints && this.hints["h"] === null) {
+      if (num === 0 && this.hints["h"] === null) {
         const oldH = this[3];
-        this[3] = Math.max(this[0], y + 2 * paddingY - this.y);
+        this[3] = y + 2 * paddingY - this.y;
         if (Math.abs(oldH - this[3]) > 1e-6) {
           App.get()._needsLayout = true;
         }
@@ -4694,7 +4755,7 @@ class BoxLayout extends Widget {
       }
       let ch = h;
       let cw = (w - fixedw) / num;
-      if (this.hints["w"] !== null && num === 0 && w > 0 || cw < 0) paddingX = (w - fixedw) / 2;
+      if ((num === 0 && w > 0 || cw < 0) && this.hints["w"] !== null) paddingX = (w - fixedw) / 2;
       let y = this.y + paddingY;
       let x = this.x + paddingX;
       for (let c of this.iterChildren()) {
@@ -4710,9 +4771,9 @@ class BoxLayout extends Widget {
         c.layoutChildren();
         x += spacingX + c.w;
       }
-      if (num == 0 && "w" in this.hints && this.hints["w"] == null) {
+      if (num === 0 && this.hints["w"] === null) {
         const oldW = this[2];
-        this[2] = Math.max(x + 2 * paddingX - this.x, 0);
+        this[2] = x + 2 * paddingX - this.x;
         if (Math.abs(oldW - this[2]) > 1e-6) {
           App.get()._needsLayout = true;
         }
@@ -4856,6 +4917,7 @@ class TabbedNotebook extends Notebook {
     this.buttonScroller.parent = this;
     this.updateButtons();
   }
+  /**@type {EventCallbackNullable} */
   on_tabHeightHint(e, o, v) {
     this.buttonBox.hints["h"] = this.tabHeightHint;
   }
@@ -5082,24 +5144,31 @@ class GridLayout extends Widget {
     /**@type {'vertical'|'horizontal'} Direction that child widgets are arranged in the BoxLayout*/
     __publicField(this, "orientation", "horizontal");
   }
+  /**@type {EventCallbackNullable} */
   on_numX(event, object, string) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_numY(event, object, string) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_spacingX(event, object, string) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_spacingY(event, object, string) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_paddingX(event, object, string) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_paddingY(event, object, string) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_orientation(event, object, string) {
     this._needsLayout = true;
   }
@@ -5272,6 +5341,12 @@ class ScrollView extends Widget {
     this._lastDist = null;
   }
   /**@type {EventCallbackNullable} */
+  /**
+   * 
+   * @param {string} event 
+   * @param {ScrollView} object 
+   * @param {Widget} child 
+   */
   on_child_added(event, object, child) {
     if (this.children.length == 1) {
       this.scrollX = 0;
@@ -5282,6 +5357,7 @@ class ScrollView extends Widget {
       child.listen("h", (event2, obj, data) => this._needsLayout = true);
     }
   }
+  /**@type {EventCallbackNullable} */
   on_child_removed(event, object, child) {
     if (this.children.length == 0) {
       this.scrollX = 0;
@@ -5306,12 +5382,15 @@ class ScrollView extends Widget {
     this.scrollX = 0.5 * this.scrollableW;
     this.scrollY = 0.5 * this.scrollableH;
   }
+  /**@type {EventCallbackNullable} */
   on_uiZoom(event, object, value) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_hAlign(event, object, value) {
     this._needsLayout = true;
   }
+  /**@type {EventCallbackNullable} */
   on_vAlign(event, object, value) {
     this._needsLayout = true;
   }
@@ -5328,10 +5407,12 @@ class ScrollView extends Widget {
       }
     }
   }
+  /**@type {EventCallbackNullable} */
   on_scrollW(event, object, value) {
     this._needsLayout = true;
     this.scrollX = 0;
   }
+  /**@type {EventCallbackNullable} */
   on_scrollH(event, object, value) {
     this._needsLayout = true;
     this.scrollY = 0;
@@ -6189,19 +6270,19 @@ const tileNames = {
   EL: "enemy longboat"
 };
 const tileDescriptions = {
-  C: "A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each turn.",
+  C: "A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each round.",
   V: "A village produces workers once provided with food.",
   A: "An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.",
   F: "A farm produces food once supplied with workers.",
   M: "A mine produces ore once supplied with workers.",
-  S: "A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from activated strongholds will attack enemies that they can reach.",
+  S: "A stronghold produces military strength once supplied with workers and ore. At the end of each round, units from activated strongholds will attack enemies that they can reach.",
   T: "A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once placed, tradeships allow production links between all structures within reach of the Tradeship.",
   X: "Rubble is the remains of a structure or enemy that you can build over.",
   ET: "An enemy tent is a temporary installation that expands enemy reach but does not attack.",
-  ES: "An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each turn.",
+  ES: "An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each round.",
   EC: "The enemy castle.",
   EL: "The enemy longboat allows enemy units to travel over water.",
-  ED: "An enemy dragon lives in mountains and will attack structures in range 2 at the end of each turn."
+  ED: "An enemy dragon lives in mountains and will attack structures in range 2 at the end of each round."
 };
 const tilePriority = {
   "ET": 11,
@@ -6719,12 +6800,8 @@ class Tile extends ImageWidget {
 class Rubble extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType} */
-      "X"
-    );
+    /**@type {TileType} */
+    __publicField(this, "code", "X");
     __publicField(this, "name", "Rubble");
     __publicField(this, "terrainPlacement", { "p": 0, "f": 0, "m": 0, "w": null });
     __publicField(this, "tileColor", "gray");
@@ -6736,12 +6813,8 @@ class Rubble extends Tile {
 class Castle extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType} */
-      "C"
-    );
+    /**@type {TileType} */
+    __publicField(this, "code", "C");
     __publicField(this, "name", "Castle");
     __publicField(this, "terrainPlacement", { "p": 0, "f": 0, "m": 0, "w": null });
     __publicField(this, "tileColor", "purple");
@@ -6796,12 +6869,8 @@ class Castle extends Tile {
 class Village extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "V"
-    );
+    /**@type {TileType} */
+    __publicField(this, "code", "V");
     __publicField(this, "name", "Village");
     __publicField(this, "terrainPlacement", { "p": 1, "f": 1, "m": 0, "w": null });
     __publicField(this, "tileColor", "yellow");
@@ -6820,12 +6889,8 @@ class Village extends Tile {
 class Stronghold extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "S"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "S");
     __publicField(this, "name", "Stronghold");
     __publicField(this, "terrainPlacement", { "p": 1, "f": 0, "m": 1, "w": null });
     __publicField(this, "tileColor", "red");
@@ -6843,12 +6908,8 @@ class Stronghold extends Tile {
 class Mine extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "M"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "M");
     __publicField(this, "name", "Mine");
     __publicField(this, "terrainPlacement", { "p": 1, "f": 0, "m": 2, "w": null });
     __publicField(this, "tileColor", "grey");
@@ -6866,12 +6927,8 @@ class Mine extends Tile {
 class Tradeship extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "T"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "T");
     __publicField(this, "name", "Tradeship");
     __publicField(this, "terrainPlacement", { "p": null, "f": null, "m": null, "w": 0 });
     __publicField(this, "tileColor", colorString([0.4, 0.2, 0.2, 1]));
@@ -6924,12 +6981,8 @@ class Tradeship extends Tile {
 class Abbey extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "A"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "A");
     __publicField(this, "name", "Abbey");
     __publicField(this, "terrainPlacement", { "p": 0, "f": 1, "m": 2, "w": null });
     __publicField(this, "tileColor", colorString([0.7, 0.4, 0.4, 1]));
@@ -6975,12 +7028,8 @@ class Farm extends Tile {
 class EnemyStronghold extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "ES"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "ES");
     __publicField(this, "name", "Enemy Stronghold");
     __publicField(this, "terrainPlacement", { "p": 1, "f": 1, "m": 1, "w": null });
     __publicField(this, "tileColor", colorString([0.7, 0.2, 0.2, 1]));
@@ -7000,12 +7049,8 @@ class EnemyStronghold extends Tile {
 class EnemyCastle extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "EC"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "EC");
     __publicField(this, "name", "Enemy Castle");
     __publicField(this, "terrainPlacement", { "p": 1, "f": 1, "m": 1, "w": null });
     __publicField(this, "tileColor", colorString([0.7, 0.2, 0.2, 1]));
@@ -7025,12 +7070,8 @@ class EnemyCastle extends Tile {
 class EnemyLongboat extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "EL"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "EL");
     __publicField(this, "name", "Enemy Castle");
     __publicField(this, "terrainPlacement", { "p": null, "f": null, "m": null, "w": 1 });
     __publicField(this, "tileColor", colorString([0.7, 0.2, 0.2, 1]));
@@ -7092,12 +7133,8 @@ class EnemyLongboat extends Tile {
 class EnemyTent extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType} */
-      "ET"
-    );
+    /**@type {TileType} */
+    __publicField(this, "code", "ET");
     __publicField(this, "name", "Enemy Tent");
     __publicField(this, "terrainPlacement", { "p": 1, "f": 1, "m": 1, "w": null });
     __publicField(this, "tileColor", colorString([0.7, 0.2, 0.2, 1]));
@@ -7159,12 +7196,8 @@ class EnemyTent extends Tile {
 class EnemyDragon extends Tile {
   constructor(props = {}) {
     super();
-    __publicField(
-      this,
-      "code",
-      /**@type {TileType}*/
-      "ED"
-    );
+    /**@type {TileType}*/
+    __publicField(this, "code", "ED");
     __publicField(this, "name", "Enemy Dragon");
     __publicField(this, "terrainPlacement", { "p": null, "f": null, "m": 2, "w": null });
     __publicField(this, "tileColor", colorString([0.7, 0.2, 0.2, 1]));
@@ -7368,6 +7401,155 @@ class TerrainMap extends Array {
     this[x][y] = terrain;
   }
 }
+const _NetworkFlowEdge = class _NetworkFlowEdge extends Widget {
+  constructor() {
+    super(...arguments);
+    /**@type {Board|null} */
+    __publicField(this, "board", null);
+    // pass your board instance in props
+    /** @type {[number,number]} */
+    __publicField(this, "fromHex", [0, 0]);
+    /** @type {[number,number]} */
+    __publicField(this, "toHex", [0, 0]);
+    /** @type {ResourceType} */
+    __publicField(this, "resource", "rf");
+    __publicField(this, "primary", false);
+    // thicker/highlighted if it touches the hovered tile
+    __publicField(this, "phase", 0);
+    // dash offset animation
+    __publicField(this, "speed", 1);
+    // px/sec for dash flow (kept gentle to avoid strobe)
+    __publicField(this, "_phaseInit", false);
+  }
+  /** Unique key for phase memory */
+  _edgeKey() {
+    const [fx, fy] = this.fromHex, [tx, ty] = this.toHex;
+    return `${fx},${fy}->${tx},${ty}:${this.resource}`;
+  }
+  /** Pixel center for a hex using your board API */
+  centerOf(hexPos) {
+    if (!this.board || typeof this.board.pixelPos !== "function") return { x: 0, y: 0 };
+    const [x, y] = this.board.pixelPos(hexPos);
+    return { x, y };
+  }
+  /** Gentle bow so overlapping edges are readable */
+  ctrlPoint(a2, b) {
+    const mx = (a2.x + b.x) / 2, my = (a2.y + b.y) / 2;
+    const dx = b.x - a2.x, dy = b.y - a2.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const bow = Math.min((this.board?.hexSide ?? 16) * 0.4, len * 0.12);
+    return { x: mx + nx * bow, y: my + ny * bow };
+  }
+  /** Optional half-pixel snap to reduce shimmer on thin strokes
+   * @param {number} v 
+   * @returns 
+   */
+  _snap(v) {
+    return Math.round(v) + 0.5;
+  }
+  /**@type {Widget['update']} */
+  update(app, millis) {
+    if (!this._phaseInit) {
+      const key = this._edgeKey();
+      if (_NetworkFlowEdge._phaseMem.has(key)) {
+        this.phase = _NetworkFlowEdge._phaseMem.get(key) ?? 0;
+      }
+      this._phaseInit = true;
+    }
+    const a2 = this.centerOf(this.fromHex);
+    const b = this.centerOf(this.toHex);
+    const len = Math.hypot(b.x - a2.x, b.y - a2.y) || 1;
+    const dt = millis / 1e3;
+    const v = this.speed / len;
+    this.phase = (this.phase + v * dt) % 1;
+    _NetworkFlowEdge._phaseMem.set(this._edgeKey(), this.phase);
+    app.requestFrameUpdate();
+    for (const c of this.children) c.update(app, millis);
+  }
+  /**@type {Widget['draw']} */
+  draw(app, ctx) {
+    if (!this.board) return;
+    const a2 = this.centerOf(this.fromHex);
+    const b = this.centerOf(this.toHex);
+    const c = this.ctrlPoint(a2, b);
+    const ax = a2.x, ay = a2.y;
+    const bx = b.x, by = b.y;
+    const cx = c.x, cy = c.y;
+    const src = gameImages[this.resource];
+    if (!src) return;
+    let img = _NetworkFlowEdge._iconCache.get(src);
+    if (!img) {
+      img = new Image();
+      img.src = src;
+      _NetworkFlowEdge._iconCache.set(src, img);
+    }
+    if (!img.complete) {
+      app.requestFrameUpdate();
+      return;
+    }
+    const side = this.board.hexSide ?? 1;
+    const size = side * (this.primary ? 0.3 : 0.25);
+    const startFrac = 0.12;
+    const endFrac = 0.88;
+    const span = endFrac - startFrac;
+    let pulses = Math.max(1, Math.round(span * (Math.hypot(bx - ax, by - ay) / (side * 1.4))));
+    if (this.primary && pulses < 2) pulses = 2;
+    const bezierPoint = (t) => {
+      const u = 1 - t;
+      const uu = u * u;
+      const tt = t * t;
+      const px = uu * ax + 2 * u * t * cx + tt * bx;
+      const py = uu * ay + 2 * u * t * cy + tt * by;
+      return { px, py };
+    };
+    ctx.save();
+    ctx.setLineDash([]);
+    for (let i = 0; i < pulses; i++) {
+      const tBase = (this.phase + i / pulses) % 1;
+      const t = startFrac + tBase * span;
+      const { px, py } = bezierPoint(t);
+      const localT = tBase;
+      const fadeEdge = Math.sin(Math.PI * localT);
+      if (this.primary && fadeEdge > 0.1) {
+        ctx.globalAlpha = 0.35 * fadeEdge;
+        ctx.beginPath();
+        ctx.arc(px, py, size * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = _NetworkFlowEdge.resColor[this.resource] ?? "rgba(255,255,255,0.5)";
+        ctx.fill();
+      }
+      ctx.globalAlpha = (this.primary ? 0.95 : 0.8) * (0.3 + 0.7 * fadeEdge);
+      ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
+    }
+    ctx.restore();
+  }
+};
+// internal: has phase been restored from memory?
+/** @type {Map<string, HTMLImageElement>} */
+__publicField(_NetworkFlowEdge, "_iconCache", /* @__PURE__ */ new Map());
+// Stable phase memory so edges don't "flash" when the overlay is rebuilt
+/** @type {Map<string, number>} */
+__publicField(_NetworkFlowEdge, "_phaseMem", /* @__PURE__ */ new Map());
+// Resource colors for your short codes
+__publicField(_NetworkFlowEdge, "resColor", {
+  rw: "rgba(210,165, 70,0.95)",
+  // workers
+  rf: "rgba(100,185,100,0.95)",
+  // food
+  rt: "rgba(167,115, 58,0.95)",
+  // timber (adjust if unused)
+  ro: "rgba(140,140,140,0.95)",
+  // ore
+  rb: "rgba(140,120,210,0.95)",
+  // blessing
+  rs: "rgba(210, 60, 60,0.95)",
+  // soldiers
+  rm: "rgba(200,160,100,0.95)",
+  // money (adjust if unused)
+  ri: "rgba( 60,140,210,0.95)"
+  // influence
+});
+let NetworkFlowEdge = _NetworkFlowEdge;
 class NetworkTileOverlay extends Widget {
   constructor() {
     super();
@@ -7819,6 +8001,104 @@ class ActionBar extends BoxLayout {
     }
   }
 }
+const gameDescription = `Island Chains – Prototype Overview
+==================================================================
+
+Island Chains is a turn-based hex-grid city-builder about managing production chains. The core twist: the game has no resource stockpiles. Instead you activate buildings by connecting them with buildings that provide their inputs. Buildings are active in turns where their required inputs are supplied through the network of connected structures. When active, their outputs will immediately flow to other buildings within range that need them.
+
+You play through 10 rounds, placing up to five buildings per round to expand your island economy and defend against enemies.
+
+Core Loop: Place Buildings → Form Chains → Trigger Production
+==================================================================
+
+Each building has:
+
+- Inputs (resources it needs to activate)
+- Outputs (resources it produces this turn if activated)
+- Terrain bonuses (extra output when built on certain terrain)
+
+For example:
+
+- Village → Workers (needs: Food)
+- Farm → Food (needs: Workers, production bonus: plains or forest)
+- Mine → Ore (needs: Workers, production bonus: mountains)
+
+If you place a Farm next to a Village, they will power each other:
+Workers → Farm → Food → Village → more Workers.
+
+Because resources don’t accumulate, activation depends entirely on whether inputs can be satisfied in that turn based on the current network.
+
+Resource Flow & Routing
+==================================================================
+
+By default, resources only flow between adjacent tiles, creating small local networks. You expand and combine these by placing buildings strategically.
+
+Two special buildings break adjacency rules and form larger shared networks:
+
+Castles — Large-Scale Routing Hubs
+
+- All buildings adjacent to a Castle can share resources with one another.
+- All Castles within range 3 link their adjacency groups into one larger network.
+- A supplied Castle produces Influence, which is your score in the prototype.
+
+Castles act as the backbone of long-distance production chains.
+
+Tradeships — Water Network Routers
+
+- Only placed on water, but create a supply network spanning all water tiles within range 3.
+- Any structures touching those tiles can share resources via the Tradeship.
+- Tradeships serve as flexible “floating supply lines” for connecting distant regions.
+
+Boosts & Modifiers
+==================================================================
+
+Blessings (Abbeys): Abbeys produce Blessings when supplied with Workers and Food. Many buildings get bonus output if Blessings are present, but they can still function without them.
+
+Terrain Bonuses: Some buildings gain extra output when built on favorable terrain. A “+X” indicator appears when placing a tile to show this.
+
+Playing a Round
+==================================================================
+
+1. Pick a building from your available pieces.
+
+2. Click a highlighted hex to place it (placement bonuses are highlighted).
+
+3. The game then:
+
+  - Updates the connectivity network (adjacency, castles, tradeships)
+
+  - Determines which buildings receive the inputs they need
+
+  - Activates every building whose inputs can be supplied this turn
+
+  - Routes resulting outputs to any connected buildings that require them
+
+Repeat until you have played 5 tiles
+
+You can inspect your network at any time. Click any placed building during a round to view:
+
+  - Its inputs and outputs
+
+  - Which requirements are met / unmet
+
+  - How it is connected through adjacency, castle, and tradeship networks
+
+Military & Enemies
+==================================================================
+
+Between rounds, enemy structures appear and expand outward.
+Your Strongholds, when supplied with Workers and Ore, generate Military Strength that automatically attacks nearby enemies.
+
+Unchecked enemies will destroy your buildings, leaving behind Rubble that can later be built over.
+
+End of Game
+==================================================================
+
+After 10 rounds, the game ends.
+In this prototype, scoring is straightforward: Each activated Castle produces Influence points at the end of the round.
+
+Building strong production networks and well-placed Castles is the key to high scores.
+`;
 class GameScreen extends Widget {
   constructor() {
     super();
@@ -7827,6 +8107,8 @@ class GameScreen extends Widget {
     this.level = null;
     this.gameOver = false;
     this.tileStack = [];
+    this.hoverTile = null;
+    this.roundPlacements = [];
     this.bgColor = "rgba(25, 102, 153, 1.0)";
     this.selectPos = [0, 0];
     this.board = Board.a({ hints: { right: 1, y: 0, w: "1h", h: 1 } });
@@ -7843,34 +8125,32 @@ class GameScreen extends Widget {
     this.addChild(this.actionBar);
     this.actionBar.listen("selectedTile", (e, o, v) => this.selectTile(e, o, v, null));
     this.nextButton = Button.a({
-      text: "End turn",
+      text: "End round",
       hints: { right: 0.99, bottom: 0.99, w: 0.1, h: 0.05 },
       on_press: (e, o, v) => this.finishTurn()
+    });
+    this.undoButton = Button.a({
+      text: "Undo",
+      hints: { right: 0.88, bottom: 0.99, w: 0.1, h: 0.05 },
+      on_press: (e, o, v) => this.undoLastTile()
     });
     this.instrButton = Button.a({
       text: "Instructions",
       hints: { x: 0.01, bottom: 0.99, w: null, h: 0.05 },
       on_press: (e, o, v) => {
-        ModalView.a({ hints: { x: 0.2, y: 0.2, w: 0.6, h: 0.6 }, bgColor: "rgba(75, 152, 203, 0.8)" }).c(Label.a({
-          text: `Welcome to the Island Chains Prototype
-                    
-Overview: Island Chains is a turn based city building game where you manage production chains between buildings. You play the game over 10 rounds and in each round you can place up to 5 buildings (aka tiles) onto the hex squares. Instead of stockpiling resources, the production chaining in the game is centered in input fulfillment to activate buildings. So for example, there are villages, farms, and mines that respectively produce 2 workers, 2 food (if placed on a plain), and 1 or more ore. Most buildings will require workers to activate and some will additionally require ore and food. A village requires food and a farm requires workers so if you place them side by side you will activate both. Place a mine next to them and it will start producing ore. 
-
-Once activated, buildings produce their resource(s), which can then be fed into other buildings. By default, buildings can only share their resources with adjacent tiles, but ships and castles let you break that rule by essentially acting as a resource router between everything they are connected to. Castles are also interconnected with other nearby castles so every building they are routing can share resources with buildings routed to other castles. There are also Strongholds, providing defenses, and Abbeys, providing blessings (aka building productivity boost). The game handles figuring out what resources to rout to what buildings but I'm thinking about allowing players to override the allocations building in a future update.
-
-Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an circled place on the map to place it. The +X indicator gives you a production boost if the building is placed in that spot.
-
-Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
-
-Military: Between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will continue to spread out and destroy nearby buildings. 
-
-End game: The game will end at the conclusion of your 10th round. In this prototype, you score points by activating as many castles as you can, with each active castle producing power points at the end of the round. 
-                    `,
-          wrap: true,
-          align: "left"
-        })).popup();
+        ModalView.a({ hints: { x: 0.2, y: 0.2, w: 0.6, h: 0.6 }, bgColor: "rgba(75, 152, 203, 0.8)" }).c(ScrollView.a({ scrollW: false, hints: { x: 0, y: 0, w: 1, h: 1 } }).c(
+          Label.a({
+            text: gameDescription,
+            richText: false,
+            wrap: true,
+            align: "left",
+            hints: { h: null },
+            fontSize: "0.5"
+          })
+        )).popup();
       }
     });
+    this.addChild(this.undoButton);
     this.addChild(this.nextButton);
     this.addChild(this.instrButton);
   }
@@ -7889,6 +8169,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
       this.actionBar.hints = { x: 0, y: "1.0", w: "0.14wh", h: 0.84 };
       this.actionBar.orientation = "vertical";
       this.nextButton.hints = { right: 0.99, bottom: 0.99, w: 0.1, h: "1.0" };
+      this.undoButton.hints = { right: 0.88, bottom: 0.99, w: 0.1, h: "1.0" };
       this.instrButton.hints = { x: 0.01, bottom: 0.99, w: 0.15, h: "1.0" };
     } else if (orienation === "vertical") {
       this.board.hints = { center_x: 0.5, y: "2.0", w: 1, h: "1w" };
@@ -7900,7 +8181,8 @@ End game: The game will end at the conclusion of your 10th round. In this protot
       this.actionBar.hints = { x: 0, bottom: 1, w: 1, h: "2.0" };
       this.actionBar.orientation = "horizontal";
       this.nextButton.hints = { right: 0.99, y: "1.0", w: 0.1, h: "1.0" };
-      this.instrButton.hints = { right: 0.99, y: "2.2", w: 0.15, h: "1.0" };
+      this.undoButton.hints = { right: 0.99, y: "2.2", w: 0.1, h: "1.0" };
+      this.instrButton.hints = { right: 0.99, y: "3.4", w: 0.15, h: "1.0" };
     }
   }
   finishTurn() {
@@ -7975,10 +8257,15 @@ End game: The game will end at the conclusion of your 10th round. In this protot
     }
     this.tileInfoPane.tile = tile;
     this.actionBar.selectedTile = null;
+    this.roundPlacements.push([tile, thex]);
+    this.undoButton.disable = false;
     if (advanceTurn) {
       this.clearPlacementTargets();
     }
-    if (player.scoreMarker.tilesPlacedThisTurn >= 5) this.actionBar.active = false;
+    if (player.scoreMarker.tilesPlacedThisTurn >= 5) {
+      this.actionBar.active = false;
+      this.statusLabel.text = "End round";
+    }
     return true;
   }
   /**
@@ -8064,7 +8351,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
       if (this.actionBar.active) this.actionBar.active = false;
       this.clearPlacementTargets();
       this.tileInfoPane.tile = null;
-      this.statusLabel.text = "End turn";
+      this.statusLabel.text = "End round";
     }
   }
   updateResourceProduction() {
@@ -8192,6 +8479,64 @@ End game: The game will end at the conclusion of your 10th round. In this protot
    * @param {TerrainHex|null} terrain 
    */
   displayTileNetworkInfo(player, terrain) {
+    if (terrain === null || terrain.tile === null) {
+      for (let t of player.placedTiles) t.showResourceStatus = true;
+      this.placementLayer.children = [];
+      return;
+    }
+    for (let t of player.placedTiles) t.showResourceStatus = false;
+    const edges = [];
+    const nodes = [];
+    const srcTerr = terrain;
+    const srcTile = terrain.tile;
+    if (srcTile) {
+      for (const [res, arr] of srcTile.needsFilled) {
+        for (const prodTile of arr ?? []) {
+          edges.push(NetworkFlowEdge.a({
+            hints: { x: 0, y: 0, w: "1w", h: "1h" },
+            // cover the overlay layer
+            board: this.board,
+            fromHex: prodTile.hexPos,
+            toHex: srcTerr.hexPos,
+            resource: res,
+            primary: true
+          }));
+        }
+      }
+      for (const [res, arr] of srcTile.productionFilled) {
+        for (const consTile of arr ?? []) {
+          edges.push(NetworkFlowEdge.a({
+            hints: { x: 0, y: 0, w: "1w", h: "1h" },
+            board: this.board,
+            fromHex: srcTerr.hexPos,
+            toHex: consTile.hexPos,
+            resource: res,
+            primary: true
+          }));
+        }
+      }
+    }
+    for (let terr of this.board.connectedIter(terrain, player, /* @__PURE__ */ new Set(), /* @__PURE__ */ new Set())) {
+      let output = "", input = "";
+      const nto = NetworkTileOverlay.a({
+        w: this.board.hexSide,
+        h: this.board.hexSide,
+        hexPos: terr.hexPos,
+        input,
+        output,
+        primary: terr === terrain
+      });
+      nto.updateIO();
+      nodes.push(nto);
+    }
+    this.placementLayer.children = [...nodes, ...edges];
+  }
+  /**
+   * 
+   * @param {Player} player 
+   * @param {TerrainHex|null} terrain 
+   */
+  displayTileNetworkInfo2(player, terrain) {
     if (terrain === null) {
       for (let t of player.placedTiles) {
         t.showResourceStatus = true;
@@ -8265,7 +8610,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
         w: this.board.hexSide * 2,
         h: this.board.hexSide * 2,
         score: value,
-        hexPos: thex.hexPos.slice()
+        hexPos: [thex.hexPos[0], thex.hexPos[1]]
       });
       let xy = this.board.pixelPos(thex.hexPos);
       tt.center_x = xy[0];
@@ -8397,13 +8742,15 @@ End game: The game will end at the conclusion of your 10th round. In this protot
   startPlayerTurn() {
     const p = this.players[this.activePlayer];
     this.updateResourceProduction();
+    this.roundPlacements = [];
+    this.undoButton.disable = true;
     if (p.localControl) {
       this.actionBar.active = true;
       if (p.scoreMarker.tilesPlacedThisTurn < 5) {
         this.statusLabel.text = "Select a building";
         this.statusLabel.color = p.color;
       } else {
-        this.statusLabel.text = "End turn";
+        this.statusLabel.text = "End round";
         this.statusLabel.color = p.color;
       }
     } else {
@@ -8432,6 +8779,24 @@ End game: The game will end at the conclusion of your 10th round. In this protot
     } else {
       this.statusLabel.color = "white";
       this.statusLabel.text = "Game over - draw";
+    }
+  }
+  undoLastTile() {
+    const last = this.roundPlacements.pop();
+    if (last !== void 0) {
+      const [tile, terr] = last;
+      this.removeTileFromTerrain(this.players[0], terr);
+      this.updateResourceProduction();
+      const p = this.players[this.activePlayer];
+      p.scoreMarker.tilesPlacedThisTurn--;
+    }
+    this.actionBar.selectedTile = null;
+    this.clearPlacementTargets();
+    this.tileInfoPane.tile = null;
+    this.statusLabel.text = "Select a building";
+    this.actionBar.active = true;
+    if (this.roundPlacements.length === 0) {
+      this.undoButton.disable = true;
     }
   }
   drawNewTile() {
@@ -8464,9 +8829,11 @@ End game: The game will end at the conclusion of your 10th round. In this protot
       /**@type {TargetTile[]}*/
       this.placementLayer.children
     ) {
-      let hp = this.board.pixelPos(tt.hexPos);
-      tt.w = hexSide, tt.h = hexSide, tt.center_x = hp[0];
-      tt.center_y = hp[1];
+      if ("hexPos" in tt) {
+        let hp = this.board.pixelPos(tt.hexPos);
+        tt.w = hexSide, tt.h = hexSide, tt.center_x = hp[0];
+        tt.center_y = hp[1];
+      }
     }
     this.applyHints(this.tileInfoPane);
     this.tileInfoPane.layoutChildren();
@@ -8478,6 +8845,8 @@ End game: The game will end at the conclusion of your 10th round. In this protot
     this.statusLabel.layoutChildren();
     this.applyHints(this.nextButton);
     this.nextButton.layoutChildren();
+    this.applyHints(this.undoButton);
+    this.undoButton.layoutChildren();
     this.applyHints(this.instrButton);
     this.instrButton.layoutChildren();
     this.applyHints(this.placementLayer);
