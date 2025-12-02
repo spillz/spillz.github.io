@@ -8214,9 +8214,11 @@ End of Game
 
 After 10 rounds, the game ends.
 
-In this prototype, scoring is straightforward: Each activated Castle produces Influence points at the end of the round.
+In this prototype, each activated Castle produces 2 Influence points at the end of the round and each activated Tradeship produces 1 influence point.
 
-Building strong production networks and well-placed Castles is the key to high scores.`;
+In round 10 all active buildings with no unused resources scores 1 influence point.
+
+Building efficient production networks and well-placed Castles and Tradeships is the key to high scores.`;
 class GameScreen extends Widget {
   constructor() {
     super();
