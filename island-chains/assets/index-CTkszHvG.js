@@ -6672,6 +6672,42 @@ class RandomLevel extends Level {
   }
 }
 var levels = [new RandomLevel(11)];
+class ResourceIcon extends Widget {
+  constructor() {
+    super(...arguments);
+    /**@type {ResourceType} */
+    __publicField(this, "resource", "rf");
+    __publicField(this, "primary", true);
+    __publicField(this, "color", "rgba(92, 13, 26, 1)");
+  }
+  /** @type {Widget['draw']} */
+  draw(app, ctx) {
+    const src = gameImages[this.resource];
+    if (!src) return;
+    let img = NetworkFlowEdge._iconCache.get(src);
+    if (!img) {
+      img = new Image();
+      img.src = src;
+      NetworkFlowEdge._iconCache.set(src, img);
+    }
+    if (!img.complete) {
+      app.requestFrameUpdate();
+      return;
+    }
+    const color = this.color;
+    ctx.save();
+    if (this.primary) {
+      ctx.globalAlpha = 0.65;
+      ctx.beginPath();
+      ctx.arc(this.center_x, this.center_y, this.w / 2, this.h / 2, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = this.primary ? 0.95 : 0.85;
+    ctx.drawImage(img, this.x, this.y, this.w, this.h);
+    ctx.restore();
+  }
+}
 class Tile extends ImageWidget {
   constructor() {
     super();
@@ -6755,14 +6791,12 @@ class Tile extends ImageWidget {
     this.iconBox.children = [];
     let iconsToAdd = [];
     let needsFilled = true;
+    this.hexPos;
+    const hints = { h: 0.5, w: "1wh" };
     for (let n of this.needs.keys()) {
       const minAmt = this.needs.get(n);
       if (minAmt !== void 0 && minAmt > 0 && this.needsFilled.get(n)?.length !== minAmt) {
-        const icon = ImageWidget.a({});
-        icon.src = gameImages[n];
-        icon.hints = { h: 0.5, w: "1wh" };
-        icon.bgColor = "rgba(90,0,0,0.6)";
-        icon.outlineColor = "rgb(90,0,0)";
+        const icon = ResourceIcon.a({ resource: n, color: "rgba(90,0,0,0.6)", primary: true, hints });
         iconsToAdd.push(icon);
         needsFilled = false;
       }
@@ -6770,15 +6804,10 @@ class Tile extends ImageWidget {
     if (needsFilled) {
       for (let n of this.productionCapacity.keys()) {
         const color = this.productionFilled.get(n) !== this.productionCapacity.get(n) ? "rgba(0,80,0,0.6)" : "rgba(0,0,60,0.6)";
-        const outline = this.productionFilled.get(n) !== this.productionCapacity.get(n) ? "rgb(0,80,0)" : "rgb(0,0,60)";
+        this.productionFilled.get(n) !== this.productionCapacity.get(n) ? "rgb(0,80,0)" : "rgb(0,0,60)";
         const connectedTiles = this.productionFilled.get(n);
         if (connectedTiles === void 0 || connectedTiles.length !== this.productionCapacity.get(n)) {
-          const icon = ImageWidget.a({
-            src: gameImages[n],
-            hints: { h: 0.5, w: "1wh" },
-            bgColor: color,
-            outlineColor: outline
-          });
+          const icon = ResourceIcon.a({ resource: n, color, primary: true, hints });
           iconsToAdd.push(icon);
         }
       }
@@ -7404,78 +7433,144 @@ class TerrainMap extends Array {
 const _NetworkFlowEdge = class _NetworkFlowEdge extends Widget {
   constructor() {
     super(...arguments);
-    /**@type {Board|null} */
+    /** @type {Board|null} */
     __publicField(this, "board", null);
-    // pass your board instance in props
-    /** @type {[number,number]} */
+    /** @type {[number, number]} */
     __publicField(this, "fromHex", [0, 0]);
-    /** @type {[number,number]} */
+    /** @type {[number, number]} */
     __publicField(this, "toHex", [0, 0]);
     /** @type {ResourceType} */
     __publicField(this, "resource", "rf");
+    /** Highlighted style for focused edges */
     __publicField(this, "primary", false);
-    // thicker/highlighted if it touches the hovered tile
+    // --- Pulse-related members ---
+    /**
+     * How many resource icons to show at once.
+     * - For normal edges (from != to): one pulse, mainly used for “1 at a time”.
+     * - For self-loops: icons are spaced around a circle.
+     */
+    __publicField(this, "resourceCount", 1);
+    /**
+     * Duration of a single pulse in milliseconds.
+     * A pulse = one traversal from start to end, or one full revolution for loops.
+     */
+    __publicField(this, "pulseTime", 1e3);
+    /**
+     * Number of pulses before finishing.
+     * - >0  → run that many pulses, then stop.
+     * -  0  → repeat forever.
+     */
+    __publicField(this, "pulseCount", 0);
+    /**
+     * Delay before the *first* pulse starts (in ms).
+     * During this time, nothing is drawn and no pulses are emitted.
+     */
+    __publicField(this, "startDelay", 0);
+    /**
+     * Delay *between* pulses (in ms).
+     * After each pulse finishes, the icon disappears for this long before
+     * the next pulse begins.
+     */
+    __publicField(this, "pulseDelay", 0);
+    /** Total elapsed time since creation (ms) */
+    __publicField(this, "_time", 0);
+    /** Elapsed time within current pulse+delay cycle (ms) */
+    __publicField(this, "_cycleElapsed", 0);
+    /** Total pulses completed so far */
+    __publicField(this, "_pulsesDone", 0);
+    /** Whether this edge should draw this frame */
+    __publicField(this, "_visibleThisFrame", true);
+    /**
+     * Normalized 0..1 position of the *current* pulse.
+     * For non-loops: 0 at edge start, 1 at edge end.
+     * For loops: 0..1 = full revolution around the hex.
+     */
     __publicField(this, "phase", 0);
-    // dash offset animation
+    // Leftover speed param (if you want to reintroduce speed-based motion)
     __publicField(this, "speed", 1);
-    // px/sec for dash flow (kept gentle to avoid strobe)
-    __publicField(this, "_phaseInit", false);
   }
-  /** Unique key for phase memory */
   _edgeKey() {
     const [fx, fy] = this.fromHex, [tx, ty] = this.toHex;
     return `${fx},${fy}->${tx},${ty}:${this.resource}`;
   }
-  /** Pixel center for a hex using your board API */
-  centerOf(hexPos) {
-    if (!this.board || typeof this.board.pixelPos !== "function") return { x: 0, y: 0 };
-    const [x, y] = this.board.pixelPos(hexPos);
+  centerOf(hex) {
+    if (!this.board) return { x: 0, y: 0 };
+    const [x, y] = this.board.pixelPos(hex);
     return { x, y };
   }
-  /** Gentle bow so overlapping edges are readable */
   ctrlPoint(a2, b) {
-    const mx = (a2.x + b.x) / 2, my = (a2.y + b.y) / 2;
-    const dx = b.x - a2.x, dy = b.y - a2.y;
+    const mx = (a2.x + b.x) * 0.5;
+    const my = (a2.y + b.y) * 0.5;
+    const dx = b.x - a2.x;
+    const dy = b.y - a2.y;
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len, ny = dx / len;
     const bow = Math.min((this.board?.hexSide ?? 16) * 0.4, len * 0.12);
     return { x: mx + nx * bow, y: my + ny * bow };
   }
-  /** Optional half-pixel snap to reduce shimmer on thin strokes
-   * @param {number} v 
-   * @returns 
-   */
-  _snap(v) {
-    return Math.round(v) + 0.5;
-  }
-  /**@type {Widget['update']} */
+  /** @type {Widget['update']} */
   update(app, millis) {
-    if (!this._phaseInit) {
-      const key = this._edgeKey();
-      if (_NetworkFlowEdge._phaseMem.has(key)) {
-        this.phase = _NetworkFlowEdge._phaseMem.get(key) ?? 0;
-      }
-      this._phaseInit = true;
-    }
-    const a2 = this.centerOf(this.fromHex);
-    const b = this.centerOf(this.toHex);
-    const len = Math.hypot(b.x - a2.x, b.y - a2.y) || 1;
-    const dt = millis / 1e3;
-    const v = this.speed / len;
-    this.phase = (this.phase + v * dt) % 1;
-    _NetworkFlowEdge._phaseMem.set(this._edgeKey(), this.phase);
-    app.requestFrameUpdate();
     for (const c of this.children) c.update(app, millis);
+    const activeForever = this.pulseCount === 0;
+    const maxPulses = this.pulseCount;
+    if (!activeForever && this._pulsesDone >= maxPulses) {
+      this._visibleThisFrame = false;
+      this.phase = 1;
+      return;
+    }
+    const prevTime = this._time;
+    this._time += millis;
+    let activeDt = 0;
+    if (prevTime >= this.startDelay) {
+      activeDt = millis;
+    } else if (this._time > this.startDelay) {
+      activeDt = this._time - this.startDelay;
+    }
+    if (activeDt <= 0) {
+      this._visibleThisFrame = false;
+      this.phase = 0;
+      app.requestFrameUpdate();
+      return;
+    }
+    const cycleLen = this.pulseTime + this.pulseDelay;
+    if (cycleLen <= 0 || this.pulseTime <= 0) {
+      this._visibleThisFrame = true;
+      this.phase = 0;
+      app.requestFrameUpdate();
+      return;
+    }
+    this._cycleElapsed += activeDt;
+    while (this._cycleElapsed >= cycleLen) {
+      this._cycleElapsed -= cycleLen;
+      this._pulsesDone++;
+      this.emit("pulse", { pulsesDone: this._pulsesDone });
+      if (!activeForever && this._pulsesDone >= maxPulses) {
+        this._visibleThisFrame = false;
+        this.phase = 1;
+        return;
+      }
+    }
+    let visible = true;
+    let tInPulse = this._cycleElapsed;
+    if (this._cycleElapsed >= this.pulseTime) {
+      visible = false;
+      tInPulse = this.pulseTime;
+    }
+    this._visibleThisFrame = visible;
+    if (this.pulseTime > 0) {
+      this.phase = Math.min(1, tInPulse / this.pulseTime);
+    } else {
+      this.phase = 0;
+    }
+    app.requestFrameUpdate();
   }
-  /**@type {Widget['draw']} */
+  /** @type {Widget['draw']} */
   draw(app, ctx) {
     if (!this.board) return;
+    if (!this._visibleThisFrame) return;
     const a2 = this.centerOf(this.fromHex);
     const b = this.centerOf(this.toHex);
-    const c = this.ctrlPoint(a2, b);
-    const ax = a2.x, ay = a2.y;
-    const bx = b.x, by = b.y;
-    const cx = c.x, cy = c.y;
+    const isLoop = this.fromHex[0] === this.toHex[0] && this.fromHex[1] === this.toHex[1];
     const src = gameImages[this.resource];
     if (!src) return;
     let img = _NetworkFlowEdge._iconCache.get(src);
@@ -7488,46 +7583,68 @@ const _NetworkFlowEdge = class _NetworkFlowEdge extends Widget {
       app.requestFrameUpdate();
       return;
     }
-    const side = this.board.hexSide ?? 1;
-    const size = side * (this.primary ? 0.3 : 0.25);
+    const side = this.board.hexSide ?? 16;
+    const size = side * (this.primary ? 0.4 : 0.3);
+    const color = _NetworkFlowEdge.resColor[this.resource] ?? "rgba(255,255,255,0.8)";
+    ctx.save();
+    if (isLoop) {
+      const cx = a2.x;
+      const cy = a2.y;
+      const radius = side * (this.primary ? 0.55 : 0.45);
+      const baseAngle = -Math.PI / 2 + this.phase % 1 * Math.PI * 2;
+      const count = Math.max(1, this.resourceCount | 0);
+      for (let i = 0; i < count; i++) {
+        const angle = baseAngle + 2 * Math.PI * i / count;
+        const px2 = cx + Math.cos(angle) * radius;
+        const py2 = cy + Math.sin(angle) * radius;
+        if (this.primary) {
+          ctx.globalAlpha = 0.35;
+          ctx.beginPath();
+          ctx.arc(px2, py2, size * 0.7, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+        ctx.globalAlpha = this.primary ? 0.95 : 0.85;
+        ctx.drawImage(img, px2 - size / 2, py2 - size / 2, size, size);
+      }
+      ctx.restore();
+      return;
+    }
+    const cpt = this.ctrlPoint(a2, b);
+    const ax = a2.x, ay = a2.y;
+    const bx = b.x, by = b.y;
+    const cxp = cpt.x, cyp = cpt.y;
     const startFrac = 0.12;
     const endFrac = 0.88;
     const span = endFrac - startFrac;
-    let pulses = Math.max(1, Math.round(span * (Math.hypot(bx - ax, by - ay) / (side * 1.4))));
-    if (this.primary && pulses < 2) pulses = 2;
+    const tCurve = startFrac + this.phase % 1 * span;
     const bezierPoint = (t) => {
       const u = 1 - t;
       const uu = u * u;
       const tt = t * t;
-      const px = uu * ax + 2 * u * t * cx + tt * bx;
-      const py = uu * ay + 2 * u * t * cy + tt * by;
-      return { px, py };
+      const px2 = uu * ax + 2 * u * t * cxp + tt * bx;
+      const py2 = uu * ay + 2 * u * t * cyp + tt * by;
+      return { px: px2, py: py2 };
     };
-    ctx.save();
-    ctx.setLineDash([]);
-    for (let i = 0; i < pulses; i++) {
-      const tBase = (this.phase + i / pulses) % 1;
-      const t = startFrac + tBase * span;
-      const { px, py } = bezierPoint(t);
-      const localT = tBase;
-      const fadeEdge = Math.sin(Math.PI * localT);
-      if (this.primary && fadeEdge > 0.1) {
-        ctx.globalAlpha = 0.35 * fadeEdge;
-        ctx.beginPath();
-        ctx.arc(px, py, size * 0.7, 0, Math.PI * 2);
-        ctx.fillStyle = _NetworkFlowEdge.resColor[this.resource] ?? "rgba(255,255,255,0.5)";
-        ctx.fill();
-      }
-      ctx.globalAlpha = (this.primary ? 0.95 : 0.8) * (0.3 + 0.7 * fadeEdge);
-      ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
+    const { px, py } = bezierPoint(tCurve);
+    const localT = this.phase % 1;
+    const fadeEdge = Math.sin(Math.PI * localT);
+    const alphaBase = (this.primary ? 0.95 : 0.8) * (0.3 + 0.7 * fadeEdge);
+    if (this.primary && fadeEdge > 0.1) {
+      ctx.globalAlpha = 0.35 * fadeEdge;
+      ctx.beginPath();
+      ctx.arc(px, py, size * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
     }
+    ctx.globalAlpha = alphaBase;
+    ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
     ctx.restore();
   }
 };
-// internal: has phase been restored from memory?
 /** @type {Map<string, HTMLImageElement>} */
 __publicField(_NetworkFlowEdge, "_iconCache", /* @__PURE__ */ new Map());
-// Stable phase memory so edges don't "flash" when the overlay is rebuilt
+/** Optional phase memory from older version; kept for compatibility */
 /** @type {Map<string, number>} */
 __publicField(_NetworkFlowEdge, "_phaseMem", /* @__PURE__ */ new Map());
 // Resource colors for your short codes
@@ -7537,7 +7654,7 @@ __publicField(_NetworkFlowEdge, "resColor", {
   rf: "rgba(100,185,100,0.95)",
   // food
   rt: "rgba(167,115, 58,0.95)",
-  // timber (adjust if unused)
+  // timber
   ro: "rgba(140,140,140,0.95)",
   // ore
   rb: "rgba(140,120,210,0.95)",
@@ -7545,7 +7662,7 @@ __publicField(_NetworkFlowEdge, "resColor", {
   rs: "rgba(210, 60, 60,0.95)",
   // soldiers
   rm: "rgba(200,160,100,0.95)",
-  // money (adjust if unused)
+  // money
   ri: "rgba( 60,140,210,0.95)"
   // influence
 });
@@ -7560,22 +7677,20 @@ class NetworkTileOverlay extends Widget {
     this.updateIO();
   }
   updateIO() {
-    this.outlineColor = this.primary ? "rgba(208, 212, 0,1)" : "rgba(208, 212, 240,1)";
-    this.bgColor = this.primary ? "rgba(208, 212, 0, 0.5)" : null;
-    const inputColor = "rgba(192,100,100,0.9)";
-    const outputColor = this.primary ? "rgba(100,185,100,0.9)" : "rgba(100,100,192,0.9)";
+    this.outlineColor = this.primary ? "rgba(238, 73, 22, 1)" : "rgba(208, 212, 240,1)";
+    this.primary ? "rgba(100,185,100,0.9)" : "rgba(100,100,192,0.9)";
     if (this.input !== "" && this.output !== "") {
       this.children = [
-        ImageWidget.a({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: inputColor }),
-        ImageWidget.a({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right: 1, bottom: 1 }, bgColor: outputColor })
+        ImageWidget.a({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: null }),
+        ImageWidget.a({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right: 1, bottom: 1 }, bgColor: null })
       ];
     } else if (this.input !== "") {
       this.children = [
-        ImageWidget.a({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: inputColor })
+        ImageWidget.a({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: null })
       ];
     } else if (this.output !== "") {
       this.children = [
-        ImageWidget.a({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right: 1, bottom: 1 }, bgColor: outputColor })
+        ImageWidget.a({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right: 1, bottom: 1 }, bgColor: null })
       ];
     } else {
       this.children = [];
@@ -8031,11 +8146,11 @@ Because resources don’t accumulate, activation depends entirely on whether inp
 Resource Flow & Routing
 ==================================================================
 
-By default, resources only flow between adjacent tiles, creating small local networks. You expand and combine these by placing buildings strategically.
+By default, resources only flow between adjacent tiles, creating small local networks. Placing buildings strategically to maximize the linkages. A single building will often be able to fulfill the needs of more than one building.
 
-Two special buildings break adjacency rules and form larger shared networks:
+Two special buildings break the adjacency rule and form larger shared networks:
 
-Castles — Large-Scale Routing Hubs
+1. Castles — Large-Scale Routing Hubs
 
 - All buildings adjacent to a Castle can share resources with one another.
 - All Castles within range 3 link their adjacency groups into one larger network.
@@ -8043,16 +8158,16 @@ Castles — Large-Scale Routing Hubs
 
 Castles act as the backbone of long-distance production chains.
 
-Tradeships — Water Network Routers
+2. Tradeships — Water Network Routers
 
-- Only placed on water, but create a supply network spanning all water tiles within range 3.
+- Tradeships are placed on water, but create a supply network spanning all tiles reachable over water within range 3 of the ship.
 - Any structures touching those tiles can share resources via the Tradeship.
 - Tradeships serve as flexible “floating supply lines” for connecting distant regions.
 
 Boosts & Modifiers
 ==================================================================
 
-Blessings (Abbeys): Abbeys produce Blessings when supplied with Workers and Food. Many buildings get bonus output if Blessings are present, but they can still function without them.
+Blessings (Abbeys): Abbeys produce Blessings when supplied with Workers and Food. Many buildings get bonus output if Blessings are present, but can still function without them.
 
 Terrain Bonuses: Some buildings gain extra output when built on favorable terrain. A “+X” indicator appears when placing a tile to show this.
 
@@ -8065,15 +8180,15 @@ Playing a Round
 
 3. The game then:
 
-  - Updates the connectivity network (adjacency, castles, tradeships)
+  - Updates the network based on adjacencies, castles, and tradeships,
 
-  - Determines which buildings receive the inputs they need
+  - Determines which buildings receive the inputs they need,
 
-  - Activates every building whose inputs can be supplied this turn
+  - Activates every building whose inputs can be supplied this turn (including combat), and
 
   - Routes resulting outputs to any connected buildings that require them
 
-Repeat until you have played 5 tiles
+Repeat until you have placed 5 buildings.
 
 You can inspect your network at any time. Click any placed building during a round to view:
 
@@ -8083,22 +8198,25 @@ You can inspect your network at any time. Click any placed building during a rou
 
   - How it is connected through adjacency, castle, and tradeship networks
 
+Clicking buildings in the action bar provies summary information about that building type.
+
 Military & Enemies
 ==================================================================
 
 Between rounds, enemy structures appear and expand outward.
+
 Your Strongholds, when supplied with Workers and Ore, generate Military Strength that automatically attacks nearby enemies.
 
-Unchecked enemies will destroy your buildings, leaving behind Rubble that can later be built over.
+Unopposed enemies will destroy your buildings, leaving behind Rubble that can later be built over.
 
 End of Game
 ==================================================================
 
 After 10 rounds, the game ends.
+
 In this prototype, scoring is straightforward: Each activated Castle produces Influence points at the end of the round.
 
-Building strong production networks and well-placed Castles is the key to high scores.
-`;
+Building strong production networks and well-placed Castles is the key to high scores.`;
 class GameScreen extends Widget {
   constructor() {
     super();
@@ -8110,6 +8228,9 @@ class GameScreen extends Widget {
     this.hoverTile = null;
     this.roundPlacements = [];
     this.bgColor = "rgba(25, 102, 153, 1.0)";
+    this.idleFlowActive = false;
+    this.idleFlowTileIndex = 0;
+    this.idleFlowOutputIndex = 0;
     this.selectPos = [0, 0];
     this.board = Board.a({ hints: { right: 1, y: 0, w: "1h", h: 1 } });
     this.addChild(this.board);
@@ -8153,6 +8274,141 @@ class GameScreen extends Widget {
     this.addChild(this.undoButton);
     this.addChild(this.nextButton);
     this.addChild(this.instrButton);
+  }
+  hideIdleFlow() {
+    if (!this.idleFlowActive) return;
+    if (this.placementLayer) {
+      this.placementLayer.children = this.placementLayer.children.filter(
+        (w) => !(w instanceof NetworkFlowEdge)
+      );
+    }
+    this.idleFlowActive = false;
+  }
+  nextIdleFlow() {
+    if (this.placementLayer) {
+      this.placementLayer.children = this.placementLayer.children.filter(
+        (w) => !(w instanceof NetworkFlowEdge)
+      );
+    }
+    const board = this.board;
+    if (!board) {
+      this.hideIdleFlow();
+      return;
+    }
+    const player = this.players[this.activePlayer];
+    if (!player) {
+      this.hideIdleFlow();
+      return;
+    }
+    const tiles = player.placedTiles.slice();
+    if (tiles.length === 0) {
+      this.hideIdleFlow();
+      return;
+    }
+    tiles.sort((a2, b) => {
+      const ar = a2.hexPos[1], br = b.hexPos[1];
+      if (ar !== br) return ar - br;
+      const ac = a2.hexPos[0], bc = b.hexPos[0];
+      return ac - bc;
+    });
+    if (this.idleFlowTileIndex < 0 || this.idleFlowTileIndex >= tiles.length) {
+      this.idleFlowTileIndex = 0;
+      this.idleFlowOutputIndex = 0;
+    }
+    const resourceOrder = (
+      /** @type {any} */
+      [
+        "rw",
+        // Workers
+        "rf",
+        // Food
+        "rt",
+        // Timber
+        "ro",
+        // Ore
+        "rb",
+        // Blessing
+        "rs",
+        // Soldier
+        "rm",
+        // Money
+        "ri"
+        // Influence
+      ]
+    );
+    let tileChecks = 0;
+    while (tileChecks < tiles.length) {
+      const tile = tiles[this.idleFlowTileIndex];
+      const outputs = [];
+      const activeProducer = tile.needsFilled.meets(tile.needs);
+      if (activeProducer) {
+        for (const res of resourceOrder) {
+          const cap = tile.productionCapacity.get(res) ?? 0;
+          if (!cap) continue;
+          const consumers = tile.productionFilled.get(res) ?? [];
+          const sortedConsumers = consumers.slice().sort((a2, b) => {
+            const ar = a2.hexPos[1], br = b.hexPos[1];
+            if (ar !== br) return ar - br;
+            const ac = a2.hexPos[0], bc = b.hexPos[0];
+            return ac - bc;
+          });
+          for (const consTile of sortedConsumers) {
+            outputs.push({
+              from: tile.hexPos,
+              to: consTile.hexPos,
+              resource: res,
+              unusedCount: 0
+            });
+          }
+          const used = sortedConsumers.length;
+          const unused = Math.max(0, cap - used);
+          if (unused > 0) {
+            outputs.push({
+              from: tile.hexPos,
+              to: tile.hexPos,
+              // self-loop
+              resource: res,
+              unusedCount: unused
+            });
+          }
+        }
+      }
+      if (outputs.length === 0) {
+        this.idleFlowTileIndex = (this.idleFlowTileIndex + 1) % tiles.length;
+        this.idleFlowOutputIndex = 0;
+        tileChecks++;
+        continue;
+      }
+      if (this.idleFlowOutputIndex >= outputs.length) {
+        this.idleFlowTileIndex = (this.idleFlowTileIndex + 1) % tiles.length;
+        this.idleFlowOutputIndex = 0;
+        tile.updateResourceStatusIcons();
+        tileChecks++;
+        continue;
+      }
+      const spec = outputs[this.idleFlowOutputIndex];
+      this.idleFlowOutputIndex++;
+      const isLoop = spec.from[0] === spec.to[0] && spec.from[1] === spec.to[1];
+      const resourceCount = isLoop && spec.unusedCount && spec.unusedCount > 0 ? spec.unusedCount : 1;
+      tile.iconBox.children = [];
+      const edge = NetworkFlowEdge.a({
+        hints: { x: 0, y: 0, w: "1w", h: "1h" },
+        board,
+        fromHex: spec.from,
+        toHex: spec.to,
+        resource: spec.resource,
+        primary: true,
+        // idle overlay, not selected
+        pulseTime: 2e3,
+        pulseCount: 1,
+        resourceCount
+      });
+      edge.listen("pulse", () => this.nextIdleFlow());
+      this.placementLayer.children = [edge];
+      this.idleFlowActive = true;
+      return;
+    }
+    this.hideIdleFlow();
   }
   /**
    * 
@@ -8482,6 +8738,7 @@ class GameScreen extends Widget {
     if (terrain === null || terrain.tile === null) {
       for (let t of player.placedTiles) t.showResourceStatus = true;
       this.placementLayer.children = [];
+      this.nextIdleFlow();
       return;
     }
     for (let t of player.placedTiles) t.showResourceStatus = false;
@@ -8490,40 +8747,92 @@ class GameScreen extends Widget {
     const srcTerr = terrain;
     const srcTile = terrain.tile;
     if (srcTile) {
+      const resourceOrder = (
+        /** @type {any} */
+        [
+          "rw",
+          "rf",
+          "rt",
+          "ro",
+          "rb",
+          "rs",
+          "rm",
+          "ri"
+        ]
+      );
+      const activeProducer = srcTile.needsFilled.meets(srcTile.needs);
       for (const [res, arr] of srcTile.needsFilled) {
-        for (const prodTile of arr ?? []) {
+        const prodTiles = arr ?? [];
+        for (const prodTile of prodTiles) {
           edges.push(NetworkFlowEdge.a({
             hints: { x: 0, y: 0, w: "1w", h: "1h" },
-            // cover the overlay layer
+            // cover overlay layer
             board: this.board,
             fromHex: prodTile.hexPos,
             toHex: srcTerr.hexPos,
             resource: res,
-            primary: true
+            primary: true,
+            pulseTime: 800,
+            pulseCount: 0,
+            // keep pulsing while selected
+            startDelay: 0,
+            // incoming flows start first
+            pulseDelay: 1200
           }));
         }
       }
-      for (const [res, arr] of srcTile.productionFilled) {
-        for (const consTile of arr ?? []) {
-          edges.push(NetworkFlowEdge.a({
-            hints: { x: 0, y: 0, w: "1w", h: "1h" },
-            board: this.board,
-            fromHex: srcTerr.hexPos,
-            toHex: consTile.hexPos,
-            resource: res,
-            primary: true
-          }));
+      if (activeProducer) {
+        for (const res of resourceOrder) {
+          const cap = srcTile.productionCapacity.get(res) ?? 0;
+          if (!cap) continue;
+          const consumers = srcTile.productionFilled.get(res) ?? [];
+          for (const consTile of consumers) {
+            edges.push(NetworkFlowEdge.a({
+              hints: { x: 0, y: 0, w: "1w", h: "1h" },
+              board: this.board,
+              fromHex: srcTerr.hexPos,
+              toHex: consTile.hexPos,
+              resource: res,
+              primary: true,
+              pulseTime: 800,
+              pulseCount: 0,
+              // start slightly after incoming so it feels like
+              // "resources arrive, then flow out"
+              startDelay: 1e3,
+              pulseDelay: 1200
+            }));
+          }
+          const used = consumers.length;
+          const unused = Math.max(0, cap - used);
+          if (unused > 0) {
+            edges.push(NetworkFlowEdge.a({
+              hints: { x: 0, y: 0, w: "1w", h: "1h" },
+              board: this.board,
+              fromHex: srcTerr.hexPos,
+              toHex: srcTerr.hexPos,
+              // self-loop
+              resource: res,
+              primary: true,
+              resourceCount: unused,
+              // one orbiting icon per unused unit
+              pulseTime: 1e3,
+              pulseCount: 0,
+              // keep spinning while selected
+              startDelay: 1e3,
+              // sync with outgoing
+              pulseDelay: 1e3
+            }));
+          }
         }
       }
     }
     for (let terr of this.board.connectedIter(terrain, player, /* @__PURE__ */ new Set(), /* @__PURE__ */ new Set())) {
-      let output = "", input = "";
       const nto = NetworkTileOverlay.a({
         w: this.board.hexSide,
         h: this.board.hexSide,
         hexPos: terr.hexPos,
-        input,
-        output,
+        input: "",
+        output: "",
         primary: terr === terrain
       });
       nto.updateIO();
@@ -8727,6 +9036,9 @@ class GameScreen extends Widget {
           }
         }
         if (t instanceof Castle && t.needsFilled.meets(t.needs)) {
+          player.scoreMarker.score += 1;
+        }
+        if (player.scoreMarker.turn === 10 && t.productionFilled.meets(t.productionCapacity)) {
           player.scoreMarker.score += 1;
         }
       }
