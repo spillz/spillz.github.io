@@ -6273,10 +6273,10 @@ const tileDescriptions = {
   C: "A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each round.",
   V: "A village produces workers once provided with food.",
   A: "An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.",
-  F: "A farm produces food once supplied with workers.",
+  F: "A farm produces food once supplied with workers. In a forest it will also produce timber.",
   M: "A mine produces ore once supplied with workers.",
   S: "A stronghold produces military strength once supplied with workers and ore. At the end of each round, units from activated strongholds will attack enemies that they can reach.",
-  T: "A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once placed, tradeships allow production links between all structures within reach of the Tradeship.",
+  T: "A tradeship produces money once supplied with workers and timber. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once placed, tradeships allow production links between all structures within reach of the Tradeship.",
   X: "Rubble is the remains of a structure or enemy that you can build over.",
   ET: "An enemy tent is a temporary installation that expands enemy reach but does not attack.",
   ES: "An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each round.",
@@ -6975,7 +6975,7 @@ class Tradeship extends Tile {
     return ProductionQuantity.from({ "rm": 1 + this.prodBonus });
   }
   get needs() {
-    return ProductionQuantity.from({ "rw": 1 });
+    return ProductionQuantity.from({ "rw": 1, "rt": 1 });
   }
   /** @type {Tile['place']} */
   place(terr, centerPos, player, board) {
@@ -8522,6 +8522,7 @@ class GameScreen extends Widget {
       this.actionBar.active = false;
       this.statusLabel.text = "End round";
     }
+    this.displayTileNetworkInfo(player, null);
     return true;
   }
   /**
@@ -9036,6 +9037,9 @@ class GameScreen extends Widget {
           }
         }
         if (t instanceof Castle && t.needsFilled.meets(t.needs)) {
+          player.scoreMarker.score += 2;
+        }
+        if (t instanceof Tradeship && t.needsFilled.meets(t.needs)) {
           player.scoreMarker.score += 1;
         }
         if (player.scoreMarker.turn === 10 && t.productionFilled.meets(t.productionCapacity)) {
