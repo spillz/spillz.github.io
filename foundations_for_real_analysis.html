@@ -1188,14 +1188,13 @@ that assigns to each $n \in \mathbb{N}$ the real number $1/n$.
 <h3>8.4 Reading quantified definitions</h3>
 
 <p>
-Quantified statements should be read as a sequence of commitments, not as a block
-of symbols.
-The phrases “for all” ($\forall$) and “there exists” ($\exists$) describe who gets
-to choose what, and in what order.
+Quantified statements should be read as rules about dependence.
+The phrase “for all” ($\forall$) means “for every possible choice, without exception,”
+and the phrase “there exists” ($\exists$) means “there is a way to respond.”
 </p>
 
 <p>
-For example, consider the statement
+Consider the statement
 </p>
 
 $$
@@ -1203,27 +1202,29 @@ $$
 $$
 
 <p>
-The correct way to read this is:
+This does <em>not</em> mean that a single tolerance is fixed once and for all.
+Instead, it asserts the following:
 </p>
 
 <ul>
-  <li>Someone first chooses a tolerance $\varepsilon&gt;0$.</li>
-  <li>After seeing that choice, we must produce a natural number $N$.</li>
-  <li>Once $N$ is fixed, <em>every</em> index $n&gt;N$ must satisfy
-      $|a_n-L|&lt;\varepsilon$.</li>
+  <li>For <em>every</em> tolerance $\varepsilon&gt;0$, no matter how small,</li>
+  <li>there exists a corresponding index $N$ (which may depend on that $\varepsilon$),</li>
+  <li>such that once this $N$ is chosen, the inequality
+      $|a_n-L|&lt;\varepsilon$ holds for <em>all</em> $n&gt;N$.</li>
 </ul>
 
 <p>
-The order matters.
-The number $N$ is allowed to depend on $\varepsilon$, but it must work for
-<em>all</em> larger indices $n$.
-No further adjustment is permitted once $N$ has been chosen.
+In other words, the statement must succeed against all possible choices of
+$\varepsilon$.
+There is no single universal $N$ that works for every tolerance, but for each
+tolerance there must be an $N$ that works for all sufficiently large indices.
 </p>
 
 <p>
-This “choice-and-response” interpretation is essential in analysis.
-Many incorrect arguments arise from silently reversing the order of quantifiers
-or from allowing $N$ to depend on $n$.
+Reading quantified definitions in this way—tracking which quantities may depend
+on which others—is essential in analysis.
+Many common mistakes arise from allowing forbidden dependencies, such as letting
+$N$ depend on $n$ or treating $\varepsilon$ as fixed in advance.
 </p>
 
 <div class="exercise">
