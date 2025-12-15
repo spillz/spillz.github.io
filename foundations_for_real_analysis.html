@@ -1188,30 +1188,43 @@ that assigns to each $n \in \mathbb{N}$ the real number $1/n$.
 <h3>8.4 Reading quantified definitions</h3>
 
 <p>
-Many definitions in analysis involve nested quantifiers.
-For example, the definition of convergence states:
-</p>
-
-\[
-\forall \varepsilon &gt; 0 \; \exists N \in \mathbb{N} \;
-\forall n &gt; N : |a_n - L| &lt; \varepsilon.
-\]
-
-<p>
-This statement has a precise logical structure.
-It does <em>not</em> say that $\varepsilon$ and $N$ are chosen simultaneously.
+Quantified statements should be read as a sequence of commitments, not as a block
+of symbols.
+The phrases “for all” ($\forall$) and “there exists” ($\exists$) describe who gets
+to choose what, and in what order.
 </p>
 
 <p>
-The correct reading is:
+For example, consider the statement
+</p>
+
+$$
+\forall \varepsilon &gt; 0 \; \exists N \in \mathbb{N} \; \forall n &gt; N:\ |a_n - L| &lt; \varepsilon.
+$$
+
+<p>
+The correct way to read this is:
 </p>
 
 <ul>
-  <li>Someone first chooses a tolerance $\varepsilon &gt; 0$.</li>
+  <li>Someone first chooses a tolerance $\varepsilon&gt;0$.</li>
   <li>After seeing that choice, we must produce a natural number $N$.</li>
-  <li>Once $N$ is fixed, <em>every</em> index $n &gt; N$ must satisfy
-      $|a_n - L| &lt; \varepsilon$.</li>
+  <li>Once $N$ is fixed, <em>every</em> index $n&gt;N$ must satisfy
+      $|a_n-L|&lt;\varepsilon$.</li>
 </ul>
+
+<p>
+The order matters.
+The number $N$ is allowed to depend on $\varepsilon$, but it must work for
+<em>all</em> larger indices $n$.
+No further adjustment is permitted once $N$ has been chosen.
+</p>
+
+<p>
+This “choice-and-response” interpretation is essential in analysis.
+Many incorrect arguments arise from silently reversing the order of quantifiers
+or from allowing $N$ to depend on $n$.
+</p>
 
 <div class="exercise">
 <strong>Exercise 8B.</strong>
