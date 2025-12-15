@@ -319,10 +319,151 @@ Fraction equality is therefore a consequence of integer multiplication, not a se
 </p>
 
 <div class="example">
-<strong>Geometric interpretation.</strong>
-Represent $(a,b)$ as the point $(b,a)$ in the plane.
-All equivalent fractions lie on the same line through the origin.
+<strong>Geometric interpretation (with a picture).</strong>
+A rational number is represented by an integer pair $(a,b)$ with $b\neq 0$, intended to mean $a/b$.
+To visualize this, plot the point $(b,a)$ in the plane (horizontal coordinate $b$, vertical coordinate $a$).
+Then all pairs that represent the <em>same</em> rational number lie on the same line through the origin:
+they have the same slope, because
+$$
+\frac{a}{b} = \text{slope of the line from }(0,0)\text{ to }(b,a).
+$$
+For example, the fractions $1/2$, $2/4$, and $3/6$ correspond to the points $(2,1)$, $(4,2)$, and $(6,3)$,
+which lie on the same line through the origin.
 </div>
+
+<div class="callout">
+<canvas id="ratPlane" width="760" height="360" style="width:100%; max-width:760px; border:1px solid #ddd; border-radius:10px; background:#fff;"></canvas>
+<div class="muted" style="margin-top:8px;">
+The plot shows integer points $(b,a)$ for a few equivalent fractions. Points on the same ray from the origin represent the same ratio $a/b$.
+</div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById("ratPlane");
+  if(!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  // Coordinate system: show b (x-axis) from 0..7 and a (y-axis) from 0..4.
+  const xMax = 7, yMax = 4;
+  const padL = 60, padB = 50, padR = 20, padT = 20;
+  const x0 = padL, y0 = H - padB;
+  const x1 = W - padR, y1 = padT;
+
+  function X(b){ return x0 + (b / xMax) * (x1 - x0); }
+  function Y(a){ return y0 - (a / yMax) * (y0 - y1); }
+
+  function line(xa, ya, xb, yb){
+    ctx.beginPath();
+    ctx.moveTo(xa, ya);
+    ctx.lineTo(xb, yb);
+    ctx.stroke();
+  }
+  function dot(x, y, r=5){
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+  function label(text, x, y){
+    ctx.fillText(text, x, y);
+  }
+
+  ctx.clearRect(0,0,W,H);
+
+  // Axes
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = 2;
+  line(X(0), Y(0), X(xMax), Y(0));  // x-axis
+  line(X(0), Y(0), X(0), Y(yMax));  // y-axis
+
+  // Grid
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#e6e6e6";
+  for(let b=1; b<=xMax; b++){
+    line(X(b), Y(0), X(b), Y(yMax));
+  }
+  for(let a=1; a<=yMax; a++){
+    line(X(0), Y(a), X(xMax), Y(a));
+  }
+
+  // Tick labels
+  ctx.fillStyle = "#111";
+  ctx.font = "14px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for(let b=0; b<=xMax; b++){
+    label(String(b), X(b), Y(0)+10);
+  }
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for(let a=0; a<=yMax; a++){
+    label(String(a), X(0)-8, Y(a));
+  }
+
+  // Axis titles
+  ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  ctx.fillStyle = "#111";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  label("b (denominator coordinate)", (X(0)+X(xMax))/2, H-6);
+
+  ctx.save();
+  ctx.translate(18, (Y(0)+Y(yMax))/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  label("a (numerator coordinate)", 0, 0);
+  ctx.restore();
+
+  // Rays for a/b = 1/2 and 2/3
+  function drawRay(num, den, color, title){
+    const aAtXmax = (num/den)*xMax;
+    const scale = (aAtXmax<=yMax) ? 1 : (yMax/aAtXmax);
+    const bx = xMax*scale;
+    const ay = aAtXmax*scale;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    line(X(0), Y(0), X(bx), Y(ay));
+
+    ctx.fillStyle = color;
+    ctx.font = "14px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    label(title, X(bx)+6, Y(ay));
+  }
+
+  drawRay(1,2,"#0a7","slope a/b = 1/2");
+  drawRay(2,3,"#06c","slope a/b = 2/3");
+
+  // Points and labels
+  function plotPoint(b,a,color,tag){
+    ctx.fillStyle = color;
+    dot(X(b), Y(a), 5);
+    ctx.fillStyle = "#111";
+    ctx.font = "13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    label(tag + " ("+b+","+a+")", X(b)+7, Y(a)-4);
+  }
+
+  plotPoint(2,1,"#0a7","1/2");
+  plotPoint(4,2,"#0a7","2/4");
+  plotPoint(6,3,"#0a7","3/6");
+
+  plotPoint(3,2,"#06c","2/3");
+  plotPoint(6,4,"#06c","4/6");
+
+  // Origin
+  ctx.fillStyle = "#111";
+  dot(X(0), Y(0), 4);
+  ctx.font = "13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  label("(0,0)", X(0)+6, Y(0)+6);
+})();
+</script>
 
 <div class="exercise">
 <strong>Exercise 3.</strong>
