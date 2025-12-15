@@ -25,10 +25,17 @@
   document.documentElement.style.visibility="hidden";
   window.addEventListener("load",()=>{document.documentElement.style.visibility="visible";});
 </script>
+
 <script>
-  window.MathJax={
-    tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['\\[','\\]']]},
-    options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$','$'], ['\\(','\\)']],
+      displayMath: [['\\[
+','\\, ['\[
+','
+\]']]']]
+    },
+    options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
   };
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
@@ -116,9 +123,9 @@ Here is a complete example that shows how induction works in practice.
 <div class="example">
 <strong>Example.</strong>
 We claim that for every $n\in\mathbb{N}$,
-$$
+\[
 1 + 2 + 3 + \cdots + n = \frac{n(n+1)}{2}.
-$$
+\]
 
 <strong>Base case.</strong>
 For $n=1$, the left-hand side equals $1$, and the right-hand side equals
@@ -126,15 +133,15 @@ $\frac{1\cdot2}{2}=1$. The statement is true at $n=1$.
 
 <strong>Inductive step.</strong>
 Assume the statement holds for some $k$:
-$$
+\[
 1+2+\cdots+k = \frac{k(k+1)}{2}.
-$$
+\]
 Adding $(k+1)$ to both sides gives
-$$
+\[
 1+2+\cdots+k+(k+1)
 = \frac{k(k+1)}{2} + (k+1)
 = \frac{(k+1)(k+2)}{2}.
-$$
+\]
 This is exactly the formula with $n=k+1$.
 </div>
 
@@ -146,9 +153,9 @@ forces it to be true at $2$, then $3$, and so on without exception.
 <div class="exercise">
 <strong>Exercise 1.</strong>
 Use induction to prove that
-$$
+\[
 1 + 3 + 5 + \cdots + (2n-1) = n^2
-$$
+\]
 for all $n\in\mathbb{N}$.
 
 
@@ -165,12 +172,13 @@ for all $n\in\mathbb{N}$.
     <p>
     <strong>Inductive step.</strong>
     Assume $P(k)$ holds for some $k\in\mathbb{N}$:
-    $$1+3+\cdots+(2k-1)=k^2.$$
-    Add the next odd number $2(k+1)-1=2k+1$ to both sides:
-    $$1+3+\cdots+(2k-1)+(2k+1)=k^2+(2k+1).$$
-    Simplify the right-hand side:
-    $$k^2+2k+1=(k+1)^2.$$
-    This gives $P(k+1)$.
+    \[
+1+3+\cdots+(2k-1)=k^2.\[
+Add the next odd number $2(k+1)-1=2k+1$ to both sides:
+\]1+3+\cdots+(2k-1)+(2k+1)=k^2+(2k+1).\[
+Simplify the right-hand side:
+\]k^2+2k+1=(k+1)^2.\[
+This gives $P(k+1)$.
     By induction, $P(n)$ holds for all $n\in\mathbb{N}$.
     </p>
   </div>
@@ -192,9 +200,9 @@ Every nonempty subset of $\mathbb{N}$ has a smallest element.
 
 <p>
 This principle implies that there cannot exist an infinite strictly decreasing sequence
-$$
+\]
 n_0 > n_1 > n_2 > \cdots
-$$
+\[
 of natural numbers. If such a sequence existed, the set
 $\{n_0,n_1,n_2,\dots\}$ would have no smallest element,
 contradicting well-ordering.
@@ -222,9 +230,9 @@ we explain integers as <em>differences</em>.
 <p>
 Consider ordered pairs $(a,b)$ of natural numbers, intended to represent the difference $a-b$.
 Different pairs can represent the same difference. For example,
-$$
+\]
 5-3 = 7-5 = 12-10.
-$$
+\[
 </p>
 
 <p>
@@ -244,9 +252,9 @@ The integer $0$ corresponds to any pair of the form $(n,n)$, since $n-n=0$.
 
 <p>
 The negative of $(a,b)$ is $(b,a)$, because reversing the order reverses the sign:
-$$
+\]
 a-b = -(b-a).
-$$
+\[
 </p>
 
 <p>
@@ -266,15 +274,15 @@ respects the equivalence relation.
     
 <p>
 We must show: if $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, then
-$$(a+c,b+d)\sim(a'+c',b'+d').$$
+\](a+c,b+d)\sim(a'+c',b'+d').\[
 </p>
 <p>
 The hypotheses mean:
-$$a+b'=b+a' \quad\text{and}\quad c+d'=d+c'.$$
+\]a+b'=b+a' \quad\text{and}\quad c+d'=d+c'.\[
 Add these equalities:
-$$(a+b')+(c+d')=(b+a')+(d+c').$$
+\](a+b')+(c+d')=(b+a')+(d+c').\[
 Regroup:
-$$(a+c)+(b'+d')=(b+d)+(a'+c').$$
+\](a+c)+(b'+d')=(b+d)+(a'+c').\[
 This is exactly the equivalence condition for
 $(a+c,b+d)\sim(a'+c',b'+d')$.
 So addition is well-defined on equivalence classes.
@@ -298,9 +306,9 @@ intended to mean $a/b$.
 
 <p>
 Different pairs can represent the same ratio:
-$$
+\]
 1/2 = 2/4 = 50/100.
-$$
+\[
 </p>
 
 <div class="callout">
@@ -322,9 +330,9 @@ All equivalent fractions lie on the same line through the origin.
 <div class="exercise">
 <strong>Exercise 3.</strong>
 Verify that addition
-$$
+\]
 \frac{a}{b} + \frac{c}{d} = \frac{ad+bc}{bd}
-$$
+\[
 is compatible with the equivalence relation.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
@@ -333,21 +341,21 @@ is compatible with the equivalence relation.
 <p>
 We want to check that the usual addition formula gives the same rational number no matter which representatives we choose.
 Suppose $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, i.e.
-$$ab'=a'b \quad\text{and}\quad cd'=c'd.$$
+\]ab'=a'b \quad\text{and}\quad cd'=c'd.\[
 </p>
 <p>
 Define
-$$\frac{a}{b}+\frac{c}{d}=\frac{ad+bc}{bd}.$$
+\]\frac{a}{b}+\frac{c}{d}=\frac{ad+bc}{bd}.\[
 We must show
-$$\frac{ad+bc}{bd} \sim \frac{a'd'+b'c'}{b'd'}.$$
+\]\frac{ad+bc}{bd} \sim \frac{a'd'+b'c'}{b'd'}.\[
 In equivalence-class language this is the integer identity
-$$(ad+bc)(b'd')=(a'd'+b'c')(bd).$$
+\](ad+bc)(b'd')=(a'd'+b'c')(bd).\[
 </p>
 <p>
 Expand both sides:
-$$(ad)(b'd')+(bc)(b'd') = (a'd')(bd)+(b'c')(bd).$$
+\](ad)(b'd')+(bc)(b'd') = (a'd')(bd)+(b'c')(bd).\[
 Regroup as
-$$a d b' d' + b c b' d' = a' d' b d + b' c' b d.$$
+\]a d b' d' + b c b' d' = a' d' b d + b' c' b d.\[
 Now use $ab'=a'b$ to replace $ab'$ with $a'b$, and $cd'=c'd$ to replace $cd'$ with $c'd$:
 <ul>
 <li>$a d b' d' = (ab')(dd') = (a'b)(dd') = a' d' b d$</li>
@@ -369,9 +377,9 @@ To control and compare integers, we need a precise notion of division.
 <div class="callout">
 <strong>Division Algorithm.</strong>
 Given integers $a$ and $b>0$, there exist unique integers $q$ and $r$ such that
-$$
+\]
 a = bq + r, \qquad 0 \le r < b.
-$$
+\[
 </div>
 
 <p>
@@ -382,11 +390,11 @@ is the largest unit that measures both numbers exactly.
 
 <div class="example">
 <strong>Example.</strong>
-$$
+\]
 48 = 18\cdot2 + 12, \quad
 18 = 12\cdot1 + 6, \quad
 12 = 6\cdot2 + 0.
-$$
+\[
 Therefore $\gcd(48,18)=6$.
 </div>
 
@@ -399,9 +407,11 @@ Use the Euclidean algorithm to compute $\gcd(84,30)$ and explain each step.
     
 <p>
 Apply the Euclidean algorithm:
-$$84=30\cdot2+24,$$
-$$30=24\cdot1+6,$$
-$$24=6\cdot4+0.$$
+\]84=30\cdot2+24,\[
+
+\]30=24\cdot1+6,\[
+
+\]24=6\cdot4+0.\[
 The last nonzero remainder is $6$, so $\gcd(84,30)=6$.
 </p>
 <p>
@@ -485,9 +495,9 @@ This is why parity is called a <em>minimal</em> form of divisibility.
 
 <p>
 In the equation
-$$
+\]
 a^2 = 2b^2,
-$$
+\[
 the right-hand side has an odd number of factors of $2$ (one more than $b^2$),
 while the left-hand side has an even number of factors of $2$ (twice those in $a$).
 Parity alone is enough to see that these two quantities can never be equal.
@@ -525,7 +535,7 @@ Use infinite descent to show there is no smallest positive rational number.
     
 <p>
 Assume, for contradiction, that there exists a smallest positive rational number. Call it $q$.
-Then $q/2$ is also a positive rational number, and $q/2 &lt; q$.
+Then $q/2$ is also a positive rational number, and $q/2 \lt  q$.
 This contradicts the assumption that $q$ was the smallest positive rational.
 Therefore there is no smallest positive rational number.
 </p>
@@ -545,7 +555,7 @@ Both $\mathbb{Q}$ and $\mathbb{R}$ are ordered fields.
 
 <p>
 In practice, “ordered field” means you can do algebra (add, subtract, multiply, divide by nonzero numbers) and you can also compare numbers
-(using $&lt;$ and $&gt;$), and these two structures cooperate rather than fight each other.
+(using $\lt $ and $\gt $), and these two structures cooperate rather than fight each other.
 For example, if you add the same number to both sides of an inequality, the direction of the inequality should not change.
 Similarly, multiplying by a positive number should preserve the inequality direction.
 </p>
@@ -555,11 +565,11 @@ Similarly, multiplying by a positive number should preserve the inequality direc
 An ordered field is a set of numbers with:
 <ul>
   <li><strong>Addition and multiplication</strong> behaving like ordinary arithmetic (associative, commutative, distributive, with $0$ and $1$, and inverses).</li>
-  <li><strong>An order relation</strong> $&lt;$ so that for any $a,b$ exactly one of $a&lt;b$, $a=b$, $a&gt;b$ holds (trichotomy), and the order is transitive.</li>
+  <li><strong>An order relation</strong> $\lt $ so that for any $a,b$ exactly one of $a\lt b$, $a=b$, $a\gt b$ holds (trichotomy), and the order is transitive.</li>
   <li><strong>Compatibility rules</strong> linking algebra and order:
     <ul>
-      <li>If $a&lt;b$ then $a+c&lt;b+c$ for all $c$.</li>
-      <li>If $0&lt;c$ and $a&lt;b$ then $ac&lt;bc$.</li>
+      <li>If $a\lt b$ then $a+c\lt b+c$ for all $c$.</li>
+      <li>If $0\lt c$ and $a\lt b$ then $ac\lt bc$.</li>
     </ul>
   </li>
 </ul>
@@ -568,13 +578,13 @@ An ordered field is a set of numbers with:
 <div class="example">
 <strong>Example: why $\mathbb{Q}$ is an ordered field.</strong>
 Take rational numbers written as fractions (equivalence classes) and use the usual operations.
-Define $a&lt;b$ for rationals by saying $b-a$ is positive.
-Concretely, if $a=\frac{p}{q}$ and $b=\frac{r}{s}$ with $q,s&gt;0$, then
-$$
+Define $a\lt b$ for rationals by saying $b-a$ is positive.
+Concretely, if $a=\frac{p}{q}$ and $b=\frac{r}{s}$ with $q,s\gt 0$, then
+\]
 \frac{p}{q} &lt; \frac{r}{s}
 \quad\text{means}\quad
 ps &lt; rq.
-$$
+\[
 This is the familiar “cross-multiply” rule, and it is exactly the statement that $b-a$ is positive.
 With this definition, adding the same rational to both sides and multiplying by a positive rational preserve inequalities.
 </div>
@@ -583,27 +593,27 @@ With this definition, adding the same rational to both sides and multiplying by 
 <strong>Exercise 7.</strong>
 Let $a,b,c\in\mathbb{Q}$.
 <ol>
-  <li>Assume $a&lt;b$. Prove that $a+c&lt;b+c$.</li>
-  <li>Assume $a&lt;b$ and $0&lt;c$. Prove that $ac&lt;bc$.</li>
+  <li>Assume $a\lt b$. Prove that $a+c\lt b+c$.</li>
+  <li>Assume $a\lt b$ and $0\lt c$. Prove that $ac\lt bc$.</li>
 </ol>
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
     <p>
-    (1) If $a&lt;b$, then by definition $b-a$ is positive.
+    (1) If $a\lt b$, then by definition $b-a$ is positive.
     Consider $(b+c)-(a+c) = b-a$.
-    Since $b-a$ is positive, $(b+c)-(a+c)$ is positive, which means $a+c&lt;b+c$.
+    Since $b-a$ is positive, $(b+c)-(a+c)$ is positive, which means $a+c\lt b+c$.
     </p>
     <p>
-    (2) Assume $a&lt;b$ and $0&lt;c$.
-    Since $a&lt;b$, we have $b-a&gt;0$.
-    Multiply this positive number by the positive number $c$ to get $c(b-a)&gt;0$.
+    (2) Assume $a\lt b$ and $0\lt c$.
+    Since $a\lt b$, we have $b-a\gt 0$.
+    Multiply this positive number by the positive number $c$ to get $c(b-a)\gt 0$.
     Distribute:
-    $$c(b-a)=cb-ca.$$
-    So $cb-ca&gt;0$, which means $ca&lt;cb$, i.e. $ac&lt;bc$.
+\]c(b-a)=cb-ca.\[
+So $cb-ca\gt 0$, which means $ca\lt cb$, i.e. $ac\lt bc$.
     </p>
     <p class="muted">
-    Note: this solution uses only the idea “$x&lt;y$ means $y-x$ is positive” plus distributivity. In a fully axiomatic treatment,
+    Note: this solution uses only the idea “$x\lt y$ means $y-x$ is positive” plus distributivity. In a fully axiomatic treatment,
     these are exactly the compatibility axioms you assume for an ordered field.
     </p>
   </div>
@@ -633,10 +643,10 @@ A sequence is simply a function from $\mathbb{N}$ to $\mathbb{R}$.
 <p>
 Understanding quantifiers is essential in analysis.
 For example, the definition of convergence states:
-$$
+\]
 \forall \varepsilon \,\gt\, 0 \; \exists N \; \forall n \,\gt\, N :
 |a_n - L| \,\lt\, \varepsilon.
-$$
+\[
 </p>
 
 <div class="exercise">
@@ -650,13 +660,14 @@ and what depends on what.
     
 <p>
 The statement
-$$\forall \varepsilon &gt; 0 \; \exists N \; \forall n &gt; N : |a_n-L| &lt; \varepsilon$$
+\]\forall \varepsilon &gt; 0 \; \exists N \; \forall n &gt; N : |a_n-L| &lt; \varepsilon
+\]
 means:
 </p>
 <ul>
-<li>You (or an adversary) pick any tolerance $\varepsilon&gt;0$ (how close you want to be to $L$).</li>
+<li>You (or an adversary) pick any tolerance $\varepsilon\gt 0$ (how close you want to be to $L$).</li>
 <li>After seeing that choice, we must produce a cutoff index $N$.</li>
-<li>Once $N$ is chosen, <em>every</em> index $n$ beyond $N$ satisfies $|a_n-L|&lt;\varepsilon$.</li>
+<li>Once $N$ is chosen, <em>every</em> index $n$ beyond $N$ satisfies $|a_n-L|\lt \varepsilon$.</li>
 </ul>
 <p>
 In words: <em>no matter how small an error tolerance you demand, eventually all terms of the sequence stay within that tolerance of $L$.</em>
@@ -667,5 +678,21 @@ In words: <em>no matter how small an error tolerance you demand, eventually all 
 </div>
 
 </main>
+
+<script>
+  function typesetNode(node) {
+    if (window.MathJax && MathJax.typesetPromise) {
+      MathJax.typesetPromise([node]).catch(console.error);
+    }
+  }
+  window.addEventListener("load", () => {
+    document.querySelectorAll("details").forEach(d => {
+      d.addEventListener("toggle", () => {
+        if (d.open) typesetNode(d);
+      });
+    });
+  });
+</script>
+
 </body>
 </html>
