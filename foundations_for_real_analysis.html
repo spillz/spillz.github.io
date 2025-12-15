@@ -633,46 +633,167 @@ Completeness fills the gaps present in $\mathbb{Q}$ and ensures that limits beha
 <h2>8. Sets, Functions, and Sequences</h2>
 
 <p>
-A function assigns exactly one output to each input.
-A sequence is simply a function from $\mathbb{N}$ to $\mathbb{R}$.
+Real Analysis is, at its core, the study of functions and limiting processes.
+To work rigorously, we must be precise about what sets and functions are,
+and how sequences fit into this picture.
+</p>
+
+<h3>8.1 Sets as collections</h3>
+
+<p>
+A <em>set</em> is simply a collection of distinct objects, called its elements.
+We write $x \in A$ to mean “$x$ is an element of the set $A$.”
 </p>
 
 <p>
-Understanding quantifiers is essential in analysis.
-For example, the definition of convergence states:
-$$
-\forall \varepsilon \,\gt\, 0 \; \exists N \; \forall n \,\gt\, N :
-|a_n - L| \,\lt\, \varepsilon.
-$$
+In analysis, sets usually consist of numbers.
+For example:
 </p>
 
+<ul>
+  <li>$\mathbb{N}$ is the set of natural numbers $\{1,2,3,\dots\}$.</li>
+  <li>$\mathbb{Q}$ is the set of rational numbers.</li>
+  <li>$\mathbb{R}$ is the set of real numbers.</li>
+</ul>
+
+<p>
+Sets allow us to specify <em>where objects live</em> and which objects we are allowed
+to talk about at a given moment.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+The statement “$x^2 &lt; 2$” is incomplete unless we say where $x$ comes from.
+If $x \in \mathbb{R}$, the statement has many solutions.
+If $x \in \mathbb{Z}$, the only solutions are $x = -1, 0, 1$.
+</div>
+
+<h3>8.2 Functions as rules with a domain</h3>
+
+<p>
+A <em>function</em> is a rule that assigns to each element of one set
+(the <em>domain</em>) exactly one element of another set
+(the <em>codomain</em>).
+</p>
+
+<p>
+We write $f : A \to B$ to indicate that $f$ is a function
+with domain $A$ and codomain $B$.
+For each $x \in A$, the value of the function at $x$ is denoted $f(x)$.
+</p>
+
+<p>
+It is essential to understand that a function is not just a formula.
+The same formula can define different functions depending on the domain.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+The rule $f(x) = 1/x$ defines:
+<ul>
+  <li>a function $\mathbb{R} \setminus \{0\} \to \mathbb{R}$,</li>
+  <li>a function $\mathbb{Q} \setminus \{0\} \to \mathbb{Q}$.</li>
+</ul>
+These are different functions, even though the formula is the same.
+</div>
+
 <div class="exercise">
-<strong>Exercise 6.</strong>
-Rewrite the definition of convergence in words,
-explicitly describing who chooses $\varepsilon$, who chooses $N$,
-and what depends on what.
+<strong>Exercise 8.1.</strong>
+Give an example of a formula that defines a function on $\mathbb{R}$
+but does <em>not</em> define a function on $\mathbb{Q}$.
+Explain why.
+</div>
+
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-    
-<p>
-The statement
-$$\forall \varepsilon &gt; 0 \; \exists N \; \forall n &gt; N : |a_n-L| &lt; \varepsilon
-$$
-means:
-</p>
-<ul>
-<li>You (or an adversary) pick any tolerance $\varepsilon\gt 0$ (how close you want to be to $L$).</li>
-<li>After seeing that choice, we must produce a cutoff index $N$.</li>
-<li>Once $N$ is chosen, <em>every</em> index $n$ beyond $N$ satisfies $|a_n-L|\lt \varepsilon$.</li>
-</ul>
-<p>
-In words: <em>no matter how small an error tolerance you demand, eventually all terms of the sequence stay within that tolerance of $L$.</em>
-</p>
-
+    <p>
+    The formula $f(x) = \sqrt{x}$ defines a function on the domain
+    $\{x \in \mathbb{R} : x \ge 0\}$.
+    However, it does not define a function $\mathbb{Q} \to \mathbb{Q}$,
+    because $\sqrt{2}$ is not rational.
+    </p>
   </div>
 </details>
+
+<h3>8.3 Sequences as functions</h3>
+
+<p>
+A <em>sequence</em> is nothing more than a function whose domain is the natural numbers.
+</p>
+
+<p>
+Formally, a sequence of real numbers is a function
+$$
+a : \mathbb{N} \to \mathbb{R}.
+$$
+We usually write $a_n$ instead of $a(n)$.
+</p>
+
+<p>
+This viewpoint is not cosmetic.
+It explains why statements about sequences inevitably involve
+quantifiers over natural numbers.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+The sequence $a_n = \frac{1}{n}$ is the function
+that assigns to each $n \in \mathbb{N}$ the real number $1/n$.
 </div>
+
+<h3>8.4 Reading quantified definitions</h3>
+
+<p>
+Many definitions in analysis involve nested quantifiers.
+For example, the definition of convergence states:
+</p>
+
+\[
+\forall \varepsilon &gt; 0 \; \exists N \in \mathbb{N} \;
+\forall n &gt; N : |a_n - L| &lt; \varepsilon.
+\]
+
+<p>
+This statement has a precise logical structure.
+It does <em>not</em> say that $\varepsilon$ and $N$ are chosen simultaneously.
+</p>
+
+<p>
+The correct reading is:
+</p>
+
+<ul>
+  <li>Someone first chooses a tolerance $\varepsilon &gt; 0$.</li>
+  <li>After seeing that choice, we must produce a natural number $N$.</li>
+  <li>Once $N$ is fixed, <em>every</em> index $n &gt; N$ must satisfy
+      $|a_n - L| &lt; \varepsilon$.</li>
+</ul>
+
+<div class="exercise">
+<strong>Exercise 8.2.</strong>
+Consider the sequence $a_n = 1/n$.
+Explain, in words, how you would choose $N$ after being given a specific
+$\varepsilon &gt; 0$.
+</div>
+
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Given $\varepsilon &gt; 0$, we want $|1/n - 0| &lt; \varepsilon$,
+    which means $1/n &lt; \varepsilon$.
+    This is equivalent to $n &gt; 1/\varepsilon$.
+    We may therefore choose any natural number
+    $N &gt; 1/\varepsilon$.
+    </p>
+  </div>
+</details>
+
+<p>
+This “who chooses what, and when” structure is the backbone of all limit arguments
+in real analysis.
+</p>
 
 </main>
 
