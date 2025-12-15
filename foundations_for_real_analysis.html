@@ -160,6 +160,93 @@ you should continually ask:
 Learning to track these dependencies is one of the central skills of Real Analysis.
 </p>
 
+<h3>Generalizing: turning a “cute result” into a reusable template</h3>
+
+<p>
+A common early difficulty in proof-based mathematics is learning how to <em>generalize</em>.
+In calculus, you may solve a particular instance (a specific function, a specific limit, a specific inequality).
+In Real Analysis, you will often be asked to identify the underlying structure and prove a statement that covers many instances at once.
+</p>
+
+<p>
+One way to think about this is:
+a “cute result” is valuable not only because it is true, but because it often reveals a pattern that holds in a broader setting.
+Good proofs do not just show that something happens once; they explain <em>why</em> it happens, and that “why” is usually what generalizes.
+</p>
+
+<div class="callout">
+<strong>A practical approach to generalizing.</strong>
+When you prove a result, ask:
+<ul>
+  <li>Which features of the objects were actually used?</li>
+  <li>Which properties were irrelevant and can be removed?</li>
+  <li>What is the simplest statement that captures the same reasoning?</li>
+</ul>
+Generalization means replacing unnecessary specifics with the weakest assumptions that still make the proof work.
+</div>
+
+<div class="example">
+<strong>Example: from a specific inequality to a general one.</strong>
+<p>
+A familiar inequality is
+$$
+|x+y| \le |x| + |y|.
+$$
+This does not depend on any special values of $x$ and $y$.
+In fact, the same reasoning gives a whole family of inequalities.
+For example,
+$$
+|x+y+z| \le |x| + |y| + |z|
+$$
+and more generally, for any natural number $n$,
+$$
+\left|\sum_{k=1}^n a_k\right| \le \sum_{k=1}^n |a_k|.
+$$
+</p>
+<p>
+The point is not that the $n$-term version is “harder.”
+The point is that the proof reveals a pattern that can be reused whenever sums appear in limits, error bounds, and convergence arguments.
+</p>
+</div>
+
+<div class="exercise">
+<strong>Exercise.</strong>
+You already know that if $x&gt;0$ then $x^2&gt;0$.
+A “cute result” is the fact that if $x^2&lt;1$ then $|x|&lt;1$.
+<p>
+(a) State a more general version of this result by replacing $1$ with an arbitrary positive number $M$.<br>
+(b) Prove your generalized statement.
+</p>
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    <strong>(a)</strong>
+    A natural generalization is:
+    for any real number $M&gt;0$, if $x^2&lt;M^2$ then $|x|&lt;M$.
+    </p>
+    <p>
+    <strong>(b)</strong>
+    We prove the contrapositive, which is often cleaner.
+    The contrapositive is:
+    if $|x|\ge M$, then $x^2\ge M^2$.
+    </p>
+    <p>
+    If $|x|\ge M&gt;0$, then squaring both sides preserves the inequality:
+    $|x|^2 \ge M^2$.
+    But $|x|^2=x^2$, so $x^2\ge M^2$.
+    This proves the contrapositive, hence the original statement.
+    </p>
+  </div>
+</details>
+</div>
+
+<p>
+Generalization is not about making statements vague.
+It is about identifying exactly which assumptions are needed, and then proving a statement that applies whenever those assumptions hold.
+This is one of the main ways analysis builds powerful results from simple ideas.
+</p>
+
 
 <h2>1. Natural Numbers, Induction, and Well-Ordering</h2>
 
