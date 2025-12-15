@@ -620,18 +620,37 @@ Therefore, no such solution exists.
 
 <div class="exercise">
 <strong>Exercise 6.</strong>
-Use infinite descent to show that there is no smallest positive real number.
+Use infinite descent to show that there is no positive integer solution to
+\[
+n = 2k^2.
+\]
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
     <p>
-    Suppose there were a smallest positive real number $x$.
-    Then $x/2$ would also be a positive real number and would satisfy
-    $0 &lt; x/2 &lt; x$.
-    This contradicts the minimality of $x$.
+    Suppose there exists a smallest positive integer $n$ such that
+    $n = 2k^2$ for some integer $k$.
     </p>
+
     <p>
-    Therefore, there is no smallest positive real number.
+    Since $n$ is even, write $n = 2m$.
+    Substituting gives
+    $$
+    2m = 2k^2 \quad\Rightarrow\quad m = k^2.
+    $$
+    </p>
+
+    <p>
+    But then $m$ itself is a perfect square, so
+    $$
+    m = k^2 = 2\left(\frac{k}{\sqrt{2}}\right)^2,
+    $$
+    which implies that $m$ has the same form as $n$ but is strictly smaller.
+    </p>
+
+    <p>
+    This contradicts the assumption that $n$ was minimal.
+    Therefore, no such positive integer $n$ exists.
     </p>
   </div>
 </details>
