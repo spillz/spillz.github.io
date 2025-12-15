@@ -760,7 +760,7 @@ Therefore, no such solution exists.
 <h3>6.4 An exercise in descent</h3>
 
 <div class="exercise">
-<strong>Exercise 6.</strong>
+<strong>Exercise 6A.</strong>
 Use infinite descent to show that there is no positive integer solution to
 \[
 n = 2k^2.
@@ -804,6 +804,132 @@ of a prime.
 This is why it appears naturally in irrationality proofs and Diophantine equations.
 </p>
 
+<h3>Why the rationals are not sufficient for analysis: limits can escape</h3>
+
+<p>
+Real analysis is largely about <em>limits</em>. A basic expectation is that if a sequence of numbers
+gets tighter and tighter—its terms eventually become arbitrarily close to each other—then it should
+be converging toward a definite number.
+</p>
+
+<p>
+That expectation is true in the real numbers, but it is <em>false</em> in the rational numbers.
+The failure is not philosophical: it is a concrete, testable breakdown of “closure under limits.”
+</p>
+
+<div class="callout">
+<strong>Cauchy sequence (informal preview).</strong>
+A sequence $(a_n)$ is called <em>Cauchy</em> if its terms eventually get arbitrarily close to one another:
+for every tolerance $\varepsilon&gt;0$, there is an index $N$ such that whenever $m,n&gt;N$ we have
+$|a_n-a_m|&lt;\varepsilon$.
+<br><br>
+Intuition: past some point, the sequence “bunches up.” It ought to be approaching some limit—unless
+your number system has holes.
+</div>
+
+<div class="example">
+<strong>Example: a rational sequence that converges to $\sqrt{2}$ (but not inside $\mathbb{Q}$).</strong>
+
+<p>
+Define a sequence of rationals by starting at $a_1=1$ and iterating
+</p>
+
+$$
+a_{n+1}=\frac{1}{2}\left(a_n+\frac{2}{a_n}\right).
+$$
+
+<p>
+This is the classical Newton iteration for solving $x^2=2$. Each $a_n$ is rational (because it is built
+from $a_n$ using addition, division, and multiplication), and numerically it quickly produces
+</p>
+
+<ul>
+  <li>$a_1=1$</li>
+  <li>$a_2=\frac{3}{2}=1.5$</li>
+  <li>$a_3=\frac{17}{12}\approx 1.4167$</li>
+  <li>$a_4=\frac{577}{408}\approx 1.4142157$</li>
+</ul>
+
+<p>
+These values are clearly homing in on $1.41421\ldots$, i.e. on $\sqrt{2}$.
+In $\mathbb{R}$, this sequence converges to $\sqrt{2}$.
+But since $\sqrt{2}\notin\mathbb{Q}$, it cannot converge to any rational number.
+So (as we will formalize later) $\mathbb{Q}$ contains Cauchy sequences with no limit in $\mathbb{Q}$.
+</p>
+</div>
+
+<div class="exercise">
+<strong>Exercise 6B.</strong>
+Let $(a_n)$ be the sequence of <em>decimal truncations</em> of $\sqrt{2}$:
+$$
+a_1=1,\quad a_2=1.4,\quad a_3=1.41,\quad a_4=1.414,\quad \dots
+$$
+so that $a_n$ is the rational number obtained by cutting $\sqrt{2}$ off after $n-1$ decimal places.
+<p>
+(a) Show that $(a_n)$ is a Cauchy sequence in $\mathbb{Q}$ (use only elementary bounds on decimals).<br>
+(b) Explain why $(a_n)$ cannot converge to any rational number.
+</p>
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+
+    <p>
+    <strong>(a) Cauchy.</strong>
+    Fix $\varepsilon&gt;0$. Choose $N$ so large that $10^{-(N-1)}&lt;\varepsilon$.
+    (This is always possible because powers of $10$ grow without bound.)
+    </p>
+
+    <p>
+    For $m,n\ge N$, the numbers $a_m$ and $a_n$ agree in their first $N-1$ decimal places.
+    The largest possible difference between two decimals that agree through $N-1$ places is
+    less than $10^{-(N-1)}$. Concretely, one of them could be
+    </p>
+
+    $$
+    1.d_1d_2\cdots d_{N-1}0000\cdots
+    $$
+
+    <p>
+    while the other could be at most
+    </p>
+
+    $$
+    1.d_1d_2\cdots d_{N-1}9999\cdots
+    $$
+
+    <p>
+    and the difference between these is $&lt;10^{-(N-1)}$.
+    Therefore $|a_m-a_n|&lt;10^{-(N-1)}&lt;\varepsilon$ for all $m,n\ge N$.
+    This is exactly the Cauchy property.
+    </p>
+
+    <p>
+    <strong>(b) No rational limit.</strong>
+    In $\mathbb{R}$, the truncation sequence $(a_n)$ converges to $\sqrt{2}$:
+    the truncations get closer and closer to the true decimal expansion.
+    If $(a_n)$ converged to some rational $q\in\mathbb{Q}$, then (viewing $\mathbb{Q}\subset\mathbb{R}$)
+    it would also converge to $q$ as a real sequence.
+    But limits in $\mathbb{R}$ are unique, so we would have $q=\sqrt{2}$, contradicting
+    $\sqrt{2}\notin\mathbb{Q}$.
+    </p>
+
+    <p class="muted">
+    This is the key failure: $\mathbb{Q}$ is not “closed under limits.”
+    The real numbers are built (in one standard approach) precisely so that
+    every Cauchy sequence has a limit.
+    </p>
+
+  </div>
+</details>
+</div>
+
+<p>
+This is one concrete reason the rational numbers are not enough for analysis:
+we can produce sequences whose behavior demands a limit, but the limit is not rational.
+Completeness of $\mathbb{R}$ can be understood as the systematic repair of this defect.
+</p>
+
+
 <h2>7. Ordered Fields and Completeness</h2>
 
 <p>
@@ -811,7 +937,6 @@ An ordered field is a number system equipped with addition, multiplication,
 and an order relation that behaves sensibly with respect to these operations.
 Both $\mathbb{Q}$ and $\mathbb{R}$ are ordered fields.
 </p>
-
 
 <p>
 In practice, “ordered field” means you can do algebra (add, subtract, multiply, divide by nonzero numbers) and you can also compare numbers
