@@ -20,7 +20,9 @@
   .exercise { border-left:4px solid #57c; background:#f7f9ff; padding:14px 16px; margin:18px 0; }
   .muted { color:var(--muted); }
   code { background:#f2f2f2; padding:0 4px; border-radius:4px; }
+  details > summary { cursor:pointer; }
 </style>
+
 <script>
   document.documentElement.style.visibility="hidden";
   window.addEventListener("load",()=>{document.documentElement.style.visibility="visible";});
@@ -44,40 +46,33 @@
 
 <p>
 This document is a preparatory text for a first rigorous course in Real Analysis.
-It is written for readers encountering proof-based mathematics for the first time,
-or for readers who have seen calculus but have not previously studied the logical
-and structural foundations of the number systems.
+It is written for readers who have seen calculus computations but are new to proof-based mathematics,
+and for readers who want the logical and structural foundations of the number systems made explicit.
 </p>
 
 <p>
-Most Real Analysis textbooks begin by stating axioms for the real numbers and then
-develop limits, continuity, and convergence from those axioms. In doing so, they
-necessarily rely on properties of the natural numbers, integers, and rational numbers
-that are assumed rather than explained. The goal of this text is to make those
-assumptions explicit and understandable.
+Most Real Analysis courses begin with the real numbers and build limits, continuity, and convergence.
+That development relies on facts about the natural numbers, integers, and rational numbers that are often assumed.
+Here we make those assumptions visible, and we practice the proof techniques that will be used constantly in analysis.
 </p>
 
 <p>
-We will carefully explain:
-how counting leads to the natural numbers,
-how subtraction leads to the integers,
-how division leads to the rational numbers,
-and why the rational numbers are still not sufficient for analysis.
-Along the way, we will introduce induction, well-ordering, divisibility,
-and infinite descent, with concrete examples and exercises.
+Along the way, we will:
 </p>
-
-<p>
-Nothing in this document requires prior exposure to abstract algebra or set theory.
-Where formal constructions are used, they are motivated by simple numerical ideas
-and illustrated with examples. The emphasis throughout is on understanding where
-the rules come from, not merely learning how to apply them.
-</p>
+<ul>
+  <li>explain induction and well-ordering on $\mathbb{N}$,</li>
+  <li>introduce basic set language (so that constructions like “equivalence classes” are readable),</li>
+  <li>construct $\mathbb{Z}$ and $\mathbb{Q}$ using equivalence relations,</li>
+  <li>practice divisibility arguments (including a first irrationality proof),</li>
+  <li>explain proof styles such as contradiction and contrapositive,</li>
+  <li>see why $\mathbb{Q}$ is not sufficient for analysis, and</li>
+  <li>learn how quantified definitions lead to $\varepsilon$–$N$ and $\varepsilon$–$\delta$ proofs.</li>
+</ul>
 
 <p class="muted">
 Technical note: this HTML file uses MathJax to render mathematics. If you open the file while offline or behind a firewall that blocks CDNs,
 the MathJax library may not load and you may see raw LaTeX (for example, <code>\forall</code> or <code>\sqrt{2}</code>) instead of formatted equations.
-To fix that, open the file with an internet connection, or replace the MathJax script tag at the bottom of the page with a local copy of MathJax.
+To fix that, open the file with an internet connection, or replace the MathJax script tag above with a local copy of MathJax.
 </p>
 
 
@@ -87,8 +82,7 @@ To fix that, open the file with an internet connection, or replace the MathJax s
 We begin with the natural numbers
 $\mathbb{N} = \{1,2,3,\dots\}$.
 These are the numbers used for counting, ordering, and indexing steps in a process.
-They form the backbone of many arguments in analysis, especially those involving
-sequences and iterative procedures.
+They form the backbone of many arguments in analysis, especially those involving sequences and iterative procedures.
 </p>
 
 <h3>1.1 Mathematical induction</h3>
@@ -112,11 +106,6 @@ then $P(n)$ is true for all $n\in\mathbb{N}$.
 
 <h3>1.2 A concrete example of induction</h3>
 
-<p>
-The symbolic form “$P(1)$ and $P(k)\Rightarrow P(k+1)$” can feel abstract.
-Here is a complete example that shows how induction works in practice.
-</p>
-
 <div class="example">
 <strong>Example.</strong>
 We claim that for every $n\in\mathbb{N}$,
@@ -126,7 +115,7 @@ $$
 
 <strong>Base case.</strong>
 For $n=1$, the left-hand side equals $1$, and the right-hand side equals
-$\frac{1\cdot2}{2}=1$. The statement is true at $n=1$.
+$\frac{1\cdot2}{2}=1$.
 
 <strong>Inductive step.</strong>
 Assume the statement holds for some $k$:
@@ -143,8 +132,7 @@ This is exactly the formula with $n=k+1$.
 </div>
 
 <p>
-Induction works because once the statement is true at $1$, the inductive step
-forces it to be true at $2$, then $3$, and so on without exception.
+Induction works because once the statement is true at $1$, the inductive step forces it to be true at $2$, then $3$, and so on.
 </p>
 
 <div class="exercise">
@@ -154,8 +142,6 @@ $$
 1 + 3 + 5 + \cdots + (2n-1) = n^2
 $$
 for all $n\in\mathbb{N}$.
-
-
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
@@ -170,25 +156,86 @@ for all $n\in\mathbb{N}$.
     <strong>Inductive step.</strong>
     Assume $P(k)$ holds for some $k\in\mathbb{N}$:
     $$
-1+3+\cdots+(2k-1)=k^2.$$
-Add the next odd number $2(k+1)-1=2k+1$ to both sides:
-$$1+3+\cdots+(2k-1)+(2k+1)=k^2+(2k+1).$$
-Simplify the right-hand side:
-$$k^2+2k+1=(k+1)^2.$$
-This gives $P(k+1)$.
+    1+3+\cdots+(2k-1)=k^2.
+    $$
+    Add the next odd number $2(k+1)-1=2k+1$ to both sides:
+    $$
+    1+3+\cdots+(2k-1)+(2k+1)=k^2+(2k+1).
+    $$
+    Simplify the right-hand side:
+    $$
+    k^2+2k+1=(k+1)^2.
+    $$
+    This gives $P(k+1)$.
     By induction, $P(n)$ holds for all $n\in\mathbb{N}$.
     </p>
   </div>
 </details>
-
 </div>
 
-<h3>1.3 Well-ordering and why infinite descent is impossible</h3>
+<h3>1.3 Inequalities: a basic toolkit you will use constantly</h3>
 
 <p>
-There is another way to express the same structure underlying induction.
-Instead of pushing upward step by step, it rules out endless downward motion.
+Real Analysis proofs frequently depend on bounding one expression by another.
+In calculus, inequalities often appear only as side work. In analysis, they are a primary tool.
+This subsection introduces a few patterns that appear over and over.
 </p>
+
+<div class="callout">
+<strong>Three inequality patterns.</strong>
+<ul>
+  <li><strong>Triangle inequality:</strong> for any real numbers $x,y$, $|x+y|\le |x|+|y|$.</li>
+  <li><strong>Reverse triangle inequality:</strong> $||x|-|y||\le |x-y|$.</li>
+  <li><strong>Bounding by something simpler:</strong> if $0\le u\le v$ then $u^2\le v^2$ and $|u|\le |v|$.</li>
+</ul>
+These are not “tricks.” They are standard moves that let you replace a complicated expression with a controllable one.
+</div>
+
+<div class="example">
+<strong>Example.</strong>
+Show that $|x^2-y^2|\le (|x|+|y|)\,|x-y|$ for all real numbers $x,y$.
+<p>
+<strong>Reason.</strong> Factor and then apply the triangle inequality:
+$$
+|x^2-y^2| = |(x-y)(x+y)| = |x-y|\cdot|x+y| \le |x-y|(|x|+|y|).
+$$
+</p>
+</div>
+
+<div class="exercise">
+<strong>Exercise 2.</strong>
+Let $x,y\in\mathbb{R}$.
+Prove that
+$$
+|x-y|\ge \bigl||x|-|y|\bigr|.
+$$
+Then explain in one sentence why this inequality is useful when you want to show that a sequence cannot converge to two different limits.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Starting from the triangle inequality,
+    $$
+    |x| = |(x-y)+y| \le |x-y|+|y|,
+    $$
+    so $|x|-|y|\le |x-y|$.
+    Swapping the roles of $x$ and $y$ gives $|y|-|x|\le |x-y|$.
+    Combining these yields
+    $$
+    -|x-y|\le |x|-|y|\le |x-y|,
+    $$
+    which is exactly $||x|-|y||\le |x-y|$.
+    </p>
+    <p>
+    <strong>Usefulness.</strong>
+    If a sequence were close to two different limits $L$ and $M$, then $|L-M|$ would have to be small because
+    $|L-M|\le |L-a_n|+|a_n-M|$; this is one standard way to prove limits are unique.
+    </p>
+  </div>
+</details>
+</div>
+
+<h3>1.4 Well-ordering and why infinite descent is impossible</h3>
 
 <div class="callout">
 <strong>Well-Ordering Principle.</strong>
@@ -210,7 +257,158 @@ Induction and well-ordering are two perspectives on the same underlying fact:
 the natural numbers have a beginning, and you cannot keep stepping downward forever.
 </p>
 
-<h2>2. Integers as Differences</h2>
+
+<h2>2. Sets as Collections</h2>
+
+<p>
+Real Analysis is written in the language of sets. Even the familiar number systems
+$\mathbb{N},\mathbb{Z},\mathbb{Q},\mathbb{R}$ are sets.
+To read and write proofs, you need a small set of basic operations and proof patterns.
+</p>
+
+<h3>2.1 Elements, subsets, and set-builder notation</h3>
+
+<p>
+If $A$ is a set, the notation $x\in A$ means “$x$ is an element of $A$.”
+The notation $A\subseteq B$ means “every element of $A$ is also an element of $B$.”
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+The statement $\mathbb{N}\subseteq\mathbb{Z}$ means that every natural number is an integer.
+It does <em>not</em> mean that $\mathbb{N}$ is a single integer.
+</div>
+
+<p>
+Set-builder notation describes sets by a property:
+$$
+\{x\in\mathbb{R} : x^2 < 2\}
+$$
+means “the set of real numbers whose square is less than $2$.”
+</p>
+
+<h3>2.2 Unions, intersections, and complements</h3>
+
+<div class="callout">
+<ul>
+  <li><strong>Union:</strong> $A\cup B=\{x : x\in A \text{ or } x\in B\}$.</li>
+  <li><strong>Intersection:</strong> $A\cap B=\{x : x\in A \text{ and } x\in B\}$.</li>
+  <li><strong>Complement (relative to a universe $U$):</strong> $A^c = U\setminus A=\{x\in U : x\notin A\}$.</li>
+</ul>
+</div>
+
+<div class="exercise">
+<strong>Exercise 3.</strong>
+Let $A,B,C$ be subsets of a universe set $U$.
+Prove that
+$$
+A\cap(B\cup C) = (A\cap B)\cup(A\cap C).
+$$
+This identity is called <em>distributivity</em> of $\cap$ over $\cup$.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    We prove two inclusions.
+    </p>
+    <p>
+    <strong>($\subseteq$)</strong> Let $x\in A\cap(B\cup C)$. Then $x\in A$ and $x\in (B\cup C)$.
+    So $x\in B$ or $x\in C$.
+    If $x\in B$, then $x\in A\cap B$; if $x\in C$, then $x\in A\cap C$.
+    In either case $x\in (A\cap B)\cup(A\cap C)$.
+    </p>
+    <p>
+    <strong>($\supseteq$)</strong> Let $x\in (A\cap B)\cup(A\cap C)$.
+    Then either $x\in A\cap B$ or $x\in A\cap C$.
+    In both cases $x\in A$, and also $x\in B$ or $x\in C$.
+    Therefore $x\in B\cup C$, and hence $x\in A\cap(B\cup C)$.
+    </p>
+  </div>
+</details>
+</div>
+
+<h3>2.3 Equivalence relations and equivalence classes</h3>
+
+<p>
+An <em>equivalence relation</em> is a rule that declares when two objects should be regarded as “the same” for some purpose.
+For example, the fractions $1/2$ and $2/4$ are not the same pair of integers, but they represent the same rational number.
+</p>
+
+<div class="callout">
+<strong>Equivalence relation (informal).</strong>
+A relation $\sim$ on a set $S$ is an equivalence relation if it behaves like “sameness”:
+<ul>
+  <li><strong>Reflexive:</strong> $x\sim x$ for all $x\in S$.</li>
+  <li><strong>Symmetric:</strong> if $x\sim y$ then $y\sim x$.</li>
+  <li><strong>Transitive:</strong> if $x\sim y$ and $y\sim z$ then $x\sim z$.</li>
+</ul>
+</div>
+
+<p>
+Given an element $x\in S$, its <em>equivalence class</em> is the subset
+$$
+[x]=\{y\in S : y\sim x\}.
+$$
+Equivalence classes are sets. In the constructions of $\mathbb{Z}$ and $\mathbb{Q}$ below,
+each “number” will be an entire equivalence class.
+</p>
+
+<div class="exercise">
+<strong>Exercise 4.</strong>
+Let $\sim$ be an equivalence relation on a set $S$.
+Show that if $x\sim y$, then $[x]=[y]$.
+In other words, equivalent elements determine the same equivalence class.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Assume $x\sim y$. We prove $[x]\subseteq [y]$ and $[y]\subseteq [x]$.
+    </p>
+    <p>
+    Let $z\in [x]$. Then $z\sim x$ by definition of $[x]$.
+    Since $x\sim y$ and $\sim$ is symmetric, we also have $y\sim x$.
+    By transitivity, $z\sim x$ and $x\sim y$ imply $z\sim y$.
+    Hence $z\in [y]$. So $[x]\subseteq [y]$.
+    </p>
+    <p>
+    The reverse inclusion is similar: if $z\in [y]$ then $z\sim y$, and with $y\sim x$ we get $z\sim x$, so $z\in [x]$.
+    Therefore $[x]=[y]$.
+    </p>
+  </div>
+</details>
+</div>
+
+<p>
+Equivalence relations and equivalence classes are useful whenever we want to treat different
+objects as “the same” for a specific purpose, while still keeping track of how they were built.
+This happens constantly in mathematics: we often have multiple representations of a single concept.
+</p>
+
+<p>
+For example, the fractions $1/2$ and $2/4$ are different pairs of integers, but they represent the same ratio.
+Likewise, the subtraction expressions $5-3$ and $12-10$ look different, but they represent the same net difference.
+An equivalence relation is the formal device that tells us precisely when two representations should be identified.
+</p>
+
+<div class="callout">
+<strong>Equivalence matters.</strong>
+Equivalence relations let us build new number systems (and many other objects) by:
+<ul>
+  <li>starting with concrete representations we understand (like pairs of integers),</li>
+  <li>declaring when two representations mean the same thing (an equivalence relation), and</li>
+  <li>treating each entire equivalence class as a single new object (a “number”).</li>
+</ul>
+</div>
+
+<p>
+This is also how we keep arithmetic consistent.
+When we define addition or multiplication on these new objects, we must be sure the result does not depend on which representative we picked.
+The phrase <em>well-defined</em> means exactly this: if two representations are equivalent, then performing an operation on them gives equivalent results.
+The exercises in the next sections practice this idea.
+</p>
+
+
+<h2>3. Integers as Differences</h2>
 
 <p>
 The integers $\mathbb{Z}$ arise when subtraction must make sense in all cases.
@@ -223,13 +421,11 @@ Rather than introducing negative numbers as unfamiliar new symbols,
 we construct the integers by making the idea of a <em>difference</em> precise.
 </p>
 
-<h3>2.1 Difference pairs</h3>
+<h3>3.1 Difference pairs</h3>
 
 <p>
-Consider ordered pairs $(a,b)$ of natural numbers, intended to represent the
-difference $a-b$.
-The key point is that many different calculations can produce the same difference.
-For example,
+Consider ordered pairs $(a,b)$ of natural numbers, intended to represent the difference $a-b$.
+The key point is that many different calculations can produce the same difference. For example,
 </p>
 
 $$
@@ -237,20 +433,11 @@ $$
 $$
 
 <p>
-Although the numbers involved are different, each expression results in $2$.
-If we want to model “difference” itself, we must regard all of these as representing
-the same integer.
+If we want to model “difference” itself, we must regard all of these as representing the same integer.
 </p>
 
 <p>
-This immediately explains why multiple representations are unavoidable:
-a difference records an <em>imbalance</em>, not a specific subtraction step.
-Adding the same amount to both numbers does not change the imbalance.
-</p>
-
-<p>
-To formalize this idea, we declare two pairs equivalent when they encode the same net
-difference.
+To formalize this idea, we declare two pairs equivalent when they encode the same net difference.
 </p>
 
 <div class="callout">
@@ -258,103 +445,61 @@ $(a,b)$ is equivalent to $(c,d)$ if and only if $a+d = b+c$.
 </div>
 
 <p>
-This condition exactly captures the intuition above.
-It says that starting from $a$ and removing $b$ leaves the same result as
-starting from $c$ and removing $d$.
-An integer is therefore not a single pair, but the entire collection of pairs
-that share the same difference.
+An integer is therefore not a single pair, but the entire equivalence class of pairs that share the same difference.
 </p>
 
-<h3>2.2 Zero and negative integers</h3>
+<h3>3.2 Zero and negative integers</h3>
 
 <p>
-The integer $0$ corresponds to any pair of the form $(n,n)$, since
-$n-n=0$.
+The integer $0$ corresponds to any pair of the form $(n,n)$, since $n-n=0$.
 All such pairs are equivalent, reflecting the fact that zero represents perfect balance.
 </p>
 
 <p>
-Negation has a simple interpretation in this framework.
-If $(a,b)$ represents the difference $a-b$, then swapping the entries gives
-$(b,a)$, which represents
-</p>
-
-$$
-b-a = -(a-b).
-$$
-
-<p>
-Thus the negative of an integer is obtained by reversing the order of the pair.
-No new objects are introduced: we are simply viewing the same imbalance from the
-opposite direction.
-</p>
-
-<p>
-This perspective removes the mystery from sign rules.
-Changing the sign reverses which side is larger.
-Adding integers corresponds to combining gains and losses.
-The familiar arithmetic of positive and negative numbers follows from these
-interpretations, rather than being imposed by memorization.
+Negation has a simple interpretation: if $(a,b)$ represents $a-b$, then swapping entries gives $(b,a)$, representing $-(a-b)$.
 </p>
 
 <div class="exercise">
-<strong>Exercise 2.</strong>
+<strong>Exercise 5.</strong>
 Show that adding difference pairs by
 $(a,b)+(c,d)=(a+c,b+d)$
-respects the equivalence relation.
-
+respects the equivalence relation (so addition is well-defined on equivalence classes).
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-
-<p>
-We must show that if $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, then
-$$(a+c,b+d)\sim(a'+c',b'+d').$$
-</p>
-
-<p>
-The hypotheses mean:
-$$
-a+b' = b+a'
-\quad\text{and}\quad
-c+d' = d+c'.
-$$
-</p>
-
-<p>
-Adding these equalities gives
-$$
-(a+b')+(c+d') = (b+a')+(d+c').
-$$
-</p>
-
-<p>
-Rearranging terms yields
-$$
-(a+c)+(b'+d') = (b+d)+(a'+c').
-$$
-</p>
-
-<p>
-This is exactly the equivalence condition for
-$(a+c,b+d)\sim(a'+c',b'+d')$.
-Therefore addition is well-defined on equivalence classes.
-</p>
-
+    <p>
+    We must show that if $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, then
+    $(a+c,b+d)\sim(a'+c',b'+d')$.
+    </p>
+    <p>
+    The hypotheses mean:
+    $$
+    a+b' = b+a'
+    \quad\text{and}\quad
+    c+d' = d+c'.
+    $$
+    Adding these equalities gives
+    $$
+    (a+b')+(c+d') = (b+a')+(d+c').
+    $$
+    Rearranging terms yields
+    $$
+    (a+c)+(b'+d') = (b+d)+(a'+c').
+    $$
+    This is exactly the equivalence condition for
+    $(a+c,b+d)\sim(a'+c',b'+d')$.
+    </p>
   </div>
 </details>
 </div>
 
-<h2>3. Rational Numbers as Ratios</h2>
+
+<h2>4. Rational Numbers as Ratios</h2>
 
 <p>
 Rational numbers arise when we want division to be meaningful in all cases.
 A rational number is understood as a <em>ratio</em> of two integers.
-</p>
-
-<p>
-We represent a rational number by a pair $(a,b)$ with $a\in\mathbb{Z}$ and $b\neq0$,
-intended to mean $a/b$.
+We represent it by a pair $(a,b)$ with $a\in\mathbb{Z}$ and $b\neq0$, intended to mean $a/b$.
 </p>
 
 <p>
@@ -369,22 +514,13 @@ $(a,b)$ is equivalent to $(c,d)$ if and only if $ad = bc$.
 </div>
 
 <p>
-This equivalence relation explains fraction equality.
-Whenever you clear denominators or simplify fractions, you are implicitly using this rule.
-Fraction equality is therefore a consequence of integer multiplication, not a separate idea.
+This equivalence relation explains fraction equality: whenever you clear denominators or simplify fractions, you are using this rule.
 </p>
 
 <div class="example">
-<strong>Geometric interpretation (with a picture).</strong>
-A rational number is represented by an integer pair $(a,b)$ with $b\neq 0$, intended to mean $a/b$.
-To visualize this, plot the point $(b,a)$ in the plane (horizontal coordinate $b$, vertical coordinate $a$).
-Then all pairs that represent the <em>same</em> rational number lie on the same line through the origin:
-they have the same slope, because
-$$
-\frac{a}{b} = \text{slope of the line from }(0,0)\text{ to }(b,a).
-$$
-For example, the fractions $1/2$, $2/4$, and $3/6$ correspond to the points $(2,1)$, $(4,2)$, and $(6,3)$,
-which lie on the same line through the origin.
+<strong>Geometric interpretation.</strong>
+Plot the integer point $(b,a)$ in the plane. Then all pairs that represent the same rational number lie on the same line through the origin:
+they have the same slope because $\frac{a}{b}$ is the slope of the line from $(0,0)$ to $(b,a)$.
 </div>
 
 <div class="callout">
@@ -401,7 +537,6 @@ The plot shows integer points $(b,a)$ for a few equivalent fractions. Points on 
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
-  // Coordinate system: show b (x-axis) from 0..7 and a (y-axis) from 0..4.
   const xMax = 7, yMax = 4;
   const padL = 60, padB = 50, padR = 20, padT = 20;
   const x0 = padL, y0 = H - padB;
@@ -430,32 +565,24 @@ The plot shows integer points $(b,a)$ for a few equivalent fractions. Points on 
   // Axes
   ctx.strokeStyle = "#111";
   ctx.lineWidth = 2;
-  line(X(0), Y(0), X(xMax), Y(0));  // x-axis
-  line(X(0), Y(0), X(0), Y(yMax));  // y-axis
+  line(X(0), Y(0), X(xMax), Y(0));
+  line(X(0), Y(0), X(0), Y(yMax));
 
   // Grid
   ctx.lineWidth = 1;
   ctx.strokeStyle = "#e6e6e6";
-  for(let b=1; b<=xMax; b++){
-    line(X(b), Y(0), X(b), Y(yMax));
-  }
-  for(let a=1; a<=yMax; a++){
-    line(X(0), Y(a), X(xMax), Y(a));
-  }
+  for(let b=1; b<=xMax; b++) line(X(b), Y(0), X(b), Y(yMax));
+  for(let a=1; a<=yMax; a++) line(X(0), Y(a), X(xMax), Y(a));
 
   // Tick labels
   ctx.fillStyle = "#111";
   ctx.font = "14px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  for(let b=0; b<=xMax; b++){
-    label(String(b), X(b), Y(0)+10);
-  }
+  for(let b=0; b<=xMax; b++) label(String(b), X(b), Y(0)+10);
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
-  for(let a=0; a<=yMax; a++){
-    label(String(a), X(0)-8, Y(a));
-  }
+  for(let a=0; a<=yMax; a++) label(String(a), X(0)-8, Y(a));
 
   // Axis titles
   ctx.font = "16px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
@@ -472,7 +599,7 @@ The plot shows integer points $(b,a)$ for a few equivalent fractions. Points on 
   label("a (numerator coordinate)", 0, 0);
   ctx.restore();
 
-  // Rays for a/b = 1/2 and 2/3
+  // Rays
   function drawRay(num, den, color, title){
     const aAtXmax = (num/den)*xMax;
     const scale = (aAtXmax<=yMax) ? 1 : (yMax/aAtXmax);
@@ -522,51 +649,50 @@ The plot shows integer points $(b,a)$ for a few equivalent fractions. Points on 
 </script>
 
 <div class="exercise">
-<strong>Exercise 3.</strong>
+<strong>Exercise 6.</strong>
 Verify that addition
 $$
 \frac{a}{b} + \frac{c}{d} = \frac{ad+bc}{bd}
 $$
-is compatible with the equivalence relation.
+is compatible with the equivalence relation on pairs $(a,b)$ with $b\neq 0$.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-    
-<p>
-We want to check that the usual addition formula gives the same rational number no matter which representatives we choose.
-Suppose $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, i.e.
-$$ab'=a'b \quad\text{and}\quad cd'=c'd.$$
-</p>
-<p>
-Define
-$$\frac{a}{b}+\frac{c}{d}=\frac{ad+bc}{bd}.$$
-We must show
-$$\frac{ad+bc}{bd} \sim \frac{a'd'+b'c'}{b'd'}.$$
-In equivalence-class language this is the integer identity
-$$(ad+bc)(b'd')=(a'd'+b'c')(bd).$$
-</p>
-<p>
-Expand both sides:
-$$(ad)(b'd')+(bc)(b'd') = (a'd')(bd)+(b'c')(bd).$$
-Regroup as
-$$a d b' d' + b c b' d' = a' d' b d + b' c' b d.$$
-Now use $ab'=a'b$ to replace $ab'$ with $a'b$, and $cd'=c'd$ to replace $cd'$ with $c'd$:
-<ul>
-<li>$a d b' d' = (ab')(dd') = (a'b)(dd') = a' d' b d$</li>
-<li>$b c b' d' = (bb')(c d') = (bb')(c' d) = b' c' b d$</li>
-</ul>
-Each term matches, so the equality holds. Therefore the addition rule is well-defined.
-</p>
-
+    <p>
+    We want to check that the usual addition formula gives the same rational number no matter which representatives we choose.
+    Suppose $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, i.e.
+    $$ab'=a'b \quad\text{and}\quad cd'=c'd.$$
+    </p>
+    <p>
+    Define
+    $$\frac{a}{b}+\frac{c}{d}=\frac{ad+bc}{bd}.$$
+    We must show
+    $$\frac{ad+bc}{bd} \sim \frac{a'd'+b'c'}{b'd'}.$$
+    In equivalence-class language this is the integer identity
+    $$(ad+bc)(b'd')=(a'd'+b'c')(bd).$$
+    </p>
+    <p>
+    Expand both sides:
+    $$(ad)(b'd')+(bc)(b'd') = (a'd')(bd)+(b'c')(bd).$$
+    Regroup as
+    $$a d b' d' + b c b' d' = a' d' b d + b' c' b d.$$
+    Now use $ab'=a'b$ to replace $ab'$ with $a'b$, and $cd'=c'd$ to replace $cd'$ with $c'd$.
+    The matching terms agree, so the equality holds. Therefore the addition rule is well-defined.
+    </p>
   </div>
 </details>
 </div>
 
-<h2>4. Division Algorithm and the Greatest Common Divisor</h2>
+
+<h2>5. Divisibility, Parity, and a First Irrationality Proof</h2>
 
 <p>
-To control and compare integers, we need a precise notion of division.
+Divisibility is a way of tracking which integers “fit into” others.
+It is central to number theory, but it also provides clean proof practice that transfers directly to analysis:
+you learn how to make precise definitions and then push them through logical consequences.
 </p>
+
+<h3>5.1 Division algorithm and the greatest common divisor</h3>
 
 <div class="callout">
 <strong>Division Algorithm.</strong>
@@ -579,51 +705,37 @@ $$
 <p>
 Repeating the division step produces the Euclidean algorithm.
 Its output, the greatest common divisor $\gcd(a,b)$,
-is the largest unit that measures both numbers exactly.
+is the largest positive integer that divides both numbers.
 </p>
 
 <div class="example">
 <strong>Example.</strong>
 $$
-48 = 18\cdot2 + 12, \quad
-18 = 12\cdot1 + 6, \quad
+48 = 18\cdot2 + 12,\quad
+18 = 12\cdot1 + 6,\quad
 12 = 6\cdot2 + 0.
 $$
 Therefore $\gcd(48,18)=6$.
 </div>
 
 <div class="exercise">
-<strong>Exercise 4.</strong>
+<strong>Exercise 7.</strong>
 Use the Euclidean algorithm to compute $\gcd(84,30)$ and explain each step.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-    
-<p>
-Apply the Euclidean algorithm:
-$$84=30\cdot2+24,$$
-
-$$30=24\cdot1+6,$$
-
-$$24=6\cdot4+0.$$
-The last nonzero remainder is $6$, so $\gcd(84,30)=6$.
-</p>
-<p>
-Interpretation: $6$ is the largest integer that divides both $84$ and $30$ exactly.
-</p>
-
+    <p>
+    Apply the Euclidean algorithm:
+    $$84=30\cdot2+24,$$
+    $$30=24\cdot1+6,$$
+    $$24=6\cdot4+0.$$
+    The last nonzero remainder is $6$, so $\gcd(84,30)=6$.
+    </p>
   </div>
 </details>
 </div>
 
-<h2>5. Parity and a First Irrationality Proof</h2>
-
-<p>
-Parity distinguishes integers according to whether they are divisible by $2$.
-It is the simplest possible notion of divisibility: instead of tracking <em>all</em> factors of a number,
-we ask only one yes/no question — “is there a factor of $2$ or not?”
-Despite its simplicity, parity is strong enough to force contradictions in many arguments.
-</p>
+<h3>5.2 Parity</h3>
 
 <div class="callout">
 <strong>Even and odd.</strong>
@@ -633,244 +745,144 @@ Every integer is either even or odd, and never both.
 </div>
 
 <p>
-Parity behaves especially well under squaring, which is why it is useful in irrationality proofs.
+Parity behaves especially well under squaring.
+If $n$ is even then $n^2$ is even, and if $n$ is odd then $n^2$ is odd.
+Equivalently, if $n^2$ is even, then $n$ must already be even.
 </p>
-
-<div class="callout">
-<strong>Squares preserve parity.</strong>
-<ul>
-  <li>If $n$ is even, then $n=2k$ and $n^2=(2k)^2=4k^2=2(2k^2)$ is even.</li>
-  <li>If $n$ is odd, then $n=2k+1$ and $n^2=(2k+1)^2=4k^2+4k+1=2(2k^2+2k)+1$ is odd.</li>
-</ul>
-</div>
-
-<p>
-Thus squaring does not mix parity: even numbers square to even numbers, and odd numbers square to odd numbers.
-Equivalently, if a square is even, the original number must already have been even.
-This “one-way” implication is exactly what drives the classical contradiction in the proof that
-$\sqrt{2}$ is not rational.
-</p>
-
 
 <div class="exercise">
-<strong>Exercise 5.</strong>
+<strong>Exercise 8.</strong>
 Prove that if $n^2$ is divisible by $4$, then $n$ is even.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
     <p>
-    Suppose $n^2$ is divisible by $4$.
-    Then $n^2 = 4k$ for some integer $k$.
-    In particular, $n^2$ is even, so $n$ must be even by the parity argument above.
-    </p>
-    <p>
-    Write $n=2m$ for some integer $m$.
-    Then $n^2 = 4m^2$, which is divisible by $4$.
-    This confirms that divisibility by $4$ at the level of a square forces a factor of $2$
-    already to be present in the original number.
+    Suppose $n^2$ is divisible by $4$, so $n^2=4k$ for some integer $k$.
+    In particular $n^2$ is even. If $n$ were odd, then $n^2$ would be odd, a contradiction.
+    Therefore $n$ is even.
     </p>
   </div>
 </details>
 </div>
 
-<div class="example">
-<strong>Why parity is “minimal but sufficient.”</strong>
-In the proof that $\sqrt{2}$ is irrational, we only need to track one piece of information:
-whether a number has a factor of $2$ or not.
-We do <em>not</em> need to know anything about divisibility by $3$, $5$, or other primes.
-</div>
-
-<p>
-Full prime factorization tells us that every integer can be written uniquely as a product of primes,
-and that squaring doubles all prime exponents.
-Parity is the special case where we look only at the prime $2$ and ignore everything else.
-This is why parity is called a <em>minimal</em> form of divisibility.
-</p>
-
-<p>
-In the equation
-$$
-a^2 = 2b^2,
-$$
-the right-hand side has an odd number of factors of $2$ (one more than $b^2$),
-while the left-hand side has an even number of factors of $2$ (twice those in $a$).
-Parity alone is enough to see that these two quantities can never be equal.
-</p>
+<h3>5.3 A first irrationality proof: $\sqrt{2}\notin\mathbb{Q}$</h3>
 
 <div class="example">
-<strong>Example.</strong>
-Assume $\sqrt{2}=a/b$ with integers $a,b$.
+<strong>Example (proof by contradiction).</strong>
+Assume $\sqrt{2}=a/b$ with integers $a,b$ and $b\neq 0$.
 Then $a^2=2b^2$.
 If $a^2$ is even, then $a$ is even; write $a=2k$.
-Substituting gives $b^2=2k^2$, so $b$ is even.
-This produces a smaller pair, contradicting well-ordering.
+Substituting gives $b^2=2k^2$, so $b$ is even as well.
+Thus both $a$ and $b$ are divisible by $2$, meaning the fraction $a/b$ was not in lowest terms.
+This contradicts the assumption that we chose a reduced representation.
 Therefore $\sqrt{2}$ is not rational.
 </div>
 
-<h2>6. Infinite Descent</h2>
+<div class="exercise">
+<strong>Exercise 9.</strong>
+Fill in the missing justification in the argument above: why is it legitimate to assume, at the start, that $a/b$ is in lowest terms?
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Any rational number can be written as a fraction of integers, and among all such representations
+    we can choose one where the denominator is positive and the greatest common divisor of numerator and denominator is $1$.
+    (For example, divide numerator and denominator by $\gcd(a,b)$.) This is called a reduced or lowest-terms form.
+    Therefore, if $\sqrt{2}$ were rational, it would have at least one representation $a/b$ with $\gcd(a,b)=1$.
+    </p>
+  </div>
+</details>
+</div>
+
+
+<h2>6. Infinite Descent and Proof Styles</h2>
 
 <p>
-Infinite descent is a proof method that exploits the structure of the natural numbers.
-It is closely related to induction and well-ordering, but it works in the opposite
-direction: instead of building upward step by step, it shows that a hypothetical
-counterexample would force an endless downward chain.
-</p>
-
-<p>
-Because the natural numbers cannot decrease forever, such a chain cannot exist.
-This makes infinite descent a powerful way to prove impossibility results.
+Infinite descent is a proof method that exploits well-ordering on the natural numbers.
+It is closely related to induction, but it runs “downward”: it shows that a hypothetical example would force a smaller example, and therefore a smaller one again, and so on.
+Since the natural numbers cannot decrease forever, the original assumption must have been false.
 </p>
 
 <h3>6.1 Why infinite descent works</h3>
 
 <p>
-Recall the well-ordering principle: every nonempty subset of $\mathbb{N}$
-has a smallest element.
+Suppose we assume that a certain kind of object exists.
+If we can show that any such object would give rise to a <em>smaller</em> object of the same kind, then there can be no smallest one.
+This contradicts well-ordering, so the original assumption must be false.
 </p>
-
-<p>
-Infinite descent uses this fact as follows.
-Suppose we assume that some kind of object exists.
-If we can show that any such object would give rise to a <em>smaller</em> object
-of the same kind, then there can be no smallest one.
-This contradicts well-ordering, so the original assumption must have been false.
-</p>
-
-<p>
-The logic is not “we can keep going forever,” but rather
-“we are forced to keep going forever — which is impossible.”
-</p>
-
-<h3>6.2 A worked example</h3>
 
 <div class="example">
 <strong>Example.</strong>
 There is no smallest positive rational number.
+<p>
+<strong>Reason.</strong>
+If $q&gt;0$ is rational, then $q/2&gt;0$ is rational and $q/2&lt;q$.
+So no positive rational can be “smallest.”
+</p>
 </div>
 
-<p>
-<strong>Proof.</strong>
-Assume, for contradiction, that there exists a smallest positive rational number.
-Call it $q$.
-</p>
+<h3>6.2 Proof styles you will see constantly</h3>
 
 <p>
-Then $q/2$ is also a positive rational number.
-Moreover,
-$$
-0 &lt; \frac{q}{2} &lt; q.
-$$
-This contradicts the assumption that $q$ was the smallest positive rational number.
+Real Analysis uses a small number of proof patterns repeatedly.
+Naming them helps you recognize what a proof is doing.
 </p>
 
-<p>
-The contradiction arises because any candidate for “smallest” immediately
-produces a smaller one.
-Therefore, no smallest positive rational number exists.
-</p>
-
-<p class="muted">
-Note that this argument does not require constructing an infinite sequence explicitly.
-The contradiction occurs as soon as we observe that the process cannot stop.
-</p>
-
-<h3>6.3 Infinite descent with integers</h3>
-
-<p>
-Infinite descent becomes more interesting when the “size” being reduced
-is not obvious numerical magnitude, but some measure of complexity.
-This is how it is used in classical number theory.
-</p>
+<div class="callout">
+<strong>Common proof patterns.</strong>
+<ul>
+  <li><strong>Direct proof:</strong> start from the hypotheses and use definitions and algebra to reach the conclusion.</li>
+  <li><strong>Proof by contradiction:</strong> assume the conclusion is false (or assume the opposite statement), then derive an impossibility.</li>
+  <li><strong>Contrapositive:</strong> to prove “if $P$ then $Q$,” it is often easier to prove “if not $Q$ then not $P$.” These are logically equivalent.</li>
+  <li><strong>Existence by construction:</strong> explicitly build the object and verify it has the desired properties.</li>
+</ul>
+</div>
 
 <div class="example">
-<strong>Example.</strong>
-There is no positive integer solution to the equation
-$$
-a^2 = 2b^2.
-$$
+<strong>Example (contrapositive).</strong>
+Proposition: If $x^2&lt;1$, then $|x|&lt;1$.
+<p>
+A contrapositive proof starts from the negation of the conclusion: assume $|x|\ge 1$.
+Then $x^2 \ge 1$, so it is not true that $x^2&lt;1$.
+Therefore, if $x^2&lt;1$ holds, we must have $|x|&lt;1$.
+</p>
 </div>
 
-<p>
-<strong>Idea of the argument.</strong>
-Suppose such a solution exists.
-From the equation, $a^2$ is even, so $a$ must be even.
-Write $a = 2k$.
-Substituting gives
-$$
-(2k)^2 = 2b^2 \quad\Rightarrow\quad b^2 = 2k^2.
-$$
-Thus $b$ is also even.
-</p>
-
-<p>
-We have shown that from any solution $(a,b)$ we can construct a strictly smaller
-solution $(k, b/2)$.
-Repeating this process would produce an infinite strictly decreasing sequence
-of positive integers, which is impossible.
-</p>
-
-<p>
-Therefore, no such solution exists.
-</p>
-
-<h3>6.4 An exercise in descent</h3>
-
 <div class="exercise">
-<strong>Exercise 6A.</strong>
-Use infinite descent to show that there is no positive integer solution to
-\[
-n = 2k^2.
-\]
+<strong>Exercise 10.</strong>
+Prove the statement “If $x$ is irrational, then $x+1$ is irrational.”
+Do this in two ways:
+<ol>
+  <li>by contradiction, and</li>
+  <li>by proving the contrapositive.</li>
+</ol>
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
     <p>
-    Suppose there exists a smallest positive integer $n$ such that
-    $n = 2k^2$ for some integer $k$.
+    <strong>(1) Contradiction.</strong>
+    Assume $x$ is irrational but $x+1$ is rational.
+    Then $x = (x+1)-1$ would be a difference of rationals, hence rational.
+    This contradicts that $x$ is irrational.
     </p>
-
     <p>
-    Since $n$ is even, write $n = 2m$.
-    Substituting gives
-    $$
-    2m = 2k^2 \quad\Rightarrow\quad m = k^2.
-    $$
-    </p>
-
-    <p>
-    But then $m$ itself is a perfect square, so
-    $$
-    m = k^2 = 2\left(\frac{k}{\sqrt{2}}\right)^2,
-    $$
-    which implies that $m$ has the same form as $n$ but is strictly smaller.
-    </p>
-
-    <p>
-    This contradicts the assumption that $n$ was minimal.
-    Therefore, no such positive integer $n$ exists.
+    <strong>(2) Contrapositive.</strong>
+    The contrapositive of “if $x$ is irrational then $x+1$ is irrational” is:
+    “if $x+1$ is rational then $x$ is rational.”
+    If $x+1$ is rational, then subtracting $1$ (which is rational) shows $x=(x+1)-1$ is rational.
+    Therefore the contrapositive is true, so the original statement is true.
     </p>
   </div>
 </details>
 </div>
 
-<p>
-Infinite descent is especially effective when combined with divisibility arguments,
-where “smaller” refers not just to size, but to the number of prime factors or powers
-of a prime.
-This is why it appears naturally in irrationality proofs and Diophantine equations.
-</p>
 
-<h3>6.5 Why the rationals are not sufficient for analysis: limits can escape</h3>
+<h2>7. Why the Rationals Are Not Sufficient for Analysis</h2>
 
 <p>
-Real analysis is largely about <em>limits</em>. A basic expectation is that if a sequence of numbers
-gets tighter and tighter—its terms eventually become arbitrarily close to each other—then it should
-be converging toward a definite number.
-</p>
-
-<p>
-That expectation is true in the real numbers, but it is <em>false</em> in the rational numbers.
-The failure is not philosophical: it is a concrete, testable breakdown of “closure under limits.”
+Real Analysis is largely about <em>limits</em>. A basic expectation is that if a sequence of numbers
+gets tighter and tighter—its terms eventually become arbitrarily close to each other—then it should converge toward a definite number.
+This expectation is correct in $\mathbb{R}$ but false in $\mathbb{Q}$.
 </p>
 
 <div class="callout">
@@ -879,44 +891,27 @@ A sequence $(a_n)$ is called <em>Cauchy</em> if its terms eventually get arbitra
 for every tolerance $\varepsilon&gt;0$, there is an index $N$ such that whenever $m,n&gt;N$ we have
 $|a_n-a_m|&lt;\varepsilon$.
 <br><br>
-Intuition: past some point, the sequence “bunches up.” It ought to be approaching some limit—unless
-your number system has holes.
+Intuition: past some point, the sequence “bunches up.” It ought to be approaching a limit—unless your number system has holes.
 </div>
 
 <div class="example">
 <strong>Example: a rational sequence that converges to $\sqrt{2}$ (but not inside $\mathbb{Q}$).</strong>
-
 <p>
 Define a sequence of rationals by starting at $a_1=1$ and iterating
 </p>
-
 $$
 a_{n+1}=\frac{1}{2}\left(a_n+\frac{2}{a_n}\right).
 $$
-
 <p>
-This is the classical Newton iteration for solving $x^2=2$. Each $a_n$ is rational (because it is built
-from $a_n$ using addition, division, and multiplication), and numerically it quickly produces
-</p>
-
-<ul>
-  <li>$a_1=1$</li>
-  <li>$a_2=\frac{3}{2}=1.5$</li>
-  <li>$a_3=\frac{17}{12}\approx 1.4167$</li>
-  <li>$a_4=\frac{577}{408}\approx 1.4142157$</li>
-</ul>
-
-<p>
-These values are clearly homing in on $1.41421\ldots$, i.e. on $\sqrt{2}$.
-In $\mathbb{R}$, this sequence converges to $\sqrt{2}$.
-But since $\sqrt{2}\notin\mathbb{Q}$, it cannot converge to any rational number.
-So (as we will formalize later) $\mathbb{Q}$ contains Cauchy sequences with no limit in $\mathbb{Q}$.
+This is Newton’s method applied to $x^2=2$. Each $a_n$ is rational, and the values quickly approach $1.41421\ldots$,
+which is $\sqrt{2}$. In $\mathbb{R}$ the sequence converges to $\sqrt{2}$, but $\sqrt{2}\notin\mathbb{Q}$,
+so the sequence has no limit in $\mathbb{Q}$.
 </p>
 </div>
 
 <div class="exercise">
-<strong>Exercise 6B.</strong>
-Let $(a_n)$ be the sequence of <em>decimal truncations</em> of $\sqrt{2}$:
+<strong>Exercise 11.</strong>
+Let $(a_n)$ be the sequence of decimal truncations of $\sqrt{2}$:
 $$
 a_1=1,\quad a_2=1.4,\quad a_3=1.41,\quad a_4=1.414,\quad \dots
 $$
@@ -928,65 +923,30 @@ so that $a_n$ is the rational number obtained by cutting $\sqrt{2}$ off after $n
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-
     <p>
     <strong>(a) Cauchy.</strong>
     Fix $\varepsilon&gt;0$. Choose $N$ so large that $10^{-(N-1)}&lt;\varepsilon$.
-    (This is always possible because powers of $10$ grow without bound.)
+    For $m,n\ge N$, the decimals $a_m$ and $a_n$ agree through $N-1$ places.
+    Therefore their difference is less than $10^{-(N-1)}$, hence less than $\varepsilon$.
     </p>
-
-    <p>
-    For $m,n\ge N$, the numbers $a_m$ and $a_n$ agree in their first $N-1$ decimal places.
-    The largest possible difference between two decimals that agree through $N-1$ places is
-    less than $10^{-(N-1)}$. Concretely, one of them could be
-    </p>
-
-    $$
-    1.d_1d_2\cdots d_{N-1}0000\cdots
-    $$
-
-    <p>
-    while the other could be at most
-    </p>
-
-    $$
-    1.d_1d_2\cdots d_{N-1}9999\cdots
-    $$
-
-    <p>
-    and the difference between these is $&lt;10^{-(N-1)}$.
-    Therefore $|a_m-a_n|&lt;10^{-(N-1)}&lt;\varepsilon$ for all $m,n\ge N$.
-    This is exactly the Cauchy property.
-    </p>
-
     <p>
     <strong>(b) No rational limit.</strong>
-    In $\mathbb{R}$, the truncation sequence $(a_n)$ converges to $\sqrt{2}$:
-    the truncations get closer and closer to the true decimal expansion.
-    If $(a_n)$ converged to some rational $q\in\mathbb{Q}$, then (viewing $\mathbb{Q}\subset\mathbb{R}$)
-    it would also converge to $q$ as a real sequence.
-    But limits in $\mathbb{R}$ are unique, so we would have $q=\sqrt{2}$, contradicting
-    $\sqrt{2}\notin\mathbb{Q}$.
+    In $\mathbb{R}$, the truncation sequence converges to $\sqrt{2}$.
+    If it converged to a rational $q$, then as a real sequence it would also converge to $q$.
+    But limits in $\mathbb{R}$ are unique, so $q=\sqrt{2}$, contradicting $\sqrt{2}\notin\mathbb{Q}$.
     </p>
-
-    <p class="muted">
-    This is the key failure: $\mathbb{Q}$ is not “closed under limits.”
-    The real numbers are built (in one standard approach) precisely so that
-    every Cauchy sequence has a limit.
-    </p>
-
   </div>
 </details>
 </div>
 
 <p>
-This is one concrete reason the rational numbers are not enough for analysis:
-we can produce sequences whose behavior demands a limit, but the limit is not rational.
-Completeness of $\mathbb{R}$ can be understood as the systematic repair of this defect.
+This is a concrete reason $\mathbb{Q}$ is not enough for analysis:
+there are sequences of rationals whose behavior demands a limit, but the limit is not rational.
+Completeness of $\mathbb{R}$ is the systematic repair of this defect.
 </p>
 
 
-<h2>7. Ordered Fields and Completeness</h2>
+<h2>8. Ordered Fields and Completeness</h2>
 
 <p>
 An ordered field is a number system equipped with addition, multiplication,
@@ -994,19 +954,12 @@ and an order relation that behaves sensibly with respect to these operations.
 Both $\mathbb{Q}$ and $\mathbb{R}$ are ordered fields.
 </p>
 
-<p>
-In practice, “ordered field” means you can do algebra (add, subtract, multiply, divide by nonzero numbers) and you can also compare numbers
-(using $\lt $ and $\gt $), and these two structures cooperate rather than fight each other.
-For example, if you add the same number to both sides of an inequality, the direction of the inequality should not change.
-Similarly, multiplying by a positive number should preserve the inequality direction.
-</p>
-
 <div class="callout">
 <strong>Ordered field (informal checklist).</strong>
 An ordered field is a set of numbers with:
 <ul>
   <li><strong>Addition and multiplication</strong> behaving like ordinary arithmetic (associative, commutative, distributive, with $0$ and $1$, and inverses).</li>
-  <li><strong>An order relation</strong> $\lt $ so that for any $a,b$ exactly one of $a\lt b$, $a=b$, $a\gt b$ holds (trichotomy), and the order is transitive.</li>
+  <li><strong>An order relation</strong> $\lt$ so that for any $a,b$ exactly one of $a\lt b$, $a=b$, $a\gt b$ holds (trichotomy), and the order is transitive.</li>
   <li><strong>Compatibility rules</strong> linking algebra and order:
     <ul>
       <li>If $a\lt b$ then $a+c\lt b+c$ for all $c$.</li>
@@ -1016,185 +969,68 @@ An ordered field is a set of numbers with:
 </ul>
 </div>
 
-<div class="example">
-<strong>Example: why $\mathbb{Q}$ is an ordered field.</strong>
-Take rational numbers written as fractions (equivalence classes) and use the usual operations.
-Define $a\lt b$ for rationals by saying $b-a$ is positive.
-Concretely, if $a=\frac{p}{q}$ and $b=\frac{r}{s}$ with $q,s\gt 0$, then
-$$
-\frac{p}{q} &lt; \frac{r}{s}
-\quad\text{means}\quad
-ps &lt; rq.
-$$
-This is the familiar “cross-multiply” rule, and it is exactly the statement that $b-a$ is positive.
-With this definition, adding the same rational to both sides and multiplying by a positive rational preserve inequalities.
-</div>
-
-<div class="exercise">
-<strong>Exercise 7.</strong>
-Let $a,b,c\in\mathbb{Q}$.
-<ol>
-  <li>Assume $a\lt b$. Prove that $a+c\lt b+c$.</li>
-  <li>Assume $a\lt b$ and $0\lt c$. Prove that $ac\lt bc$.</li>
-</ol>
-<details class="callout">
-  <summary><strong>Solution (click to expand)</strong></summary>
-  <div style="margin-top:10px">
-    <p>
-    (1) If $a\lt b$, then by definition $b-a$ is positive.
-    Consider $(b+c)-(a+c) = b-a$.
-    Since $b-a$ is positive, $(b+c)-(a+c)$ is positive, which means $a+c\lt b+c$.
-    </p>
-    <p>
-    (2) Assume $a\lt b$ and $0\lt c$.
-    Since $a\lt b$, we have $b-a\gt 0$.
-    Multiply this positive number by the positive number $c$ to get $c(b-a)\gt 0$.
-    Distribute:
-$$c(b-a)=cb-ca.$$
-So $cb-ca\gt 0$, which means $ca\lt cb$, i.e. $ac\lt bc$.
-    </p>
-    <p class="muted">
-    Note: this solution uses only the idea “$x\lt y$ means $y-x$ is positive” plus distributivity. In a fully axiomatic treatment,
-    these are exactly the compatibility axioms you assume for an ordered field.
-    </p>
-  </div>
-</details>
-</div>
-
 <p>
 What distinguishes $\mathbb{R}$ from $\mathbb{Q}$ is completeness.
+One standard completeness axiom is the least upper bound property.
 </p>
 
 <div class="callout">
 <strong>Least Upper Bound Axiom.</strong>
-Every nonempty subset of $\mathbb{R}$ that is bounded above has a least upper bound.
+Every nonempty subset of $\mathbb{R}$ that is bounded above has a least upper bound (supremum).
 </div>
 
-<p>
-Completeness fills the gaps present in $\mathbb{Q}$ and ensures that limits behave as expected.
-</p>
-
-<h2>8. Sets, Functions, and Sequences</h2>
-
-<p>
-Real Analysis is, at its core, the study of functions and limiting processes.
-To work rigorously, we must be precise about what sets and functions are,
-and how sequences fit into this picture.
-</p>
-
-<h3>8.1 Sets as collections</h3>
-
-<p>
-A <em>set</em> is simply a collection of distinct objects, called its elements.
-We write $x \in A$ to mean “$x$ is an element of the set $A$.”
-</p>
-
-<p>
-In analysis, sets usually consist of numbers.
-For example:
-</p>
-
-<ul>
-  <li>$\mathbb{N}$ is the set of natural numbers $\{1,2,3,\dots\}$.</li>
-  <li>$\mathbb{Q}$ is the set of rational numbers.</li>
-  <li>$\mathbb{R}$ is the set of real numbers.</li>
-</ul>
-
-<p>
-Sets allow us to specify <em>where objects live</em> and which objects we are allowed
-to talk about at a given moment.
-</p>
-
 <div class="example">
-<strong>Example.</strong>
-The statement “$x^2 &lt; 2$” is incomplete unless we say where $x$ comes from.
-If $x \in \mathbb{R}$, the statement has many solutions.
-If $x \in \mathbb{Z}$, the only solutions are $x = -1, 0, 1$.
-</div>
-
-<h3>8.2 Functions as rules with a domain</h3>
-
-<p>
-A <em>function</em> is a rule that assigns to each element of one set
-(the <em>domain</em>) exactly one element of another set
-(the <em>codomain</em>).
-</p>
-
-<p>
-We write $f : A \to B$ to indicate that $f$ is a function
-with domain $A$ and codomain $B$.
-For each $x \in A$, the value of the function at $x$ is denoted $f(x)$.
-</p>
-
-<p>
-It is essential to understand that a function is not just a formula.
-The same formula can define different functions depending on the domain.
-</p>
-
-<div class="example">
-<strong>Example.</strong>
-The rule $f(x) = 1/x$ defines:
-<ul>
-  <li>a function $\mathbb{R} \setminus \{0\} \to \mathbb{R}$,</li>
-  <li>a function $\mathbb{Q} \setminus \{0\} \to \mathbb{Q}$.</li>
-</ul>
-These are different functions, even though the formula is the same.
+<strong>Example: a supremum that is not a maximum.</strong>
+Let
+$$
+A=\{x\in\mathbb{R}: x^2&lt;2\}.
+$$
+Then $A$ is bounded above (for instance, by $2$), and it has a least upper bound.
+In fact, $\sup A = \sqrt{2}$.
+However, $\sqrt{2}\notin A$ because $\sqrt{2}^2=2$ is not strictly less than $2$.
+So $A$ has a supremum but no largest element.
 </div>
 
 <div class="exercise">
-<strong>Exercise 8A.</strong>
-Give an example of a formula that defines a function on $\mathbb{R}$
-but does <em>not</em> define a function on $\mathbb{Q}$.
-Explain why.
+<strong>Exercise 12.</strong>
+Let $A=(0,1)=\{x\in\mathbb{R}:0&lt;x&lt;1\}$.
+<p>
+(a) Show that $A$ is bounded above and has no maximum element.<br>
+(b) Find $\sup A$ and justify your answer using the definition of least upper bound.
+</p>
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
     <p>
-    The formula $f(x) = \sqrt{x}$ defines a function on the domain
-    $\{x \in \mathbb{R} : x \ge 0\}$.
-    However, it does not define a function $\mathbb{Q} \to \mathbb{Q}$,
-    because $\sqrt{2}$ is not rational.
+    <strong>(a)</strong>
+    The set $A$ is bounded above by $1$ because every $x\in A$ satisfies $x&lt;1$.
+    It has no maximum: if $x\in(0,1)$ then $(x+1)/2$ is also in $(0,1)$ and satisfies $x&lt;(x+1)/2$.
+    So no element can be the largest.
+    </p>
+    <p>
+    <strong>(b)</strong>
+    We claim $\sup A = 1$.
+    First, $1$ is an upper bound by part (a).
+    Second, if $u&lt;1$ then $u$ is not an upper bound because we can choose $x=(u+1)/2$.
+    This $x$ satisfies $u&lt;x&lt;1$, so $x\in A$ but $x&gt;u$.
+    Therefore no number smaller than $1$ is an upper bound, so $1$ is the least upper bound.
     </p>
   </div>
 </details>
 </div>
 
-<h3>8.3 Sequences as functions</h3>
+
+<h2>9. Quantifiers and $\varepsilon$-Proofs</h2>
 
 <p>
-A <em>sequence</em> is nothing more than a function whose domain is the natural numbers.
+Nearly every definition in Real Analysis is a quantified statement.
+Being able to read quantifiers correctly—and then use them to build proofs—is a core skill.
 </p>
 
-<p>
-Formally, a sequence of real numbers is a function
-$$
-a : \mathbb{N} \to \mathbb{R}.
-$$
-We usually write $a_n$ instead of $a(n)$.
-</p>
+<h3>9.1 Reading quantified definitions</h3>
 
 <p>
-This viewpoint is not cosmetic.
-It explains why statements about sequences inevitably involve
-quantifiers over natural numbers.
-</p>
-
-<div class="example">
-<strong>Example.</strong>
-The sequence $a_n = \frac{1}{n}$ is the function
-that assigns to each $n \in \mathbb{N}$ the real number $1/n$.
-</div>
-
-<h3>8.4 Reading quantified definitions</h3>
-
-<p>
-Quantified statements should be read as rules about dependence.
-The phrase “for all” ($\forall$) means “for every possible choice, without exception,”
-and the phrase “there exists” ($\exists$) means “there is a way to respond.”
-</p>
-
-<p>
-Consider the statement
+Consider the formal definition of the limit of a sequence:
 </p>
 
 $$
@@ -1203,95 +1039,200 @@ $$
 
 <p>
 This does <em>not</em> mean that a single tolerance is fixed once and for all.
-Instead, it asserts the following:
+Instead, it asserts:
 </p>
 
 <ul>
   <li>For <em>every</em> tolerance $\varepsilon&gt;0$, no matter how small,</li>
-  <li>there exists a corresponding index $N$ (which may depend on that $\varepsilon$),</li>
-  <li>such that once this $N$ is chosen, the inequality
-      $|a_n-L|&lt;\varepsilon$ holds for <em>all</em> $n&gt;N$.</li>
+  <li>there exists an index $N$ (which may depend on that $\varepsilon$),</li>
+  <li>such that once this $N$ is chosen, the inequality holds for <em>all</em> $n&gt;N$.</li>
 </ul>
 
 <p>
-In other words, the statement must succeed against all possible choices of
-$\varepsilon$.
-There is no single universal $N$ that works for every tolerance, but for each
-tolerance there must be an $N$ that works for all sufficiently large indices.
-</p>
-
-<p>
-Reading quantified definitions in this way—tracking which quantities may depend
-on which others—is essential in analysis.
-Many common mistakes arise from allowing forbidden dependencies, such as letting
-$N$ depend on $n$ or treating $\varepsilon$ as fixed in advance.
+You can think of it as a “challenge-response” structure: someone hands you $\varepsilon$, and you must respond with an $N$ that works.
 </p>
 
 <div class="exercise">
-<strong>Exercise 8B.</strong>
+<strong>Exercise 13.</strong>
 Consider the sequence $a_n = 1/n$.
-Explain, in words, how you would choose $N$ after being given a specific
-$\varepsilon &gt; 0$.
+Explain, in words, how you would choose $N$ after being given a specific $\varepsilon &gt; 0$.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
     <p>
-    Given $\varepsilon &gt; 0$, we want $|1/n - 0| &lt; \varepsilon$,
-    which means $1/n &lt; \varepsilon$.
-    This is equivalent to $n &gt; 1/\varepsilon$.
-    We may therefore choose any natural number
-    $N &gt; 1/\varepsilon$.
+    We want $|1/n-0|&lt;\varepsilon$, which means $1/n&lt;\varepsilon$.
+    This is equivalent to $n&gt;1/\varepsilon$.
+    So after being given $\varepsilon$, choose any integer $N$ larger than $1/\varepsilon$.
+    Then for all $n&gt;N$ we have $1/n&lt;1/N&lt;\varepsilon$.
+    </p>
+  </div>
+</details>
+</div>
+
+<h3>9.2 Turning the definition into a proof: a full $\varepsilon$–$N$ example</h3>
+
+<div class="example">
+<strong>Example (a complete $\varepsilon$–$N$ proof).</strong>
+Prove that $\lim_{n\to\infty} \frac{1}{n} = 0$.
+<p>
+<strong>Proof.</strong>
+Let $\varepsilon&gt;0$ be given.
+We want to make $|1/n-0|=1/n$ smaller than $\varepsilon$.
+So we want $1/n&lt;\varepsilon$, which is equivalent to $n&gt;1/\varepsilon$.
+Choose a natural number $N$ such that $N&gt;1/\varepsilon$.
+Then for every $n&gt;N$, we have $n&gt;N$ and therefore $1/n&lt;1/N&lt;\varepsilon$.
+Hence $|1/n-0|&lt;\varepsilon$ for all $n&gt;N$, which is exactly the definition of convergence to $0$.
+</p>
+</div>
+
+<p>
+Notice the structure: we begin with what we want ($|a_n-L|&lt;\varepsilon$) and solve inequalities until we can state a choice of $N$.
+This “work backward, then write forward” pattern is normal in analysis.
+</p>
+
+<div class="exercise">
+<strong>Exercise 14.</strong>
+Use the $\varepsilon$–$N$ definition to prove that
+$$
+\lim_{n\to\infty}\frac{3n+1}{n}=3.
+$$
+Your proof must:
+<ul>
+  <li>start by fixing an arbitrary $\varepsilon&gt;0$,</li>
+  <li>choose an explicit $N$ in terms of $\varepsilon$, and</li>
+  <li>verify the inequality for all $n&gt;N$.</li>
+</ul>
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Let $\varepsilon&gt;0$ be given.
+    We have
+    $$
+    \left|\frac{3n+1}{n}-3\right| = \left|3+\frac{1}{n}-3\right|=\frac{1}{n}.
+    $$
+    So we want $1/n&lt;\varepsilon$, which is equivalent to $n&gt;1/\varepsilon$.
+    Choose $N\in\mathbb{N}$ with $N&gt;1/\varepsilon$.
+    Then for all $n&gt;N$ we have $1/n&lt;1/N&lt;\varepsilon$.
+    Therefore $\left|\frac{3n+1}{n}-3\right|&lt;\varepsilon$ for all $n&gt;N$,
+    so the limit is $3$.
+    </p>
+  </div>
+</details>
+</div>
+
+<h3>9.3 From sequences to functions: the $\varepsilon$–$\delta$ definition</h3>
+
+<p>
+Limits of functions are defined similarly, but now the index $n$ is replaced by a real input $x$.
+The idea is: if $x$ is close to $a$, then $f(x)$ should be close to $L$.
+The definition records exactly how close is “close enough.”
+</p>
+
+<div class="callout">
+<strong>Limit of a function (informal statement).</strong>
+We say $\lim_{x\to a} f(x)=L$ if for every $\varepsilon&gt;0$ there exists a $\delta&gt;0$ such that
+whenever $0&lt;|x-a|&lt;\delta$ we have $|f(x)-L|&lt;\varepsilon$.
+</div>
+
+<div class="example">
+<strong>Example (a complete $\varepsilon$–$\delta$ proof).</strong>
+Prove that $\lim_{x\to 2} (3x+1)=7$.
+<p>
+<strong>Proof.</strong>
+Let $\varepsilon&gt;0$ be given.
+We want $|(3x+1)-7|&lt;\varepsilon$ whenever $x$ is close to $2$.
+Compute:
+$$
+|(3x+1)-7| = |3x-6| = 3|x-2|.
+$$
+So it is enough to ensure $3|x-2|&lt;\varepsilon$.
+This will hold if $|x-2|&lt;\varepsilon/3$.
+Therefore choose $\delta=\varepsilon/3$.
+Then whenever $0&lt;|x-2|&lt;\delta$, we have
+$$
+|(3x+1)-7| = 3|x-2| &lt; 3\delta = 3(\varepsilon/3)=\varepsilon.
+$$
+This proves $\lim_{x\to 2}(3x+1)=7$.
+</p>
+</div>
+
+<div class="exercise">
+<strong>Exercise 15.</strong>
+Use the $\varepsilon$–$\delta$ definition to prove that
+$$
+\lim_{x\to 1} x^2 = 1.
+$$
+Hint: factor $x^2-1=(x-1)(x+1)$ and use a bound on $|x+1|$ when $x$ is close to $1$.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Let $\varepsilon&gt;0$ be given. We need $|x^2-1|&lt;\varepsilon$ when $0&lt;|x-1|&lt;\delta$.
+    Factor:
+    $$
+    |x^2-1| = |x-1||x+1|.
+    $$
+    The issue is that $|x+1|$ depends on $x$, so we bound it by forcing $x$ into a small neighborhood of $1$.
+    Require $|x-1|&lt;1$. Then $x\in(0,2)$ and so $|x+1|&lt;3$.
+    </p>
+    <p>
+    Now if we also ensure $|x-1|&lt;\varepsilon/3$, then
+    $$
+    |x^2-1| = |x-1||x+1| &lt; (\varepsilon/3)\cdot 3 = \varepsilon.
+    $$
+    Therefore choose
+    $$
+    \delta = \min\{1,\varepsilon/3\}.
+    $$
+    Then whenever $0&lt;|x-1|&lt;\delta$, both bounds hold and we get $|x^2-1|&lt;\varepsilon$.
+    Hence $\lim_{x\to 1}x^2=1$.
     </p>
   </div>
 </details>
 </div>
 
 <p>
-This “who chooses what, and when” structure is the backbone of all limit arguments
-in real analysis.
+This proof illustrates a standard analysis move: impose an extra condition like $|x-1|&lt;1$ to control a troublesome factor,
+then use the remaining freedom to meet the $\varepsilon$ target.
 </p>
+
+
+<h2>10. Conclusion and How to Use This Document</h2>
 
 <p>
-The purpose of such introducing qunatified definitions is practical.
-Nearly every definition in real analysis—limits, continuity, convergence,
-boundedness, completeness—is a quantified statement.
-Being able to read these definitions accurately is not a matter of symbolism,
-but of logic: changing the order of quantifiers changes the meaning.
-This section provides the tools needed to interpret such definitions correctly
-before they appear in their full analytic form.
+This document developed foundations that a first course in Real Analysis assumes quickly:
 </p>
-
-<h2>9. Conclusion</h2>
-
-<p>
-This document established the basic logical and structural tools required for a
-first course in real analysis.
-These included the construction and purpose of the number systems
-$\mathbb{N}$, $\mathbb{Z}$, and $\mathbb{Q}$,
-the role of equivalence relations,
-the use of induction and infinite descent,
-and the careful reading of quantified definitions.
-</p>
+<ul>
+  <li>how induction and well-ordering support rigorous arguments on $\mathbb{N}$,</li>
+  <li>how sets and equivalence relations organize mathematical objects,</li>
+  <li>how $\mathbb{Z}$ and $\mathbb{Q}$ can be constructed as equivalence classes,</li>
+  <li>how divisibility arguments train contradiction-style reasoning,</li>
+  <li>why $\mathbb{Q}$ has “holes” that force the introduction of completeness, and</li>
+  <li>how quantifiers lead directly to $\varepsilon$–$N$ and $\varepsilon$–$\delta$ proofs.</li>
+</ul>
 
 <p>
-Each construction was motivated by a specific need:
-subtraction leads to the integers,
-division leads to the rationals,
-and the behavior of limits points beyond the rationals.
-The failure of $\mathbb{Q}$ to contain limits of all Cauchy sequences is the
-structural reason a larger number system is required.
+When you begin Real Analysis, the biggest shift is not new formulas, but a new standard of justification.
+You will be asked to prove statements that look “obvious” from calculus intuition.
+The point is not to deny intuition; it is to learn exactly which facts your intuition depends on, and how to make those dependencies explicit.
 </p>
 
-<p>
-With these foundations in place, a course in real analysis proceeds by
-formalizing limits, continuity, and completeness for the real numbers.
-The definitions and arguments that follow rely heavily on the concepts developed
-here, particularly equivalence, order, and quantification.
-</p>
+<div class="callout">
+<strong>How to read an analysis proof.</strong>
+When reading a proof, ask:
+<ul>
+  <li>What are the hypotheses, and where are they used?</li>
+  <li>What definition is being invoked (especially one with quantifiers)?</li>
+  <li>Which quantities depend on which choices?</li>
+  <li>Where do inequalities come from, and what are they trying to control?</li>
+</ul>
+If you can answer these questions, you are already doing Real Analysis.
+</div>
 
 <p class="muted">
-The purpose of this document was to make those prerequisites explicit so that
-subsequent results can be read and proved with fewer hidden assumptions.
+A practical suggestion: do not merely read the worked examples. After each one, try to rewrite the argument from memory.
+Then compare to the original. The gap between your version and the written version is exactly where your analysis skills are growing.
 </p>
 
 
