@@ -75,6 +75,91 @@ the MathJax library may not load and you may see raw LaTeX (for example, <code>\
 To fix that, open the file with an internet connection, or replace the MathJax script tag above with a local copy of MathJax.
 </p>
 
+<h2>0. What Is a Proof?</h2>
+
+<p>
+In mathematics, a <em>proof</em> is not an experiment, a calculation, or an explanation meant to convince by example.
+A proof is a logical argument that starts from agreed-upon assumptions and definitions, and reaches a conclusion by steps that are valid in all cases.
+</p>
+
+<p>
+This distinction matters.
+In calculus, it is often acceptable to check formulas numerically, draw graphs, or rely on geometric intuition.
+In Real Analysis, this is no longer enough.
+A statement must be shown to follow logically from what is assumed, not merely to agree with computations or pictures.
+</p>
+
+<div class="callout">
+<strong>What is assumed in a proof?</strong>
+A proof rests on three kinds of assumptions, not one:
+<ul>
+  <li>
+    <strong>Axioms (global assumptions).</strong>
+    These are the background rules of the number system and of logic itself.
+    Examples include the algebraic and order properties of the real numbers,
+    and the completeness property (such as the existence of least upper bounds).
+    Axioms are not restated inside individual proofs; they form the environment in which all arguments take place.
+  </li>
+  <li>
+    <strong>Definitions (meaning-fixing assumptions).</strong>
+    Definitions specify what words and symbols mean.
+    They are not assumptions about truth, but agreements about language.
+    Examples include what “even,” “limit,” or “Cauchy sequence” mean.
+    Much of Real Analysis consists of carefully unpacking definitions and following their consequences.
+  </li>
+  <li>
+    <strong>Hypotheses (local assumptions).</strong>
+    These are the specific conditions stated in the theorem or proposition being proved.
+    Examples include “let $(a_n)$ be a sequence of real numbers,”
+    “assume $x^2<2$,” or “let $\varepsilon>0$ be given.”
+    These are the assumptions you may use in the proof—and no others.
+  </li>
+</ul>
+</div>
+
+<p>
+A correct proof makes clear which assumptions are being used at each step.
+It does not rely on hidden facts, special cases, or numerical experimentation.
+When a conclusion is reached, it must hold for every object satisfying the stated hypotheses.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+The identity
+$$
+1 + 2 + \cdots + n = \frac{n(n+1)}{2}
+$$
+can be checked numerically for small values of $n$.
+But a proof by induction shows that once the formula holds at the starting point,
+and once correctness at one step forces correctness at the next,
+the identity must hold for all natural numbers.
+</div>
+
+<div class="exercise">
+<strong>Exercise.</strong>
+Explain why checking that a statement holds for the first 100 natural numbers does <em>not</em> constitute a proof that it holds for all natural numbers.
+Write your answer in complete sentences.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Checking finitely many cases only shows that the statement holds for those specific values.
+    It gives no information about what happens beyond the values checked.
+    A proof must rule out the possibility that the statement fails at some later value.
+    Induction does this by showing that failure at any step would force failure earlier, which contradicts the verified base case.
+    </p>
+  </div>
+</details>
+</div>
+
+<p>
+As you read the rest of this document, and later a Real Analysis textbook,
+you should continually ask:
+“What assumptions are in force here?” and
+“Which definition is being used at this step?”
+Learning to track these dependencies is one of the central skills of Real Analysis.
+</p>
+
 
 <h2>1. Natural Numbers, Induction, and Well-Ordering</h2>
 
