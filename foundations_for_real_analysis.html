@@ -456,7 +456,7 @@ $\sqrt{2}$ is not rational.
 
 
 <div class="exercise">
-<strong>Exercise 5A.</strong>
+<strong>Exercise 5.</strong>
 Prove that if $n^2$ is divisible by $4$, then $n$ is even.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
@@ -513,33 +513,136 @@ Therefore $\sqrt{2}$ is not rational.
 <h2>6. Infinite Descent</h2>
 
 <p>
-Infinite descent is a proof method that exploits well-ordering.
-If a supposed counterexample leads to a smaller one, then no counterexample can exist.
+Infinite descent is a proof method that exploits the structure of the natural numbers.
+It is closely related to induction and well-ordering, but it works in the opposite
+direction: instead of building upward step by step, it shows that a hypothetical
+counterexample would force an endless downward chain.
 </p>
+
+<p>
+Because the natural numbers cannot decrease forever, such a chain cannot exist.
+This makes infinite descent a powerful way to prove impossibility results.
+</p>
+
+<h3>6.1 Why infinite descent works</h3>
+
+<p>
+Recall the well-ordering principle: every nonempty subset of $\mathbb{N}$
+has a smallest element.
+</p>
+
+<p>
+Infinite descent uses this fact as follows.
+Suppose we assume that some kind of object exists.
+If we can show that any such object would give rise to a <em>smaller</em> object
+of the same kind, then there can be no smallest one.
+This contradicts well-ordering, so the original assumption must have been false.
+</p>
+
+<p>
+The logic is not “we can keep going forever,” but rather
+“we are forced to keep going forever — which is impossible.”
+</p>
+
+<h3>6.2 A worked example</h3>
 
 <div class="example">
 <strong>Example.</strong>
 There is no smallest positive rational number.
-If $q>0$ were smallest, then $q/2$ would be smaller.
 </div>
 
+<p>
+<strong>Proof.</strong>
+Assume, for contradiction, that there exists a smallest positive rational number.
+Call it $q$.
+</p>
+
+<p>
+Then $q/2$ is also a positive rational number.
+Moreover,
+$$
+0 &lt; \frac{q}{2} &lt; q.
+$$
+This contradicts the assumption that $q$ was the smallest positive rational number.
+</p>
+
+<p>
+The contradiction arises because any candidate for “smallest” immediately
+produces a smaller one.
+Therefore, no smallest positive rational number exists.
+</p>
+
+<p class="muted">
+Note that this argument does not require constructing an infinite sequence explicitly.
+The contradiction occurs as soon as we observe that the process cannot stop.
+</p>
+
+<h3>6.3 Infinite descent with integers</h3>
+
+<p>
+Infinite descent becomes more interesting when the “size” being reduced
+is not obvious numerical magnitude, but some measure of complexity.
+This is how it is used in classical number theory.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+There is no positive integer solution to the equation
+$$
+a^2 = 2b^2.
+$$
+</div>
+
+<p>
+<strong>Idea of the argument.</strong>
+Suppose such a solution exists.
+From the equation, $a^2$ is even, so $a$ must be even.
+Write $a = 2k$.
+Substituting gives
+$$
+(2k)^2 = 2b^2 \quad\Rightarrow\quad b^2 = 2k^2.
+$$
+Thus $b$ is also even.
+</p>
+
+<p>
+We have shown that from any solution $(a,b)$ we can construct a strictly smaller
+solution $(k, b/2)$.
+Repeating this process would produce an infinite strictly decreasing sequence
+of positive integers, which is impossible.
+</p>
+
+<p>
+Therefore, no such solution exists.
+</p>
+
+<h3>6.4 An exercise in descent</h3>
+
 <div class="exercise">
-<strong>Exercise 5.</strong>
-Use infinite descent to show there is no smallest positive rational number.
+<strong>Exercise 6.</strong>
+Use infinite descent to show that there is no smallest positive real number.
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-    
-<p>
-Assume, for contradiction, that there exists a smallest positive rational number. Call it $q$.
-Then $q/2$ is also a positive rational number, and $q/2 \lt  q$.
-This contradicts the assumption that $q$ was the smallest positive rational.
-Therefore there is no smallest positive rational number.
-</p>
-
+    <p>
+    Suppose there were a smallest positive real number $x$.
+    Then $x/2$ would also be a positive real number and would satisfy
+    $0 &lt; x/2 &lt; x$.
+    This contradicts the minimality of $x$.
+    </p>
+    <p>
+    Therefore, there is no smallest positive real number.
+    </p>
   </div>
 </details>
 </div>
+
+<p>
+Infinite descent is especially effective when combined with divisibility arguments,
+where “smaller” refers not just to size, but to the number of prime factors or powers
+of a prime.
+This is why it appears naturally in irrationality proofs and Diophantine equations.
+</p>
 
 <h2>7. Ordered Fields and Completeness</h2>
 
@@ -698,12 +801,10 @@ These are different functions, even though the formula is the same.
 </div>
 
 <div class="exercise">
-<strong>Exercise 8.1.</strong>
+<strong>Exercise 8A</strong>
 Give an example of a formula that defines a function on $\mathbb{R}$
 but does <em>not</em> define a function on $\mathbb{Q}$.
 Explain why.
-</div>
-
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
@@ -715,6 +816,7 @@ Explain why.
     </p>
   </div>
 </details>
+</div>
 
 <h3>8.3 Sequences as functions</h3>
 
@@ -771,12 +873,10 @@ The correct reading is:
 </ul>
 
 <div class="exercise">
-<strong>Exercise 8.2.</strong>
+<strong>Exercise 8B</strong>
 Consider the sequence $a_n = 1/n$.
 Explain, in words, how you would choose $N$ after being given a specific
 $\varepsilon &gt; 0$.
-</div>
-
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
@@ -789,6 +889,7 @@ $\varepsilon &gt; 0$.
     </p>
   </div>
 </details>
+</div>
 
 <p>
 This “who chooses what, and when” structure is the backbone of all limit arguments
