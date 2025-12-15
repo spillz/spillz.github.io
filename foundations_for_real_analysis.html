@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Foundations for Real Analysis</title>
+<style>
+  :root { --maxw: 980px; --fg:#111; --muted:#555; --bg:#fff; --rule:#ddd; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+         line-height:1.65; }
+  main { max-width:var(--maxw); margin:0 auto; padding:36px 24px 72px; }
+  h1 { font-size:2.2rem; margin-bottom:12px; }
+  h2 { font-size:1.45rem; margin-top:42px; border-top:1px solid var(--rule); padding-top:16px; }
+  h3 { font-size:1.15rem; margin-top:26px; }
+  p { margin:12px 0; }
+  ul, ol { margin:12px 0 14px 28px; }
+  .callout { border-left:4px solid #999; background:#fafafa; padding:14px 16px; margin:18px 0; }
+  .example { border-left:4px solid #2b7; background:#f7fff9; padding:14px 16px; margin:18px 0; }
+  .exercise { border-left:4px solid #57c; background:#f7f9ff; padding:14px 16px; margin:18px 0; }
+  .muted { color:var(--muted); }
+  code { background:#f2f2f2; padding:0 4px; border-radius:4px; }
+</style>
+<script>
+  document.documentElement.style.visibility="hidden";
+  window.addEventListener("load",()=>{document.documentElement.style.visibility="visible";});
+</script>
+<script>
+  window.MathJax={
+    tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['\\[','\\]']]},
+    options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+</head>
+<body>
+<main>
+
+<h1>Foundations for Real Analysis</h1>
+
+<p>
+This document is a preparatory text for a first rigorous course in Real Analysis.
+It is written for readers encountering proof-based mathematics for the first time,
+or for readers who have seen calculus but have not previously studied the logical
+and structural foundations of the number systems.
+</p>
+
+<p>
+Most Real Analysis textbooks begin by stating axioms for the real numbers and then
+develop limits, continuity, and convergence from those axioms. In doing so, they
+necessarily rely on properties of the natural numbers, integers, and rational numbers
+that are assumed rather than explained. The goal of this text is to make those
+assumptions explicit and understandable.
+</p>
+
+<p>
+We will carefully explain:
+how counting leads to the natural numbers,
+how subtraction leads to the integers,
+how division leads to the rational numbers,
+and why the rational numbers are still not sufficient for analysis.
+Along the way, we will introduce induction, well-ordering, divisibility,
+and infinite descent, with concrete examples and exercises.
+</p>
+
+<p>
+Nothing in this document requires prior exposure to abstract algebra or set theory.
+Where formal constructions are used, they are motivated by simple numerical ideas
+and illustrated with examples. The emphasis throughout is on understanding where
+the rules come from, not merely learning how to apply them.
+</p>
+
+<p class="muted">
+Technical note: this HTML file uses MathJax to render mathematics. If you open the file while offline or behind a firewall that blocks CDNs,
+the MathJax library may not load and you may see raw LaTeX (for example, <code>\forall</code> or <code>\sqrt{2}</code>) instead of formatted equations.
+To fix that, open the file with an internet connection, or replace the MathJax script tag at the bottom of the page with a local copy of MathJax.
+</p>
+
+
+<h2>1. Natural Numbers, Induction, and Well-Ordering</h2>
+
+<p>
+We begin with the natural numbers
+$\mathbb{N} = \{1,2,3,\dots\}$.
+These are the numbers used for counting, ordering, and indexing steps in a process.
+They form the backbone of many arguments in analysis, especially those involving
+sequences and iterative procedures.
+</p>
+
+<h3>1.1 Mathematical induction</h3>
+
+<p>
+Mathematical induction formalizes a simple but powerful idea:
+if a statement is true at the first step, and if truth at one step forces truth at the next,
+then the statement must be true at every step.
+</p>
+
+<div class="callout">
+<strong>Principle of Mathematical Induction.</strong>
+Let $P(n)$ be a statement depending on a natural number $n$.
+If:
+<ol>
+<li>$P(1)$ is true, and</li>
+<li>for every $k\in\mathbb{N}$, $P(k)$ implies $P(k+1)$,</li>
+</ol>
+then $P(n)$ is true for all $n\in\mathbb{N}$.
+</div>
+
+<h3>1.2 A concrete example of induction</h3>
+
+<p>
+The symbolic form “$P(1)$ and $P(k)\Rightarrow P(k+1)$” can feel abstract.
+Here is a complete example that shows how induction works in practice.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+We claim that for every $n\in\mathbb{N}$,
+$$
+1 + 2 + 3 + \cdots + n = \frac{n(n+1)}{2}.
+$$
+
+<strong>Base case.</strong>
+For $n=1$, the left-hand side equals $1$, and the right-hand side equals
+$\frac{1\cdot2}{2}=1$. The statement is true at $n=1$.
+
+<strong>Inductive step.</strong>
+Assume the statement holds for some $k$:
+$$
+1+2+\cdots+k = \frac{k(k+1)}{2}.
+$$
+Adding $(k+1)$ to both sides gives
+$$
+1+2+\cdots+k+(k+1)
+= \frac{k(k+1)}{2} + (k+1)
+= \frac{(k+1)(k+2)}{2}.
+$$
+This is exactly the formula with $n=k+1$.
+</div>
+
+<p>
+Induction works because once the statement is true at $1$, the inductive step
+forces it to be true at $2$, then $3$, and so on without exception.
+</p>
+
+<div class="exercise">
+<strong>Exercise 1.</strong>
+Use induction to prove that
+$$
+1 + 3 + 5 + \cdots + (2n-1) = n^2
+$$
+for all $n\in\mathbb{N}$.
+
+
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Let $P(n)$ be the statement $1+3+5+\cdots+(2n-1)=n^2$.
+    </p>
+    <p>
+    <strong>Base case.</strong>
+    For $n=1$, the left-hand side is $1$ and the right-hand side is $1^2=1$.
+    </p>
+    <p>
+    <strong>Inductive step.</strong>
+    Assume $P(k)$ holds for some $k\in\mathbb{N}$:
+    $$1+3+\cdots+(2k-1)=k^2.$$
+    Add the next odd number $2(k+1)-1=2k+1$ to both sides:
+    $$1+3+\cdots+(2k-1)+(2k+1)=k^2+(2k+1).$$
+    Simplify the right-hand side:
+    $$k^2+2k+1=(k+1)^2.$$
+    This gives $P(k+1)$.
+    By induction, $P(n)$ holds for all $n\in\mathbb{N}$.
+    </p>
+  </div>
+</details>
+
+</div>
+
+<h3>1.3 Well-ordering and why infinite descent is impossible</h3>
+
+<p>
+There is another way to express the same structure underlying induction.
+Instead of pushing upward step by step, it rules out endless downward motion.
+</p>
+
+<div class="callout">
+<strong>Well-Ordering Principle.</strong>
+Every nonempty subset of $\mathbb{N}$ has a smallest element.
+</div>
+
+<p>
+This principle implies that there cannot exist an infinite strictly decreasing sequence
+$$
+n_0 > n_1 > n_2 > \cdots
+$$
+of natural numbers. If such a sequence existed, the set
+$\{n_0,n_1,n_2,\dots\}$ would have no smallest element,
+contradicting well-ordering.
+</p>
+
+<p>
+Induction and well-ordering are two perspectives on the same underlying fact:
+the natural numbers have a beginning, and you cannot keep stepping downward forever.
+</p>
+
+<h2>2. Integers as Differences</h2>
+
+<p>
+The integers $\mathbb{Z}$ arise when subtraction is required to make sense in all cases.
+Expressions like $3-5$ should denote a number, even though $5$ is larger than $3$.
+</p>
+
+<p>
+Rather than introducing negative numbers as mysterious new symbols,
+we explain integers as <em>differences</em>.
+</p>
+
+<h3>2.1 Difference pairs</h3>
+
+<p>
+Consider ordered pairs $(a,b)$ of natural numbers, intended to represent the difference $a-b$.
+Different pairs can represent the same difference. For example,
+$$
+5-3 = 7-5 = 12-10.
+$$
+</p>
+
+<p>
+To capture this idea formally, we declare two pairs equivalent when they represent
+the same net difference.
+</p>
+
+<div class="callout">
+$(a,b)$ is equivalent to $(c,d)$ if and only if $a+d = b+c$.
+</div>
+
+<h3>2.2 Zero and negative integers</h3>
+
+<p>
+The integer $0$ corresponds to any pair of the form $(n,n)$, since $n-n=0$.
+</p>
+
+<p>
+The negative of $(a,b)$ is $(b,a)$, because reversing the order reverses the sign:
+$$
+a-b = -(b-a).
+$$
+</p>
+
+<p>
+Under this interpretation, negative numbers are not additional objects;
+they are simply differences viewed in the opposite direction.
+Subtraction and sign rules follow naturally from this construction.
+</p>
+
+<div class="exercise">
+<strong>Exercise 2.</strong>
+Show that adding difference pairs by
+$(a,b)+(c,d)=(a+c,b+d)$
+respects the equivalence relation.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    
+<p>
+We must show: if $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, then
+$$(a+c,b+d)\sim(a'+c',b'+d').$$
+</p>
+<p>
+The hypotheses mean:
+$$a+b'=b+a' \quad\text{and}\quad c+d'=d+c'.$$
+Add these equalities:
+$$(a+b')+(c+d')=(b+a')+(d+c').$$
+Regroup:
+$$(a+c)+(b'+d')=(b+d)+(a'+c').$$
+This is exactly the equivalence condition for
+$(a+c,b+d)\sim(a'+c',b'+d')$.
+So addition is well-defined on equivalence classes.
+</p>
+
+  </div>
+</details>
+</div>
+
+<h2>3. Rational Numbers as Ratios</h2>
+
+<p>
+Rational numbers arise when we want division to be meaningful in all cases.
+A rational number is understood as a <em>ratio</em> of two integers.
+</p>
+
+<p>
+We represent a rational number by a pair $(a,b)$ with $a\in\mathbb{Z}$ and $b\neq0$,
+intended to mean $a/b$.
+</p>
+
+<p>
+Different pairs can represent the same ratio:
+$$
+1/2 = 2/4 = 50/100.
+$$
+</p>
+
+<div class="callout">
+$(a,b)$ is equivalent to $(c,d)$ if and only if $ad = bc$.
+</div>
+
+<p>
+This equivalence relation explains fraction equality.
+Whenever you clear denominators or simplify fractions, you are implicitly using this rule.
+Fraction equality is therefore a consequence of integer multiplication, not a separate idea.
+</p>
+
+<div class="example">
+<strong>Geometric interpretation.</strong>
+Represent $(a,b)$ as the point $(b,a)$ in the plane.
+All equivalent fractions lie on the same line through the origin.
+</div>
+
+<div class="exercise">
+<strong>Exercise 3.</strong>
+Verify that addition
+$$
+\frac{a}{b} + \frac{c}{d} = \frac{ad+bc}{bd}
+$$
+is compatible with the equivalence relation.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    
+<p>
+We want to check that the usual addition formula gives the same rational number no matter which representatives we choose.
+Suppose $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, i.e.
+$$ab'=a'b \quad\text{and}\quad cd'=c'd.$$
+</p>
+<p>
+Define
+$$\frac{a}{b}+\frac{c}{d}=\frac{ad+bc}{bd}.$$
+We must show
+$$\frac{ad+bc}{bd} \sim \frac{a'd'+b'c'}{b'd'}.$$
+In equivalence-class language this is the integer identity
+$$(ad+bc)(b'd')=(a'd'+b'c')(bd).$$
+</p>
+<p>
+Expand both sides:
+$$(ad)(b'd')+(bc)(b'd') = (a'd')(bd)+(b'c')(bd).$$
+Regroup as
+$$a d b' d' + b c b' d' = a' d' b d + b' c' b d.$$
+Now use $ab'=a'b$ to replace $ab'$ with $a'b$, and $cd'=c'd$ to replace $cd'$ with $c'd$:
+<ul>
+<li>$a d b' d' = (ab')(dd') = (a'b)(dd') = a' d' b d$</li>
+<li>$b c b' d' = (bb')(c d') = (bb')(c' d) = b' c' b d$</li>
+</ul>
+Each term matches, so the equality holds. Therefore the addition rule is well-defined.
+</p>
+
+  </div>
+</details>
+</div>
+
+<h2>4. Division Algorithm and the Greatest Common Divisor</h2>
+
+<p>
+To control and compare integers, we need a precise notion of division.
+</p>
+
+<div class="callout">
+<strong>Division Algorithm.</strong>
+Given integers $a$ and $b>0$, there exist unique integers $q$ and $r$ such that
+$$
+a = bq + r, \qquad 0 \le r < b.
+$$
+</div>
+
+<p>
+Repeating the division step produces the Euclidean algorithm.
+Its output, the greatest common divisor $\gcd(a,b)$,
+is the largest unit that measures both numbers exactly.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+$$
+48 = 18\cdot2 + 12, \quad
+18 = 12\cdot1 + 6, \quad
+12 = 6\cdot2 + 0.
+$$
+Therefore $\gcd(48,18)=6$.
+</div>
+
+<div class="exercise">
+<strong>Exercise 4.</strong>
+Use the Euclidean algorithm to compute $\gcd(84,30)$ and explain each step.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    
+<p>
+Apply the Euclidean algorithm:
+$$84=30\cdot2+24,$$
+$$30=24\cdot1+6,$$
+$$24=6\cdot4+0.$$
+The last nonzero remainder is $6$, so $\gcd(84,30)=6$.
+</p>
+<p>
+Interpretation: $6$ is the largest integer that divides both $84$ and $30$ exactly.
+</p>
+
+  </div>
+</details>
+</div>
+
+<h2>5. Parity and a First Irrationality Proof</h2>
+
+<p>
+Parity distinguishes integers according to whether they are divisible by $2$.
+It is the simplest possible notion of divisibility: instead of tracking <em>all</em> factors of a number,
+we ask only one yes/no question — “is there a factor of $2$ or not?”
+Despite its simplicity, parity is strong enough to force contradictions in many arguments.
+</p>
+
+<div class="callout">
+<strong>Even and odd.</strong>
+An integer $n$ is <em>even</em> if $n=2k$ for some integer $k$.
+It is <em>odd</em> if $n=2k+1$ for some integer $k$.
+Every integer is either even or odd, and never both.
+</div>
+
+<p>
+Parity behaves especially well under squaring, which is why it is useful in irrationality proofs.
+</p>
+
+<div class="callout">
+<strong>Squares preserve parity.</strong>
+<ul>
+  <li>If $n$ is even, then $n=2k$ and $n^2=(2k)^2=4k^2=2(2k^2)$ is even.</li>
+  <li>If $n$ is odd, then $n=2k+1$ and $n^2=(2k+1)^2=4k^2+4k+1=2(2k^2+2k)+1$ is odd.</li>
+</ul>
+</div>
+
+<p>
+Thus squaring does not mix parity: even numbers square to even numbers, and odd numbers square to odd numbers.
+Equivalently, if a square is even, the original number must already have been even.
+This “one-way” implication is exactly what drives the classical contradiction in the proof that
+$\sqrt{2}$ is not rational.
+</p>
+
+
+<div class="exercise">
+<strong>Exercise 5A.</strong>
+Prove that if $n^2$ is divisible by $4$, then $n$ is even.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    Suppose $n^2$ is divisible by $4$.
+    Then $n^2 = 4k$ for some integer $k$.
+    In particular, $n^2$ is even, so $n$ must be even by the parity argument above.
+    </p>
+    <p>
+    Write $n=2m$ for some integer $m$.
+    Then $n^2 = 4m^2$, which is divisible by $4$.
+    This confirms that divisibility by $4$ at the level of a square forces a factor of $2$
+    already to be present in the original number.
+    </p>
+  </div>
+</details>
+</div>
+
+<div class="example">
+<strong>Why parity is “minimal but sufficient.”</strong>
+In the proof that $\sqrt{2}$ is irrational, we only need to track one piece of information:
+whether a number has a factor of $2$ or not.
+We do <em>not</em> need to know anything about divisibility by $3$, $5$, or other primes.
+</div>
+
+<p>
+Full prime factorization tells us that every integer can be written uniquely as a product of primes,
+and that squaring doubles all prime exponents.
+Parity is the special case where we look only at the prime $2$ and ignore everything else.
+This is why parity is called a <em>minimal</em> form of divisibility.
+</p>
+
+<p>
+In the equation
+$$
+a^2 = 2b^2,
+$$
+the right-hand side has an odd number of factors of $2$ (one more than $b^2$),
+while the left-hand side has an even number of factors of $2$ (twice those in $a$).
+Parity alone is enough to see that these two quantities can never be equal.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+Assume $\sqrt{2}=a/b$ with integers $a,b$.
+Then $a^2=2b^2$.
+If $a^2$ is even, then $a$ is even; write $a=2k$.
+Substituting gives $b^2=2k^2$, so $b$ is even.
+This produces a smaller pair, contradicting well-ordering.
+Therefore $\sqrt{2}$ is not rational.
+</div>
+
+<h2>6. Infinite Descent</h2>
+
+<p>
+Infinite descent is a proof method that exploits well-ordering.
+If a supposed counterexample leads to a smaller one, then no counterexample can exist.
+</p>
+
+<div class="example">
+<strong>Example.</strong>
+There is no smallest positive rational number.
+If $q>0$ were smallest, then $q/2$ would be smaller.
+</div>
+
+<div class="exercise">
+<strong>Exercise 5.</strong>
+Use infinite descent to show there is no smallest positive rational number.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    
+<p>
+Assume, for contradiction, that there exists a smallest positive rational number. Call it $q$.
+Then $q/2$ is also a positive rational number, and $q/2 &lt; q$.
+This contradicts the assumption that $q$ was the smallest positive rational.
+Therefore there is no smallest positive rational number.
+</p>
+
+  </div>
+</details>
+</div>
+
+<h2>7. Ordered Fields and Completeness</h2>
+
+<p>
+An ordered field is a number system equipped with addition, multiplication,
+and an order relation that behaves sensibly with respect to these operations.
+Both $\mathbb{Q}$ and $\mathbb{R}$ are ordered fields.
+</p>
+
+
+<p>
+In practice, “ordered field” means you can do algebra (add, subtract, multiply, divide by nonzero numbers) and you can also compare numbers
+(using $&lt;$ and $&gt;$), and these two structures cooperate rather than fight each other.
+For example, if you add the same number to both sides of an inequality, the direction of the inequality should not change.
+Similarly, multiplying by a positive number should preserve the inequality direction.
+</p>
+
+<div class="callout">
+<strong>Ordered field (informal checklist).</strong>
+An ordered field is a set of numbers with:
+<ul>
+  <li><strong>Addition and multiplication</strong> behaving like ordinary arithmetic (associative, commutative, distributive, with $0$ and $1$, and inverses).</li>
+  <li><strong>An order relation</strong> $&lt;$ so that for any $a,b$ exactly one of $a&lt;b$, $a=b$, $a&gt;b$ holds (trichotomy), and the order is transitive.</li>
+  <li><strong>Compatibility rules</strong> linking algebra and order:
+    <ul>
+      <li>If $a&lt;b$ then $a+c&lt;b+c$ for all $c$.</li>
+      <li>If $0&lt;c$ and $a&lt;b$ then $ac&lt;bc$.</li>
+    </ul>
+  </li>
+</ul>
+</div>
+
+<div class="example">
+<strong>Example: why $\mathbb{Q}$ is an ordered field.</strong>
+Take rational numbers written as fractions (equivalence classes) and use the usual operations.
+Define $a&lt;b$ for rationals by saying $b-a$ is positive.
+Concretely, if $a=\frac{p}{q}$ and $b=\frac{r}{s}$ with $q,s&gt;0$, then
+$$
+\frac{p}{q} &lt; \frac{r}{s}
+\quad\text{means}\quad
+ps &lt; rq.
+$$
+This is the familiar “cross-multiply” rule, and it is exactly the statement that $b-a$ is positive.
+With this definition, adding the same rational to both sides and multiplying by a positive rational preserve inequalities.
+</div>
+
+<div class="exercise">
+<strong>Exercise 7.</strong>
+Let $a,b,c\in\mathbb{Q}$.
+<ol>
+  <li>Assume $a&lt;b$. Prove that $a+c&lt;b+c$.</li>
+  <li>Assume $a&lt;b$ and $0&lt;c$. Prove that $ac&lt;bc$.</li>
+</ol>
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    <p>
+    (1) If $a&lt;b$, then by definition $b-a$ is positive.
+    Consider $(b+c)-(a+c) = b-a$.
+    Since $b-a$ is positive, $(b+c)-(a+c)$ is positive, which means $a+c&lt;b+c$.
+    </p>
+    <p>
+    (2) Assume $a&lt;b$ and $0&lt;c$.
+    Since $a&lt;b$, we have $b-a&gt;0$.
+    Multiply this positive number by the positive number $c$ to get $c(b-a)&gt;0$.
+    Distribute:
+    $$c(b-a)=cb-ca.$$
+    So $cb-ca&gt;0$, which means $ca&lt;cb$, i.e. $ac&lt;bc$.
+    </p>
+    <p class="muted">
+    Note: this solution uses only the idea “$x&lt;y$ means $y-x$ is positive” plus distributivity. In a fully axiomatic treatment,
+    these are exactly the compatibility axioms you assume for an ordered field.
+    </p>
+  </div>
+</details>
+</div>
+
+<p>
+What distinguishes $\mathbb{R}$ from $\mathbb{Q}$ is completeness.
+</p>
+
+<div class="callout">
+<strong>Least Upper Bound Axiom.</strong>
+Every nonempty subset of $\mathbb{R}$ that is bounded above has a least upper bound.
+</div>
+
+<p>
+Completeness fills the gaps present in $\mathbb{Q}$ and ensures that limits behave as expected.
+</p>
+
+<h2>8. Sets, Functions, and Sequences</h2>
+
+<p>
+A function assigns exactly one output to each input.
+A sequence is simply a function from $\mathbb{N}$ to $\mathbb{R}$.
+</p>
+
+<p>
+Understanding quantifiers is essential in analysis.
+For example, the definition of convergence states:
+$$
+\forall \varepsilon \,\gt\, 0 \; \exists N \; \forall n \,\gt\, N :
+|a_n - L| \,\lt\, \varepsilon.
+$$
+</p>
+
+<div class="exercise">
+<strong>Exercise 6.</strong>
+Rewrite the definition of convergence in words,
+explicitly describing who chooses $\varepsilon$, who chooses $N$,
+and what depends on what.
+<details class="callout">
+  <summary><strong>Solution (click to expand)</strong></summary>
+  <div style="margin-top:10px">
+    
+<p>
+The statement
+$$\forall \varepsilon &gt; 0 \; \exists N \; \forall n &gt; N : |a_n-L| &lt; \varepsilon$$
+means:
+</p>
+<ul>
+<li>You (or an adversary) pick any tolerance $\varepsilon&gt;0$ (how close you want to be to $L$).</li>
+<li>After seeing that choice, we must produce a cutoff index $N$.</li>
+<li>Once $N$ is chosen, <em>every</em> index $n$ beyond $N$ satisfies $|a_n-L|&lt;\varepsilon$.</li>
+</ul>
+<p>
+In words: <em>no matter how small an error tolerance you demand, eventually all terms of the sequence stay within that tolerance of $L$.</em>
+</p>
+
+  </div>
+</details>
+</div>
+
+</main>
+</body>
+</html>
