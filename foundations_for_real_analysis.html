@@ -213,51 +213,88 @@ the natural numbers have a beginning, and you cannot keep stepping downward fore
 <h2>2. Integers as Differences</h2>
 
 <p>
-The integers $\mathbb{Z}$ arise when subtraction is required to make sense in all cases.
-Expressions like $3-5$ should denote a number, even though $5$ is larger than $3$.
+The integers $\mathbb{Z}$ arise when subtraction must make sense in all cases.
+In the natural numbers, expressions like $3-5$ are not defined.
+Yet we clearly want such expressions to denote numbers.
 </p>
 
 <p>
-Rather than introducing negative numbers as mysterious new symbols,
-we explain integers as <em>differences</em>.
+Rather than introducing negative numbers as unfamiliar new symbols,
+we construct the integers by making the idea of a <em>difference</em> precise.
 </p>
 
 <h3>2.1 Difference pairs</h3>
 
 <p>
-Consider ordered pairs $(a,b)$ of natural numbers, intended to represent the difference $a-b$.
-Different pairs can represent the same difference. For example,
+Consider ordered pairs $(a,b)$ of natural numbers, intended to represent the
+difference $a-b$.
+The key point is that many different calculations can produce the same difference.
+For example,
+</p>
+
 $$
 5-3 = 7-5 = 12-10.
 $$
+
+<p>
+Although the numbers involved are different, each expression results in $2$.
+If we want to model “difference” itself, we must regard all of these as representing
+the same integer.
 </p>
 
 <p>
-To capture this idea formally, we declare two pairs equivalent when they represent
-the same net difference.
+This immediately explains why multiple representations are unavoidable:
+a difference records an <em>imbalance</em>, not a specific subtraction step.
+Adding the same amount to both numbers does not change the imbalance.
+</p>
+
+<p>
+To formalize this idea, we declare two pairs equivalent when they encode the same net
+difference.
 </p>
 
 <div class="callout">
 $(a,b)$ is equivalent to $(c,d)$ if and only if $a+d = b+c$.
 </div>
 
+<p>
+This condition exactly captures the intuition above.
+It says that starting from $a$ and removing $b$ leaves the same result as
+starting from $c$ and removing $d$.
+An integer is therefore not a single pair, but the entire collection of pairs
+that share the same difference.
+</p>
+
 <h3>2.2 Zero and negative integers</h3>
 
 <p>
-The integer $0$ corresponds to any pair of the form $(n,n)$, since $n-n=0$.
+The integer $0$ corresponds to any pair of the form $(n,n)$, since
+$n-n=0$.
+All such pairs are equivalent, reflecting the fact that zero represents perfect balance.
 </p>
 
 <p>
-The negative of $(a,b)$ is $(b,a)$, because reversing the order reverses the sign:
+Negation has a simple interpretation in this framework.
+If $(a,b)$ represents the difference $a-b$, then swapping the entries gives
+$(b,a)$, which represents
+</p>
+
 $$
-a-b = -(b-a).
+b-a = -(a-b).
 $$
+
+<p>
+Thus the negative of an integer is obtained by reversing the order of the pair.
+No new objects are introduced: we are simply viewing the same imbalance from the
+opposite direction.
 </p>
 
 <p>
-Under this interpretation, negative numbers are not additional objects;
-they are simply differences viewed in the opposite direction.
-Subtraction and sign rules follow naturally from this construction.
+This perspective removes the mystery from sign rules.
+Changing the sign reverses which side is larger.
+Adding integers corresponds to combining gains and losses.
+The familiar arithmetic of positive and negative numbers follows from these
+interpretations, rather than being imposed by memorization.
 </p>
 
 <div class="exercise">
@@ -265,24 +302,43 @@ Subtraction and sign rules follow naturally from this construction.
 Show that adding difference pairs by
 $(a,b)+(c,d)=(a+c,b+d)$
 respects the equivalence relation.
+
 <details class="callout">
   <summary><strong>Solution (click to expand)</strong></summary>
   <div style="margin-top:10px">
-    
+
 <p>
-We must show: if $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, then
+We must show that if $(a,b)\sim(a',b')$ and $(c,d)\sim(c',d')$, then
 $$(a+c,b+d)\sim(a'+c',b'+d').$$
 </p>
+
 <p>
 The hypotheses mean:
-$$a+b'=b+a' \quad\text{and}\quad c+d'=d+c'.$$
-Add these equalities:
-$$(a+b')+(c+d')=(b+a')+(d+c').$$
-Regroup:
-$$(a+c)+(b'+d')=(b+d)+(a'+c').$$
+$$
+a+b' = b+a'
+\quad\text{and}\quad
+c+d' = d+c'.
+$$
+</p>
+
+<p>
+Adding these equalities gives
+$$
+(a+b')+(c+d') = (b+a')+(d+c').
+$$
+</p>
+
+<p>
+Rearranging terms yields
+$$
+(a+c)+(b'+d') = (b+d)+(a'+c').
+$$
+</p>
+
+<p>
 This is exactly the equivalence condition for
 $(a+c,b+d)\sim(a'+c',b'+d')$.
-So addition is well-defined on equivalence classes.
+Therefore addition is well-defined on equivalence classes.
 </p>
 
   </div>
