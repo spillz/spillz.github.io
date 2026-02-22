@@ -1,0 +1,1289 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Radial Stitched Rings – WebGL2 caves</title>
+  <style>
+    html,body { margin:0; height:100%; background:#000; }
+    canvas { width:100vw; height:100vh; display:block; }
+    #hud {
+      position:fixed; left:12px; top:10px; color:#ddd;
+      font: 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: rgba(0,0,0,0.35); padding:8px 10px; border:1px solid #111; border-radius:8px;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud"></div>
+
+<script>
+(() => {
+  // ============================================================
+  // Config
+  // ============================================================
+  const CFG = {
+    seed: 1337,
+    RMAX: 18,
+    N_MIN: 6,
+
+    // cave grid resolution (simulation) - independent from mesh
+    GRID: 360,
+    PAD: 1.2,
+    TARGET_FINAL_AIR: 0.50,
+
+    // noise shaping
+    WARP_F: 0.055,
+    WARP_A: 2.0,
+    BASE_F: 0.13,
+    VEIN_F: 0.17,
+
+    // CA smoothing
+    CA_STEPS: 3,
+    AIR_KEEP_N8: 3,
+    ROCK_TO_AIR_N8: 6,
+
+    // barriers
+    VEIN_THRESH: 0.79,
+    VEIN_MID_MIN: 0.35,
+    VEIN_DILATE: 1,
+
+    // entrances
+    ENTRANCES: 4,
+    ENTRANCE_OUTER: 0.70,
+    ENTRANCE_INNER: 0.55,
+    ENTRANCE_ANGLE_JITTER: 0.35,
+
+    // render
+    ROCK_DARK: [0x5f/255, 0x3a/255, 0x20/255],
+    ROCK_LIGHT:[0x8a/255, 0x56/255, 0x31/255],
+    AIR_DARK:  [0x2b/255, 0x2b/255, 0x2b/255],
+    AIR_LIGHT: [0x4a/255, 0x4a/255, 0x4a/255],
+    EDGE_DARK: [0x14/255, 0x14/255, 0x14/255],
+  };
+
+  // ============================================================
+  // Deterministic RNG
+  // ============================================================
+  function mulberry32(seed) {
+    let t = seed >>> 0;
+    return function() {
+      t += 0x6D2B79F5;
+      let x = Math.imul(t ^ (t >>> 15), 1 | t);
+      x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  let currentSeed = CFG.seed;
+  let rand = mulberry32(currentSeed);
+
+  // ============================================================
+  // Simplex 2D (Gustavson-ish, compact)
+  // ============================================================
+  const grad2 = [
+    [ 1, 1], [-1, 1], [ 1,-1], [-1,-1],
+    [ 1, 0], [-1, 0], [ 1, 0], [-1, 0],
+    [ 0, 1], [ 0,-1], [ 0, 1], [ 0,-1],
+  ];
+
+  function buildPerm(seed) {
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+
+    const r = mulberry32(seed);
+    for (let i = 255; i > 0; i--) {
+      const j = (r() * (i + 1)) | 0;
+      const tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+    }
+
+    const perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    return perm;
+  }
+
+  let perm = buildPerm(currentSeed);
+  const F2 = 0.5 * (Math.sqrt(3) - 1);
+  const G2 = (3 - Math.sqrt(3)) / 6;
+
+  function simplex2(x, y) {
+    const s = (x + y) * F2;
+    const i = Math.floor(x + s);
+    const j = Math.floor(y + s);
+
+    const t = (i + j) * G2;
+    const X0 = i - t, Y0 = j - t;
+    const x0 = x - X0, y0 = y - Y0;
+
+    let i1, j1;
+    if (x0 > y0) { i1 = 1; j1 = 0; } else { i1 = 0; j1 = 1; }
+
+    const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+    const x2 = x0 - 1 + 2*G2, y2 = y0 - 1 + 2*G2;
+
+    const ii = i & 255, jj = j & 255;
+
+    let n0 = 0, n1 = 0, n2 = 0;
+
+    let t0 = 0.5 - x0*x0 - y0*y0;
+    if (t0 > 0) {
+      const gi0 = perm[ii + perm[jj]] % 12;
+      const g = grad2[gi0];
+      t0 *= t0;
+      n0 = t0 * t0 * (g[0]*x0 + g[1]*y0);
+    }
+
+    let t1 = 0.5 - x1*x1 - y1*y1;
+    if (t1 > 0) {
+      const gi1 = perm[ii + i1 + perm[jj + j1]] % 12;
+      const g = grad2[gi1];
+      t1 *= t1;
+      n1 = t1 * t1 * (g[0]*x1 + g[1]*y1);
+    }
+
+    let t2 = 0.5 - x2*x2 - y2*y2;
+    if (t2 > 0) {
+      const gi2 = perm[ii + 1 + perm[jj + 1]] % 12;
+      const g = grad2[gi2];
+      t2 *= t2;
+      n2 = t2 * t2 * (g[0]*x2 + g[1]*y2);
+    }
+
+    return 70 * (n0 + n1 + n2); // ~[-1,1]
+  }
+
+  function fbm(x, y, oct=4, pers=0.55, lac=2.0) {
+    let amp=1, freq=1, total=0, norm=0;
+    for (let o=0;o<oct;o++){
+      total += amp * simplex2(x*freq, y*freq);
+      norm += amp;
+      amp *= pers;
+      freq *= lac;
+    }
+    return norm ? total/norm : 0; // ~[-1,1]
+  }
+
+  function ridged(x, y, oct=4, pers=0.55, lac=2.0) {
+    let amp=1, freq=1, total=0, norm=0;
+    for (let o=0;o<oct;o++){
+      const n = simplex2(x*freq, y*freq); // [-1,1]
+      let r = 1 - Math.abs(n);           // [0,1]
+      r *= r;
+      total += amp * r;
+      norm += amp;
+      amp *= pers;
+      freq *= lac;
+    }
+    return norm ? total/norm : 0; // [0,1]
+  }
+
+  // ============================================================
+  // Cave field on a square grid (simulation)
+  // ============================================================
+  const G = CFG.GRID;
+  const worldMin = -(CFG.RMAX + CFG.PAD);
+  const worldMax = +(CFG.RMAX + CFG.PAD);
+  const worldSize = worldMax - worldMin;
+  const cell = worldSize / G;
+  const R2 = CFG.RMAX * CFG.RMAX;
+
+  const inside = new Uint8Array(G*G);
+  function idx(i,j){ return j*G+i; }
+  function toWorld(i,j){
+    return [worldMin + (i+0.5)*cell, worldMin + (j+0.5)*cell];
+  }
+  function toGrid(x,y){
+    return [Math.floor((x - worldMin) / cell), Math.floor((y - worldMin) / cell)];
+  }
+
+  for (let j=0;j<G;j++) for (let i=0;i<G;i++){
+    const [x,y]=toWorld(i,j);
+    inside[idx(i,j)] = (x*x + y*y <= R2) ? 1 : 0;
+  }
+
+  const dirs4 = [[1,0],[-1,0],[0,1],[0,-1]];
+  const dirs8 = [];
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) if (dx||dy) dirs8.push([dx,dy]);
+
+  function countN(field,i,j,dirs){
+    let c=0;
+    for (const [dx,dy] of dirs){
+      const x=i+dx, y=j+dy;
+      if (x<0||x>=G||y<0||y>=G) continue;
+      const k=idx(x,y);
+      if (inside[k] && field[k]) c++;
+    }
+    return c;
+  }
+
+  function dilate(field, iters){
+    let out = new Uint8Array(field);
+    for (let it=0; it<iters; it++){
+      const next = new Uint8Array(out);
+      for (let j=0;j<G;j++) for (let i=0;i<G;i++){
+        const k=idx(i,j);
+        if (!inside[k] || out[k]) continue;
+        for (const [dx,dy] of dirs4){
+          const x=i+dx, y=j+dy;
+          if (x<0||x>=G||y<0||y>=G) continue;
+          const kk=idx(x,y);
+          if (inside[kk] && out[kk]) { next[k]=1; break; }
+        }
+      }
+      out = next;
+    }
+    return out;
+  }
+
+  function carveDisk(field, cx, cy, radius, val=1){
+    const r2 = radius*radius;
+    const [ix0,iy0]=toGrid(cx-radius, cy-radius);
+    const [ix1,iy1]=toGrid(cx+radius, cy+radius);
+    const x0=Math.max(0,ix0), y0=Math.max(0,iy0);
+    const x1=Math.min(G-1,ix1), y1=Math.min(G-1,iy1);
+    for (let j=y0;j<=y1;j++) for (let i=x0;i<=x1;i++){
+      const k=idx(i,j);
+      if (!inside[k]) continue;
+      const [x,y]=toWorld(i,j);
+      const dx=x-cx, dy=y-cy;
+      if (dx*dx+dy*dy <= r2) field[k]=val;
+    }
+  }
+
+  function floodFromSeeds(field, seeds){
+    const vis = new Uint8Array(G*G);
+    const qx = new Int32Array(G*G);
+    const qy = new Int32Array(G*G);
+    let qh=0, qt=0;
+
+    for (const [sx,sy] of seeds){
+      if (sx<0||sx>=G||sy<0||sy>=G) continue;
+      const k=idx(sx,sy);
+      if (!inside[k] || !field[k] || vis[k]) continue;
+      vis[k]=1;
+      qx[qt]=sx; qy[qt]=sy; qt++;
+    }
+
+    while (qh<qt){
+      const x=qx[qh], y=qy[qh]; qh++;
+      for (const [dx,dy] of dirs4){
+        const xx=x+dx, yy=y+dy;
+        if (xx<0||xx>=G||yy<0||yy>=G) continue;
+        const kk=idx(xx,yy);
+        if (!inside[kk] || !field[kk] || vis[kk]) continue;
+        vis[kk]=1;
+        qx[qt]=xx; qy[qt]=yy; qt++;
+      }
+    }
+    return vis;
+  }
+
+  function fractionAir(field){
+    let ins=0, a=0;
+    for (let k=0;k<G*G;k++){
+      if (!inside[k]) continue;
+      ins++;
+      if (field[k]) a++;
+    }
+    return a/ins;
+  }
+
+  // precompute warp + cave + vein fields (regen per seed)
+  let wx = new Float32Array(G*G);
+  let wy = new Float32Array(G*G);
+  let caveNoise = new Float32Array(G*G);
+  let veinNoise = new Float32Array(G*G);
+
+  function buildWorld(targetInitialAir){
+    // Entrances (angles)
+    const entrances = [];
+    for (let e=0;e<CFG.ENTRANCES;e++){
+      const th = (e/CFG.ENTRANCES)*2*Math.PI + (rand()-0.5)*CFG.ENTRANCE_ANGLE_JITTER;
+      entrances.push([(CFG.RMAX-0.05)*Math.cos(th), (CFG.RMAX-0.05)*Math.sin(th)]);
+    }
+
+    // 1) binary search threshold on caveNoise -> initial air
+    let lo=0, hi=1;
+    let air = new Uint8Array(G*G);
+
+    for (let iter=0; iter<20; iter++){
+      const mid=(lo+hi)*0.5;
+      let ins=0, a=0;
+      for (let k=0;k<G*G;k++){
+        if (!inside[k]) { air[k]=0; continue; }
+        ins++;
+        const v = caveNoise[k] > mid ? 1 : 0;
+        air[k]=v; a+=v;
+      }
+      const frac = a/ins;
+      if (frac > targetInitialAir) lo = mid; else hi = mid;
+    }
+
+    // 2) CA smoothing
+    for (let s=0;s<CFG.CA_STEPS;s++){
+      const next = new Uint8Array(air);
+      for (let j=0;j<G;j++) for (let i=0;i<G;i++){
+        const k=idx(i,j);
+        if (!inside[k]) continue;
+        const n8 = countN(air,i,j,dirs8);
+        if (air[k]) next[k] = (n8 >= CFG.AIR_KEEP_N8) ? 1 : 0;
+        else        next[k] = (n8 >= CFG.ROCK_TO_AIR_N8) ? 1 : 0;
+      }
+      air = next;
+    }
+
+    // 3) veins as rock barriers (mid-depth)
+    let veins = new Uint8Array(G*G);
+    for (let j=0;j<G;j++) for (let i=0;i<G;i++){
+      const k=idx(i,j);
+      if (!inside[k]) continue;
+      const [x,y]=toWorld(i,j);
+      const r = Math.hypot(x,y) / CFG.RMAX;
+      let mid = 1.0 - Math.abs(r - 0.60) / 0.60;
+      mid = Math.max(0, Math.min(1, mid));
+      if (veinNoise[k] > CFG.VEIN_THRESH && mid > CFG.VEIN_MID_MIN) veins[k]=1;
+    }
+    veins = dilate(veins, CFG.VEIN_DILATE);
+    for (let k=0;k<G*G;k++){
+      if (veins[k]) air[k]=0;
+    }
+
+    // 4) carve entrances as guaranteed air
+    for (const [ex,ey] of entrances){
+      carveDisk(air, ex, ey, CFG.ENTRANCE_OUTER, 1);
+      carveDisk(air, ex*0.97, ey*0.97, CFG.ENTRANCE_INNER, 1);
+    }
+
+    // 5) keep only reachable from entrances
+    const seeds=[];
+    for (const [ex,ey] of entrances){
+      const [ix,iy]=toGrid(ex*0.97, ey*0.97);
+      for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++) seeds.push([ix+dx, iy+dy]);
+    }
+    const vis = floodFromSeeds(air, seeds);
+    for (let k=0;k<G*G;k++){
+      if (air[k] && !vis[k]) air[k]=0;
+    }
+
+    return { air, entrances };
+  }
+
+  let best=null, bestDiff=1e9, bestWorld=null;
+  let AIR = null;
+  let finalAir = 0;
+
+  function regenWorld(seed){
+    currentSeed = seed;
+    rand = mulberry32(currentSeed);
+    perm = buildPerm(currentSeed);
+
+    wx = new Float32Array(G*G);
+    wy = new Float32Array(G*G);
+    for (let j=0;j<G;j++) for (let i=0;i<G;i++){
+      const k=idx(i,j);
+      if (!inside[k]) continue;
+      const [x,y]=toWorld(i,j);
+      wx[k] = fbm(x*CFG.WARP_F, y*CFG.WARP_F, 3, 0.6, 2.0);
+      wy[k] = fbm((x+19.3)*CFG.WARP_F, (y-11.7)*CFG.WARP_F, 3, 0.6, 2.0);
+    }
+
+    caveNoise = new Float32Array(G*G);
+    veinNoise = new Float32Array(G*G);
+    for (let j=0;j<G;j++) for (let i=0;i<G;i++){
+      const k=idx(i,j);
+      if (!inside[k]) continue;
+      const [x,y]=toWorld(i,j);
+      const xw = x + CFG.WARP_A*wx[k];
+      const yw = y + CFG.WARP_A*wy[k];
+
+      const chambers = 0.5 + 0.5*fbm(xw*CFG.BASE_F*0.8, yw*CFG.BASE_F*0.8, 4, 0.55, 2.0);
+      const corridors= ridged(xw*CFG.BASE_F*1.35, yw*CFG.BASE_F*1.35, 4, 0.55, 2.05);
+      caveNoise[k] = 0.45*chambers + 0.55*corridors;
+
+      veinNoise[k] = ridged(xw*CFG.VEIN_F, yw*CFG.VEIN_F, 3, 0.6, 2.2);
+    }
+
+    // tune initial target to get final ~0.50
+    best=null; bestDiff=1e9; bestWorld=null;
+    for (const g of [0.58,0.60,0.62,0.64,0.66,0.68,0.70]){
+      const w=buildWorld(g);
+      const frac=fractionAir(w.air);
+      const d=Math.abs(frac - CFG.TARGET_FINAL_AIR);
+      if (d<bestDiff){ bestDiff=d; best=g; bestWorld=w; }
+    }
+    for (const delta of [-0.04,-0.03,-0.02,-0.01,0,0.01,0.02,0.03,0.04]){
+      const g=best+delta;
+      if (g<=0||g>=1) continue;
+      const w=buildWorld(g);
+      const frac=fractionAir(w.air);
+      const d=Math.abs(frac - CFG.TARGET_FINAL_AIR);
+      if (d<bestDiff){ bestDiff=d; best=g; bestWorld=w; }
+    }
+
+    AIR = bestWorld.air;
+    finalAir = fractionAir(AIR);
+  }
+
+  regenWorld(currentSeed);
+
+  function airBinaryAtWorld(x, y){
+    const [i, j] = toGrid(x, y);
+    if (i < 0 || i >= G || j < 0 || j >= G) return 1;
+    const k = idx(i, j);
+    if (!inside[k]) return 1;
+    return AIR[k] ? 1 : 0;
+  }
+
+  function isAirAtWorld(x, y){
+    return airBinaryAtWorld(x, y);
+  }
+
+  // ============================================================
+  // Build radial stitched ring mesh (positions + per-vertex attribs)
+  // ============================================================
+  function ringCount(r){
+    if (r<=0) return 1;
+    return Math.max(CFG.N_MIN, Math.floor(2*Math.PI*r));
+  }
+
+  function ringVertices(r){
+    if (r===0) return [{x:0,y:0}];
+    const n = ringCount(r);
+    const phase = (0.5/n) * 2*Math.PI;
+    const out=[];
+    for (let k=0;k<n;k++){
+      const a = 2*Math.PI*k/n + phase;
+      out.push({x:r*Math.cos(a), y:r*Math.sin(a)});
+    }
+    return out;
+  }
+
+  function stitchBand(inner, outer){
+    // returns triangles as triplets of indices into combined {I[0..n0-1], O[0..n1-1]}
+    // We'll just emit actual vertex triplets (duplicated) for simplicity.
+    const tris=[];
+    const n0=inner.length, n1=outer.length;
+    const I = inner.concat([inner[0]]);
+    const O = outer.concat([outer[0]]);
+    let i=0, j=0;
+    while (i<n0 || j<n1){
+      if (i>=n0){
+        tris.push([I[i], O[j], O[j+1]]); j++; continue;
+      }
+      if (j>=n1){
+        tris.push([I[i], O[j], I[i+1]]); i++; continue;
+      }
+      if ((i+1)/n0 < (j+1)/n1){
+        tris.push([I[i], O[j], I[i+1]]); i++;
+      } else {
+        tris.push([I[i], O[j], O[j+1]]); j++;
+      }
+    }
+    return tris;
+  }
+
+  // Build all triangles (duplicated vertices for straightforward drawArrays)
+  const positions = [];
+  const airFlag   = [];
+  const shade     = [];
+
+  function shadeAt(x,y){
+    // cheap stable shading in [0,1]
+    const n = fbm(x*0.16, y*0.16, 2, 0.6, 2.0);
+    return Math.max(0, Math.min(1, 0.5 + 0.5*n));
+  }
+
+  const rings = [];
+  const bandTris = [];
+  for (let r=0;r<=CFG.RMAX;r++) rings.push(ringVertices(r));
+
+  for (let r=0;r<CFG.RMAX;r++){
+    const inner = rings[r];
+    const outer = rings[r+1];
+    if (r===0){
+      // fan from center
+      for (let k=0;k<outer.length;k++){
+        const a = {x:0,y:0};
+        const b = outer[k];
+        const c = outer[(k+1)%outer.length];
+        for (const v of [a,b,c]){
+          positions.push(v.x, v.y);
+          airFlag.push(airBinaryAtWorld(v.x, v.y));
+          shade.push(shadeAt(v.x, v.y));
+        }
+      }
+    } else {
+      const tris = stitchBand(inner, outer);
+      bandTris[r] = tris;
+      for (const tri of tris){
+        for (const v of tri){
+          positions.push(v.x, v.y);
+          airFlag.push(airBinaryAtWorld(v.x, v.y));
+          shade.push(shadeAt(v.x, v.y));
+        }
+      }
+    }
+  }
+
+  const vertCount = positions.length / 2;
+
+  // ============================================================
+  // WebGL2 setup
+  // ============================================================
+  const canvas = document.getElementById("gl");
+  const hud = document.getElementById("hud");
+
+  function resize(){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = Math.floor(canvas.clientWidth * dpr);
+    const h = Math.floor(canvas.clientHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h){
+      canvas.width = w; canvas.height = h;
+    }
+  }
+
+  const gl = canvas.getContext("webgl2", { antialias:true, premultipliedAlpha:false });
+  if (!gl) throw new Error("WebGL2 not available");
+
+  const vs = `#version 300 es
+  precision highp float;
+  layout(location=0) in vec2 aPos;
+  layout(location=1) in float aAir;
+  layout(location=2) in float aShade;
+
+  uniform vec2 uScale; // maps world units into clip space
+  uniform vec2 uCam;
+  uniform float uRot;
+
+  out float vAir;
+  out float vShade;
+
+  vec2 rot(vec2 p, float a){
+    float c = cos(a), s = sin(a);
+    return vec2(c*p.x - s*p.y, s*p.x + c*p.y);
+  }
+
+  void main(){
+    vAir = aAir;
+    vShade = aShade;
+    vec2 p = aPos - uCam;
+    p = rot(p, uRot);
+    gl_Position = vec4(p * uScale, 0.0, 1.0);
+  }`;
+
+  const fs = `#version 300 es
+  precision highp float;
+
+  in float vAir;
+  in float vShade;
+  out vec4 outColor;
+
+  uniform vec3 uRockDark;
+  uniform vec3 uRockLight;
+  uniform vec3 uAirDark;
+  uniform vec3 uAirLight;
+
+  vec3 lerp(vec3 a, vec3 b, float t){ return a + (b-a)*t; }
+
+  void main(){
+    float t = clamp(vShade, 0.0, 1.0);
+    vec3 c = (vAir > 0.5) ? lerp(uAirDark,  uAirLight,  t)
+                          : lerp(uRockDark, uRockLight, t);
+    outColor = vec4(c, 1.0);
+  }`;
+
+  function compile(type, src){
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){
+      const log = gl.getShaderInfoLog(sh);
+      gl.deleteShader(sh);
+      throw new Error(log);
+    }
+    return sh;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+    throw new Error(gl.getProgramInfoLog(prog));
+  }
+
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  function uploadAttrib(loc, data, size, type=gl.FLOAT){
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, size, type, false, 0, 0);
+    return buf;
+  }
+
+  uploadAttrib(0, new Float32Array(positions), 2);
+  const airBuf = uploadAttrib(1, new Float32Array(airFlag),   1);
+  uploadAttrib(2, new Float32Array(shade),     1);
+
+  gl.bindVertexArray(null);
+
+  // uniforms
+  gl.useProgram(prog);
+  const uScale = gl.getUniformLocation(prog, "uScale");
+  const uCam = gl.getUniformLocation(prog, "uCam");
+  const uRot = gl.getUniformLocation(prog, "uRot");
+  const uRockDark = gl.getUniformLocation(prog, "uRockDark");
+  const uRockLight= gl.getUniformLocation(prog, "uRockLight");
+  const uAirDark  = gl.getUniformLocation(prog, "uAirDark");
+  const uAirLight = gl.getUniformLocation(prog, "uAirLight");
+
+  gl.uniform3fv(uRockDark, CFG.ROCK_DARK);
+  gl.uniform3fv(uRockLight,CFG.ROCK_LIGHT);
+  gl.uniform3fv(uAirDark,  CFG.AIR_DARK);
+  gl.uniform3fv(uAirLight, CFG.AIR_LIGHT);
+
+  // ============================================================
+  // Overlay program (ship, vectors, debug)
+  // ============================================================
+  const ovs = `#version 300 es
+  precision highp float;
+  layout(location=0) in vec2 aPos;
+  layout(location=1) in vec4 aColor;
+
+  uniform vec2 uScale;
+  uniform vec2 uCam;
+  uniform float uRot;
+
+  out vec4 vColor;
+
+  vec2 rot(vec2 p, float a){
+    float c = cos(a), s = sin(a);
+    return vec2(c*p.x - s*p.y, s*p.x + c*p.y);
+  }
+
+  void main(){
+    vec2 p = aPos - uCam;
+    p = rot(p, uRot);
+    gl_Position = vec4(p * uScale, 0.0, 1.0);
+    vColor = aColor;
+    gl_PointSize = 6.0;
+  }`;
+
+  const ofs = `#version 300 es
+  precision highp float;
+  in vec4 vColor;
+  out vec4 outColor;
+  void main(){
+    outColor = vColor;
+  }`;
+
+  const oprog = gl.createProgram();
+  gl.attachShader(oprog, compile(gl.VERTEX_SHADER, ovs));
+  gl.attachShader(oprog, compile(gl.FRAGMENT_SHADER, ofs));
+  gl.linkProgram(oprog);
+  if (!gl.getProgramParameter(oprog, gl.LINK_STATUS)){
+    throw new Error(gl.getProgramInfoLog(oprog));
+  }
+
+  const oVao = gl.createVertexArray();
+  gl.bindVertexArray(oVao);
+  const oPos = gl.createBuffer();
+  const oCol = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, oPos);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, oCol);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+
+  const ouScale = gl.getUniformLocation(oprog, "uScale");
+  const ouCam = gl.getUniformLocation(oprog, "uCam");
+  const ouRot = gl.getUniformLocation(oprog, "uRot");
+
+  // ============================================================
+  // Game state + input
+  // ============================================================
+  const keys = new Set();
+  window.addEventListener("keydown", (e) => {
+    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," ","Space"].includes(e.key)) e.preventDefault();
+    keys.add(e.key);
+  });
+  window.addEventListener("keyup", (e) => keys.delete(e.key));
+
+  const GAME = {
+    ZOOM: 4.0, // ~25% of the world visible
+    THRUST: 18.0,
+    TURN_RATE: 2.4,
+    DRAG: 0.12,
+    GRAVITY: 2.0,
+    CRASH_SPEED: 4.5,
+    LAND_SPEED: 2.0,
+    SURFACE_DOT: 0.7,
+    LAND_PULL: 1.2,
+    LAND_FRICTION: 0.6,
+    BOUNCE_RESTITUTION: 0.35,
+    COLLIDE_PUSH_FAST: 0.08,
+    DEBUG_COLLISION: true,
+    DEBUG_NODES: true,
+  };
+
+  const ship = {
+    x: 0,
+    y: CFG.RMAX + 0.9,
+    vx: 0,
+    vy: 0,
+    state: "flying",
+    explodeT: 0,
+    lastAir: 1,
+  };
+  const debris = [];
+
+  function resetShip(){
+    ship.x = 0;
+    ship.y = CFG.RMAX + 0.9;
+    ship.vx = 0;
+    ship.vy = 0;
+    ship.state = "flying";
+    ship.explodeT = 0;
+    debris.length = 0;
+  }
+
+  function rot2(x, y, a){
+    const c = Math.cos(a), s = Math.sin(a);
+    return [c*x - s*y, s*x + c*y];
+  }
+
+  function surfaceNormal(x, y, eps){
+    const gx = airValueAtWorld(x + eps, y) - airValueAtWorld(x - eps, y);
+    const gy = airValueAtWorld(x, y + eps) - airValueAtWorld(x, y - eps);
+    const len = Math.hypot(gx, gy) || 1;
+    return [gx / len, gy / len];
+  }
+
+  function pushTri(pos, col, ax, ay, bx, by, cx, cy, r, g, b, a){
+    pos.push(ax, ay, bx, by, cx, cy);
+    for (let i = 0; i < 3; i++) col.push(r, g, b, a);
+  }
+
+  function pushLine(pos, col, ax, ay, bx, by, r, g, b, a){
+    pos.push(ax, ay, bx, by);
+    col.push(r, g, b, a, r, g, b, a);
+  }
+
+  function pointInTri(px, py, ax, ay, bx, by, cx, cy){
+    const v0x = cx - ax, v0y = cy - ay;
+    const v1x = bx - ax, v1y = by - ay;
+    const v2x = px - ax, v2y = py - ay;
+    const dot00 = v0x * v0x + v0y * v0y;
+    const dot01 = v0x * v1x + v0y * v1y;
+    const dot02 = v0x * v2x + v0y * v2y;
+    const dot11 = v1x * v1x + v1y * v1y;
+    const dot12 = v1x * v2x + v1y * v2y;
+    const invDen = 1 / (dot00 * dot11 - dot01 * dot01 || 1);
+    const u = (dot11 * dot02 - dot01 * dot12) * invDen;
+    const v = (dot00 * dot12 - dot01 * dot02) * invDen;
+    return (u >= -1e-6) && (v >= -1e-6) && (u + v <= 1 + 1e-6);
+  }
+
+  function findTriAtWorld(x, y){
+    const r = Math.hypot(x, y);
+    if (r <= 0) return null;
+    const r0 = Math.floor(Math.min(CFG.RMAX - 1, Math.max(0, r)));
+    const tris = bandTris[r0];
+    if (!tris) return null;
+    for (const tri of tris){
+      const a = tri[0], b = tri[1], c = tri[2];
+      if (pointInTri(x, y, a.x, a.y, b.x, b.y, c.x, c.y)) return tri;
+    }
+    return null;
+  }
+
+  function nearestNodeOnRing(x, y){
+    const r = Math.hypot(x, y);
+    const ri = Math.max(0, Math.min(CFG.RMAX, Math.round(r)));
+    const ring = rings[ri];
+    if (!ring || ring.length === 0) return null;
+    let best = ring[0];
+    let bestD = 1e9;
+    for (const v of ring){
+      const dx = v.x - x;
+      const dy = v.y - y;
+      const d = dx * dx + dy * dy;
+      if (d < bestD){ bestD = d; best = v; }
+    }
+    return best;
+  }
+
+  function airValueAtWorld(x, y){
+    const r = Math.hypot(x, y);
+    if (r > CFG.RMAX) return 1;
+    const r0 = Math.floor(Math.min(CFG.RMAX - 1, Math.max(0, r)));
+    if (r0 <= 0){
+      return airBinaryAtWorld(x, y);
+    }
+    const tris = bandTris[r0];
+    if (!tris) return airBinaryAtWorld(x, y);
+
+    for (const tri of tris){
+      const a = tri[0], b = tri[1], c = tri[2];
+      if (!pointInTri(x, y, a.x, a.y, b.x, b.y, c.x, c.y)) continue;
+      const det = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+      if (Math.abs(det) < 1e-6) break;
+      const l1 = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / det;
+      const l2 = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / det;
+      const l3 = 1 - l1 - l2;
+      const a0 = airBinaryAtWorld(a.x, a.y);
+      const a1 = airBinaryAtWorld(b.x, b.y);
+      const a2 = airBinaryAtWorld(c.x, c.y);
+      return a0 * l1 + a1 * l2 + a2 * l3;
+    }
+
+    return airBinaryAtWorld(x, y);
+  }
+
+  let lastTime = performance.now();
+  let accumulator = 0;
+  let fpsTime = lastTime;
+  let fpsFrames = 0;
+  let fps = 0;
+  let wantRegen = false;
+  let debugCollisions = GAME.DEBUG_COLLISION;
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "m" || e.key === "M") {
+      e.preventDefault();
+      wantRegen = true;
+    }
+    if (e.key === "c" || e.key === "C") {
+      e.preventDefault();
+      debugCollisions = !debugCollisions;
+    }
+  });
+  function step(dt){
+    const left = keys.has("ArrowLeft") || keys.has("a") || keys.has("A");
+    const right = keys.has("ArrowRight") || keys.has("d") || keys.has("D");
+    const thrust = keys.has(" ") || keys.has("Space") || keys.has("ArrowUp") || keys.has("w") || keys.has("W");
+    const down = keys.has("ArrowDown") || keys.has("s") || keys.has("S");
+    const reset = keys.has("r") || keys.has("R");
+    if (reset) resetShip();
+
+    if (ship.state === "flying"){
+      let ax = 0, ay = 0;
+      const r = Math.hypot(ship.x, ship.y) || 1;
+      const rx = ship.x / r;
+      const ry = ship.y / r;
+      const tx = -ry;
+      const ty = rx;
+
+      if (left){
+        ax += tx * GAME.THRUST;
+        ay += ty * GAME.THRUST;
+      }
+      if (right){
+        ax -= tx * GAME.THRUST;
+        ay -= ty * GAME.THRUST;
+      }
+      if (thrust){
+        // thrust "up screen": radial outward to climb
+        ax += rx * GAME.THRUST;
+        ay += ry * GAME.THRUST;
+      }
+      if (down){
+        // downthrust: radial inward
+        ax += -rx * GAME.THRUST;
+        ay += -ry * GAME.THRUST;
+      }
+
+      ax += -ship.x / r * GAME.GRAVITY;
+      ay += -ship.y / r * GAME.GRAVITY;
+
+      ship.vx += ax * dt;
+      ship.vy += ay * dt;
+
+      const drag = Math.max(0, 1 - GAME.DRAG * dt);
+      ship.vx *= drag;
+      ship.vy *= drag;
+
+      ship.x += ship.vx * dt;
+      ship.y += ship.vy * dt;
+
+      const speed = Math.hypot(ship.vx, ship.vy);
+      const airCenter = airValueAtWorld(ship.x, ship.y);
+      const eps = cell * 0.75;
+      const shipHWorld = 0.7;
+      const shipRadius = shipHWorld * 0.28;
+
+      let collides = false;
+      const samples = [];
+      let hit = null;
+      const rCenter = Math.hypot(ship.x, ship.y);
+      if (rCenter - shipRadius <= CFG.RMAX){
+        for (let i = 0; i < 6; i++){
+          const a = (i / 6) * Math.PI * 2;
+          const sx = ship.x + Math.cos(a) * shipRadius;
+          const sy = ship.y + Math.sin(a) * shipRadius;
+          const av = airValueAtWorld(sx, sy);
+          const air = av > 0.5;
+          samples.push([sx, sy, air, av]);
+          if (!air) {
+            collides = true;
+            if (!hit) hit = { x: sx, y: sy };
+          }
+        }
+      }
+      ship._samples = samples;
+      ship._shipRadius = shipRadius;
+      if (hit){
+        ship._collision = {
+          x: hit.x,
+          y: hit.y,
+          tri: findTriAtWorld(hit.x, hit.y),
+          node: nearestNodeOnRing(hit.x, hit.y),
+        };
+      } else {
+        ship._collision = null;
+      }
+
+      if (collides){
+        const gdx = airValueAtWorld(ship.x + eps, ship.y) - airValueAtWorld(ship.x - eps, ship.y);
+        const gdy = airValueAtWorld(ship.x, ship.y + eps) - airValueAtWorld(ship.x, ship.y - eps);
+        const gmag = Math.hypot(gdx, gdy) / (2 * eps);
+        const inv = 1 / (Math.hypot(gdx, gdy) || 1);
+        const nx = gdx * inv;
+        const ny = gdy * inv;
+        const camRot = Math.atan2(ship.x, ship.y || 1e-6);
+        const [upx, upy] = rot2(0, 1, -camRot);
+        const dotUp = nx * upx + ny * upy;
+        const vn = ship.vx * nx + ship.vy * ny;
+        const impactSpeed = Math.max(0, -vn);
+
+        if (impactSpeed <= GAME.LAND_SPEED && vn < -0.05 && dotUp >= GAME.SURFACE_DOT){
+          ship.state = "landed";
+          ship.vx = 0; ship.vy = 0;
+        } else if (impactSpeed >= GAME.CRASH_SPEED){
+          ship.state = "crashed";
+          ship.explodeT = 0;
+          ship.vx = 0; ship.vy = 0;
+          debris.length = 0;
+          const pieces = 10;
+          for (let i = 0; i < pieces; i++){
+            const ang = Math.random() * Math.PI * 2;
+            const sp = 1.5 + Math.random() * 2.5;
+            debris.push({
+              x: ship.x + Math.cos(ang) * 0.1,
+              y: ship.y + Math.sin(ang) * 0.1,
+              vx: ship.vx + Math.cos(ang) * sp,
+              vy: ship.vy + Math.sin(ang) * sp,
+              a: Math.random() * Math.PI * 2,
+              w: (Math.random() - 0.5) * 4,
+              life: 2.5 + Math.random() * 1.5,
+            });
+          }
+        } else {
+          // no positional correction; rely on velocity response
+
+          if (impactSpeed <= GAME.LAND_SPEED && vn < -0.05 && dotUp >= GAME.SURFACE_DOT){
+            // gentle settle on mostly-horizontal surface
+            ship.vx -= nx * GAME.LAND_PULL * dt;
+            ship.vy -= ny * GAME.LAND_PULL * dt;
+            const tx = -ny;
+            const ty = nx;
+            const vt = ship.vx * tx + ship.vy * ty;
+            ship.vx -= vt * tx * GAME.LAND_FRICTION * dt;
+            ship.vy -= vt * ty * GAME.LAND_FRICTION * dt;
+          } else if (vn < 0){
+            // bounce off the surface with a tiny nudge to avoid sticking
+            const restitution = GAME.BOUNCE_RESTITUTION;
+            ship.vx -= (1 + restitution) * vn * nx;
+            ship.vy -= (1 + restitution) * vn * ny;
+            const fast = speed >= (GAME.LAND_SPEED * 1.2);
+            const push = shipRadius * (fast ? GAME.COLLIDE_PUSH_FAST : 0.02);
+            ship.x += nx * push;
+            ship.y += ny * push;
+          }
+        }
+      }
+    }
+    if (debris.length){
+      for (let i = debris.length - 1; i >= 0; i--){
+        const d = debris[i];
+        const r = Math.hypot(d.x, d.y) || 1;
+        d.vx += (-d.x / r) * GAME.GRAVITY * dt;
+        d.vy += (-d.y / r) * GAME.GRAVITY * dt;
+        d.vx *= Math.max(0, 1 - GAME.DRAG * dt);
+        d.vy *= Math.max(0, 1 - GAME.DRAG * dt);
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.a += d.w * dt;
+        d.life -= dt;
+        if (d.life <= 0) debris.splice(i, 1);
+      }
+    }
+    if (ship.state === "landed"){
+      const left = keys.has("ArrowLeft") || keys.has("a") || keys.has("A");
+      const right = keys.has("ArrowRight") || keys.has("d") || keys.has("D");
+      const thrust = keys.has(" ") || keys.has("Space") || keys.has("ArrowUp") || keys.has("w") || keys.has("W");
+      if (left || right || thrust){
+        ship.state = "flying";
+      }
+    }
+  }
+
+  function draw(){
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    accumulator += dt;
+
+    if (wantRegen){
+      wantRegen = false;
+      regenWorld(currentSeed + 1);
+      resetShip();
+      for (let i = 0; i < vertCount; i++){
+        const x = positions[i * 2];
+        const y = positions[i * 2 + 1];
+        airFlag[i] = airBinaryAtWorld(x, y);
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, airBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(airFlag), gl.STATIC_DRAW);
+    }
+
+    fpsFrames++;
+    if (now - fpsTime >= 500){
+      fps = Math.round((fpsFrames * 1000) / (now - fpsTime));
+      fpsFrames = 0;
+      fpsTime = now;
+    }
+
+    resize();
+
+    const fixed = 1 / 60;
+    const maxSteps = 4;
+    let steps = 0;
+    while (accumulator >= fixed && steps < maxSteps){
+      step(fixed);
+      accumulator -= fixed;
+      steps++;
+    }
+
+    gl.viewport(0,0,canvas.width,canvas.height);
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    const camRot = Math.atan2(ship.x, ship.y || 1e-6);
+
+    gl.useProgram(prog);
+    gl.bindVertexArray(vao);
+
+    // fit circle into viewport (uniform scale) with aspect correction
+    const s = GAME.ZOOM / (CFG.RMAX + CFG.PAD);
+    const aspect = canvas.width / canvas.height;
+    const sx = s / aspect;
+    const sy = s;
+    gl.uniform2f(uScale, sx, sy);
+    gl.uniform2f(uCam, ship.x, ship.y);
+    gl.uniform1f(uRot, camRot);
+
+    gl.drawArrays(gl.TRIANGLES, 0, vertCount);
+
+    gl.bindVertexArray(null);
+
+    // overlay (ship, vectors, debug) is drawn in WebGL below
+    const shipHWorld = 0.7;
+    const shipWWorld = 0.5;
+    const nose = shipHWorld * 0.6;
+    const tail = shipHWorld * 0.4;
+
+    const pos = [];
+    const col = [];
+    let triVerts = 0;
+    let lineVerts = 0;
+    let pointVerts = 0;
+
+    // ship body (upright on screen => rotate by -camRot in world)
+    const local = [
+      [0, nose],
+      [shipWWorld * 0.6, -tail],
+      [0, -tail * 0.6],
+      [-shipWWorld * 0.6, -tail],
+    ];
+    const body = [];
+    const shipRot = -camRot;
+    if (ship.state !== "crashed"){
+      for (const [lx, ly] of local){
+        const [wx, wy] = rot2(lx, ly, shipRot);
+        body.push([ship.x + wx, ship.y + wy]);
+      }
+      pushTri(pos, col, body[0][0], body[0][1], body[1][0], body[1][1], body[2][0], body[2][1], 0.06, 0.08, 0.12, 1);
+      pushTri(pos, col, body[0][0], body[0][1], body[2][0], body[2][1], body[3][0], body[3][1], 0.06, 0.08, 0.12, 1);
+      triVerts += 6;
+
+      // outline
+      pushLine(pos, col, body[0][0], body[0][1], body[1][0], body[1][1], 0.9, 0.9, 0.9, 1);
+      pushLine(pos, col, body[1][0], body[1][1], body[2][0], body[2][1], 0.9, 0.9, 0.9, 1);
+      pushLine(pos, col, body[2][0], body[2][1], body[3][0], body[3][1], 0.9, 0.9, 0.9, 1);
+      pushLine(pos, col, body[3][0], body[3][1], body[0][0], body[0][1], 0.9, 0.9, 0.9, 1);
+      lineVerts += 8;
+    }
+
+    const lefting = keys.has("ArrowLeft") || keys.has("a") || keys.has("A");
+    const righting = keys.has("ArrowRight") || keys.has("d") || keys.has("D");
+    const thrusting = keys.has(" ") || keys.has("Space") || keys.has("ArrowUp") || keys.has("w") || keys.has("W");
+    const downing = keys.has("ArrowDown") || keys.has("s") || keys.has("S");
+
+    const thrustV = (dx, dy, r, g, b, extraOffset = 0) => {
+      const mag = Math.hypot(dx, dy) || 1;
+      const ux = -dx / mag;
+      const uy = -dy / mag;
+      const len = shipHWorld * 0.28;
+      const spread = shipHWorld * 0.12;
+      const px = -uy;
+      const py = ux;
+      const offset = shipHWorld * 0.55 + extraOffset;
+      const tipx = ux * len;
+      const tipy = uy * len;
+      const b1x = -ux * len * 0.45 + px * spread;
+      const b1y = -uy * len * 0.45 + py * spread;
+      const b2x = -ux * len * 0.45 - px * spread;
+      const b2y = -uy * len * 0.45 - py * spread;
+      const [tx, ty] = rot2(tipx + ux * offset, tipy + uy * offset, shipRot);
+      const [p1x, p1y] = rot2(b1x + ux * offset, b1y + uy * offset, shipRot);
+      const [p2x, p2y] = rot2(b2x + ux * offset, b2y + uy * offset, shipRot);
+      pushLine(pos, col, ship.x + p1x, ship.y + p1y, ship.x + tx, ship.y + ty, r, g, b, 1);
+      pushLine(pos, col, ship.x + p2x, ship.y + p2y, ship.x + tx, ship.y + ty, r, g, b, 1);
+      lineVerts += 4;
+    };
+
+    if (ship.state !== "crashed"){
+      const tc = [1.0, 0.55, 0.15];
+      if (thrusting) thrustV(0, 1, tc[0], tc[1], tc[2]);
+      if (downing) thrustV(0, -1, tc[0], tc[1], tc[2], shipHWorld * 0.08);
+      if (lefting) thrustV(-1, 0, tc[0], tc[1], tc[2]);
+      if (righting) thrustV(1, 0, tc[0], tc[1], tc[2]);
+    }
+
+    // velocity vector
+    if (ship.state !== "crashed"){
+      const vscale = 0.35;
+      pushLine(pos, col, ship.x, ship.y, ship.x + ship.vx * vscale, ship.y + ship.vy * vscale, 0.5, 0.84, 1.0, 1);
+      lineVerts += 2;
+    }
+
+    // explosion
+    if (ship.state === "crashed"){
+      ship.explodeT = Math.min(1.2, ship.explodeT + dt * 0.9);
+      const t = ship.explodeT;
+      const radius = shipHWorld * (0.6 + t * 1.6);
+      const alpha = Math.max(0, 1 - t);
+      const seg = 28;
+      for (let i = 0; i < seg; i++){
+        const a0 = (i / seg) * Math.PI * 2;
+        const a1 = ((i + 1) / seg) * Math.PI * 2;
+        const r0 = radius * (0.85 + 0.2 * Math.sin(t * 8 + i));
+        const r1 = radius * (0.85 + 0.2 * Math.sin(t * 8 + i + 1));
+        const x0 = ship.x + Math.cos(a0) * r0;
+        const y0 = ship.y + Math.sin(a0) * r0;
+        const x1 = ship.x + Math.cos(a1) * r1;
+        const y1 = ship.y + Math.sin(a1) * r1;
+        pushLine(pos, col, x0, y0, x1, y1, 1.0, 0.72, 0.3, 0.9 * alpha);
+        lineVerts += 2;
+      }
+      // cross sparks
+      pushLine(pos, col, ship.x - radius * 0.7, ship.y, ship.x + radius * 0.7, ship.y, 1.0, 0.85, 0.4, 0.6 * alpha);
+      pushLine(pos, col, ship.x, ship.y - radius * 0.7, ship.x, ship.y + radius * 0.7, 1.0, 0.85, 0.4, 0.6 * alpha);
+      lineVerts += 4;
+    }
+
+    // debris
+    if (debris.length){
+      for (const d of debris){
+        const len = shipHWorld * 0.18;
+        const hx = Math.cos(d.a) * len;
+        const hy = Math.sin(d.a) * len;
+        pushLine(pos, col, d.x - hx, d.y - hy, d.x + hx, d.y + hy, 0.9, 0.9, 0.9, 0.9);
+        lineVerts += 2;
+      }
+    }
+
+    // collision debug points
+    if (debugCollisions && ship._samples){
+      for (const [sxw, syw, air, av] of ship._samples){
+        pos.push(sxw, syw);
+        if (air) col.push(0.45, 1.0, 0.55, 0.9);
+        else col.push(1.0, 0.3, 0.3, 0.9);
+        pointVerts += 1;
+      }
+    }
+    if (debugCollisions && ship._collision){
+      const c = ship._collision;
+      // collision point
+      pos.push(c.x, c.y);
+      col.push(1.0, 0.95, 0.2, 1.0);
+      pointVerts += 1;
+      // boundary triangle
+      if (c.tri){
+        const a = c.tri[0], b = c.tri[1], d = c.tri[2];
+        pushLine(pos, col, a.x, a.y, b.x, b.y, 1.0, 0.4, 0.2, 0.8);
+        pushLine(pos, col, b.x, b.y, d.x, d.y, 1.0, 0.4, 0.2, 0.8);
+        pushLine(pos, col, d.x, d.y, a.x, a.y, 1.0, 0.4, 0.2, 0.8);
+        lineVerts += 6;
+      }
+      // nearest node
+      if (c.node){
+        pos.push(c.node.x, c.node.y);
+        col.push(0.2, 0.9, 1.0, 0.9);
+        pointVerts += 1;
+      }
+    }
+
+    // planet node points (ring vertices)
+    if (debugCollisions && GAME.DEBUG_NODES){
+      for (const ring of rings){
+        for (const v of ring){
+          pos.push(v.x, v.y);
+          col.push(0.95, 0.8, 0.2, 0.6);
+          pointVerts += 1;
+        }
+      }
+    }
+
+    gl.useProgram(oprog);
+    gl.bindVertexArray(oVao);
+    gl.uniform2f(ouScale, sx, sy);
+    gl.uniform2f(ouCam, ship.x, ship.y);
+    gl.uniform1f(ouRot, camRot);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, oPos);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, oCol);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(col), gl.DYNAMIC_DRAW);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    if (triVerts > 0){
+      gl.drawArrays(gl.TRIANGLES, 0, triVerts);
+    }
+    let offset = triVerts;
+    if (lineVerts > 0){
+      gl.drawArrays(gl.LINES, offset, lineVerts);
+      offset += lineVerts;
+    }
+    if (pointVerts > 0){
+      gl.drawArrays(gl.POINTS, offset, pointVerts);
+    }
+
+    gl.bindVertexArray(null);
+    gl.disable(gl.BLEND);
+
+    hud.textContent =
+      `fps: ${fps} | state: ${ship.state} | speed: ${Math.hypot(ship.vx, ship.vy).toFixed(2)} | verts: ${vertCount.toLocaleString()} | air: ${finalAir.toFixed(3)} | M: new map | C: debug collisions | R: restart`;
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+})();
+</script>
+</body>
+</html>
