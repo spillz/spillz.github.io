@@ -843,6 +843,19 @@
     return airBinaryAtWorld(x, y);
   }
 
+  function shipCollidesAt(x, y, shipRadius){
+    const rCenter = Math.hypot(x, y);
+    if (rCenter - shipRadius > CFG.RMAX) return false;
+    for (let i = 0; i < 6; i++){
+      const a = (i / 6) * Math.PI * 2;
+      const sx = x + Math.cos(a) * shipRadius;
+      const sy = y + Math.sin(a) * shipRadius;
+      const av = airValueAtWorld(sx, sy);
+      if (av <= 0.5) return true;
+    }
+    return false;
+  }
+
   let lastTime = performance.now();
   let accumulator = 0;
   let fpsTime = lastTime;
@@ -949,18 +962,43 @@
         const gdx = airValueAtWorld(ship.x + eps, ship.y) - airValueAtWorld(ship.x - eps, ship.y);
         const gdy = airValueAtWorld(ship.x, ship.y + eps) - airValueAtWorld(ship.x, ship.y - eps);
         const gmag = Math.hypot(gdx, gdy) / (2 * eps);
-        const inv = 1 / (Math.hypot(gdx, gdy) || 1);
-        const nx = gdx * inv;
-        const ny = gdy * inv;
+        let nx = gdx;
+        let ny = gdy;
+        let nlen = Math.hypot(nx, ny);
+        if (nlen < 1e-4){
+          const c = ship._collision;
+          if (c){
+            nx = ship.x - c.x;
+            ny = ship.y - c.y;
+            nlen = Math.hypot(nx, ny);
+          }
+        }
+        if (nlen < 1e-4){
+          nx = ship.x;
+          ny = ship.y;
+          nlen = Math.hypot(nx, ny) || 1;
+        }
+        nx /= nlen;
+        ny /= nlen;
         const camRot = Math.atan2(ship.x, ship.y || 1e-6);
         const [upx, upy] = rot2(0, 1, -camRot);
         const dotUp = nx * upx + ny * upy;
         const vn = ship.vx * nx + ship.vy * ny;
         const impactSpeed = Math.max(0, -vn);
+        const resolvePenetration = () => {
+          const maxSteps = 8;
+          const stepSize = shipRadius * 0.2;
+          for (let i = 0; i < maxSteps; i++){
+            if (!shipCollidesAt(ship.x, ship.y, shipRadius)) break;
+            ship.x += nx * stepSize;
+            ship.y += ny * stepSize;
+          }
+        };
 
         if (impactSpeed <= GAME.LAND_SPEED && vn < -0.05 && dotUp >= GAME.SURFACE_DOT){
           ship.state = "landed";
           ship.vx = 0; ship.vy = 0;
+          resolvePenetration();
         } else if (impactSpeed >= GAME.CRASH_SPEED){
           ship.state = "crashed";
           ship.explodeT = 0;
@@ -992,6 +1030,7 @@
             const vt = ship.vx * tx + ship.vy * ty;
             ship.vx -= vt * tx * GAME.LAND_FRICTION * dt;
             ship.vy -= vt * ty * GAME.LAND_FRICTION * dt;
+            resolvePenetration();
           } else if (vn < 0){
             // bounce off the surface with a tiny nudge to avoid sticking
             const restitution = GAME.BOUNCE_RESTITUTION;
@@ -1001,6 +1040,7 @@
             const push = shipRadius * (fast ? GAME.COLLIDE_PUSH_FAST : 0.02);
             ship.x += nx * push;
             ship.y += ny * push;
+            resolvePenetration();
           }
         }
       }
