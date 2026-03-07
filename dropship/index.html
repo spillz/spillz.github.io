@@ -9,6 +9,9 @@
   <link rel="manifest" href="/dropship/manifest.webmanifest" />
   <meta charset="utf-8" />
   <title>Dropship</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Science+Gothic:wght@100..900&display=swap" rel="stylesheet" />
   <style>
     html,body { margin:0; height:100%; background:#000; }
     #gl, #overlay {
@@ -21,13 +24,59 @@
       font: 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       background: rgba(0,0,0,0.35); padding:8px 10px; border:1px solid #111; border-radius:8px;
     }
+    #planet-label {
+      position: fixed; right: 16px; bottom: 12px;
+      color: #dbe7ff; letter-spacing: 0.04em;
+      font: 600 20px "Science Gothic", ui-sans-serif, system-ui, sans-serif;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      pointer-events: none; user-select: none;
+    }
+    #objective-label {
+      position: fixed; left: 16px; bottom: 12px;
+      color: #e8f0ff; letter-spacing: 0.03em;
+      font: 600 18px "Science Gothic", ui-sans-serif, system-ui, sans-serif;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      pointer-events: none; user-select: none;
+    }
+    #heat-meter {
+      position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+      display: none; padding: 6px 10px;
+      color: #fff; letter-spacing: 0.12em; text-transform: uppercase;
+      font: 700 14px "Science Gothic", ui-sans-serif, system-ui, sans-serif;
+      background: rgba(0,0,0,0.35); border: 1px solid #111; border-radius: 8px;
+      pointer-events: none; user-select: none; text-align: center;
+    }
+    #heat-meter .heat-bar {
+      width: 220px; height: 6px; margin-top: 6px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px; overflow: hidden;
+    }
+    #heat-meter .heat-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #ffffff, #ff3b1f);
+    }
+    #heat-meter.heat-flash {
+      animation: heatFlash 0.6s infinite;
+    }
+    @keyframes heatFlash {
+      0% { color: #ffffff; box-shadow: 0 0 0 rgba(255,59,31,0.0); }
+      50% { color: #ff3b1f; box-shadow: 0 0 12px rgba(255,59,31,0.45); }
+      100% { color: #ffffff; box-shadow: 0 0 0 rgba(255,59,31,0.0); }
+    }
   </style>
-  <script type="module" crossorigin src="/dropship/assets/index--eTNMBSB.js"></script>
+  <script type="module" crossorigin src="/dropship/assets/index-zbG446el.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
 <canvas id="overlay"></canvas>
 <div id="hud"></div>
+<div id="planet-label"></div>
+<div id="objective-label"></div>
+<div id="heat-meter">
+  <div class="heat-text">Heat 0</div>
+  <div class="heat-bar"><div class="heat-bar-fill"></div></div>
+</div>
 
 </body>
 </html>
