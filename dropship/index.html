@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="manifest" href="/dropship/manifest.webmanifest" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <meta charset="utf-8" />
   <title>Dropship</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,7 +20,7 @@
     }
     #overlay { pointer-events:none; }
     #hud {
-      position:fixed; left:12px; top:10px; color:#ddd;
+      position:fixed; left:12px; top:46px; color:#ddd;
       font: 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       background: rgba(0,0,0,0.35); padding:8px 10px; border:1px solid #111; border-radius:8px;
     }
@@ -29,6 +29,7 @@
       color: #dbe7ff; letter-spacing: 0.04em;
       font: 600 20px "Science Gothic", ui-sans-serif, system-ui, sans-serif;
       text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      text-align: right;
       pointer-events: none; user-select: none;
     }
     #objective-label {
@@ -37,6 +38,23 @@
       font: 600 18px "Science Gothic", ui-sans-serif, system-ui, sans-serif;
       text-shadow: 0 2px 10px rgba(0,0,0,0.6);
       pointer-events: none; user-select: none;
+    }
+    #ship-status-label {
+      position: fixed; left: 16px; top: 12px;
+      color: #e8f0ff; letter-spacing: 0.03em;
+      font: 600 18px "Science Gothic", ui-sans-serif, system-ui, sans-serif;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      pointer-events: none; user-select: none;
+    }
+    @media (max-width: 900px) {
+      #objective-label,
+      #planet-label,
+      #ship-status-label {
+        max-width: 44vw;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.15;
+      }
     }
     #heat-meter {
       position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
@@ -65,7 +83,7 @@
       100% { color: #ffffff; box-shadow: 0 0 0 rgba(255,59,31,0.0); }
     }
   </style>
-  <script type="module" crossorigin src="/dropship/assets/index-zbG446el.js"></script>
+  <script type="module" crossorigin src="./assets/index-Cz1l890D.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
@@ -73,6 +91,7 @@
 <div id="hud"></div>
 <div id="planet-label"></div>
 <div id="objective-label"></div>
+<div id="ship-status-label"></div>
 <div id="heat-meter">
   <div class="heat-text">Heat 0</div>
   <div class="heat-bar"><div class="heat-bar-fill"></div></div>
