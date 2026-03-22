@@ -37,7 +37,7 @@
       font: 600 clamp(10px, 1.4vw, 13px)/1.2 "Science Gothic", ui-sans-serif, system-ui, sans-serif;
       background: rgba(0,0,0,0.35); padding:8px 10px; border:1px solid #111; border-radius:8px;
       max-width: min(95vw, 1100px);
-      white-space: normal;
+      white-space: pre-line;
       overflow-wrap: anywhere;
       pointer-events: none;
       user-select: none;
@@ -92,6 +92,26 @@
         max-width: min(62vw, 500px);
       }
     }
+    #signal-meter {
+      position: fixed; left: 50%; top: var(--ui-top); transform: translateX(-50%);
+      display: none; padding: 6px 10px;
+      color: #e8f0ff; letter-spacing: 0.12em; text-transform: uppercase;
+      font: 700 clamp(11px, 1.7vw, 14px) "Science Gothic", ui-sans-serif, system-ui, sans-serif;
+      background: rgba(0,0,0,0.35); border: 1px solid #111; border-radius: 8px;
+      pointer-events: none; user-select: none; text-align: center;
+      z-index: 9;
+    }
+    #signal-meter .signal-bar {
+      width: min(34vw, 180px); height: 6px; margin-top: 6px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px; overflow: hidden;
+    }
+    #signal-meter .signal-bar-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #a88716, #fad940);
+      transition: width 180ms ease-out;
+    }
     #heat-meter {
       position: fixed; left: 50%; bottom: var(--ui-bottom); transform: translateX(-50%);
       display: none; padding: 6px 10px;
@@ -102,7 +122,7 @@
       z-index: 9;
     }
     #heat-meter .heat-bar {
-      width: min(44vw, 220px); height: 6px; margin-top: 6px;
+      width: min(34vw, 180px); height: 6px; margin-top: 6px;
       background: rgba(255,255,255,0.12);
       border: 1px solid rgba(255,255,255,0.25);
       border-radius: 6px; overflow: hidden;
@@ -120,7 +140,7 @@
       100% { color: #ffffff; box-shadow: 0 0 0 rgba(255,59,31,0.0); }
     }
   </style>
-  <script type="module" crossorigin src="/dropship-testing/assets/index-DXUwmteS.js"></script>
+  <script type="module" crossorigin src="/dropship-testing/assets/index-B0TBEv_F.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
@@ -129,8 +149,12 @@
 <div id="planet-label"></div>
 <div id="objective-label"></div>
 <div id="ship-status-label"></div>
+<div id="signal-meter">
+  <div class="signal-text">Signal</div>
+  <div class="signal-bar"><div class="signal-bar-fill"></div></div>
+</div>
 <div id="heat-meter">
-  <div class="heat-text">Heat 0</div>
+  <div class="heat-text">Heat</div>
   <div class="heat-bar"><div class="heat-bar-fill"></div></div>
 </div>
 
