@@ -65,8 +65,17 @@
       max-width: min(50vw, 720px);
       white-space: pre-line;
       overflow-wrap: anywhere;
+      text-align: left;
+      transform: none;
       pointer-events: none; user-select: none;
       z-index: 9;
+    }
+    #objective-label.objective-centered {
+      left: 50%;
+      bottom: max(calc(var(--ui-bottom) + 48px), 15dvh);
+      max-width: min(66vw, 860px);
+      text-align: center;
+      transform: translateX(-50%);
     }
     #ship-status-label {
       position: fixed; left: var(--ui-left); top: var(--ui-top);
@@ -85,6 +94,7 @@
     }
     @media (max-width: 900px) {
       #objective-label, #planet-label { max-width: min(47vw, 360px); }
+      #objective-label.objective-centered { max-width: min(72vw, 520px); }
       #ship-status-label { max-width: min(74vw, 560px); }
       #hud { top: calc(var(--ui-top) + 46px); }
       body.help-touch-visible #ship-status-label {
@@ -140,7 +150,7 @@
       100% { color: #ffffff; box-shadow: 0 0 0 rgba(255,59,31,0.0); }
     }
   </style>
-  <script type="module" crossorigin src="/dropship-testing/assets/index-B11NQCoE.js"></script>
+  <script type="module" crossorigin src="/dropship-testing/assets/index-7W2ly5iN.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
