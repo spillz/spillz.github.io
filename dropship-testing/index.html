@@ -80,6 +80,9 @@
     body.dashboard-visible #objective-label.objective-centered {
       max-width: min(var(--dashboard-center-width, 66vw), 860px);
     }
+    body.dashboard-visible.help-touch-visible.touch-docked-visible #objective-label.objective-centered {
+      bottom: max(calc(var(--ui-bottom) + 82px), 19dvh);
+    }
     #ship-status-label {
       position: fixed; left: var(--ui-left); top: var(--ui-top);
       color: #e8f0ff; letter-spacing: 0.03em;
@@ -101,6 +104,9 @@
       body.dashboard-visible #objective-label.objective-centered {
         max-width: min(var(--dashboard-center-width, 72vw), 520px);
       }
+      body.dashboard-visible.help-touch-visible.touch-docked-visible #objective-label.objective-centered {
+        bottom: max(calc(var(--ui-bottom) + 86px), 18dvh);
+      }
       #ship-status-label { max-width: min(74vw, 560px); }
       #hud { top: calc(var(--ui-top) + 46px); }
       body.help-touch-visible #ship-status-label {
@@ -117,6 +123,9 @@
       }
       body.dashboard-visible #objective-label.objective-centered {
         max-width: min(var(--dashboard-center-width, 80vw), 420px);
+      }
+      body.dashboard-visible.help-touch-visible.touch-docked-visible #objective-label.objective-centered {
+        bottom: max(calc(var(--ui-bottom) + 94px), 16dvh);
       }
     }
     #signal-meter {
@@ -167,7 +176,7 @@
       100% { color: #ffffff; box-shadow: 0 0 0 rgba(255,59,31,0.0); }
     }
   </style>
-  <script type="module" crossorigin src="/dropship-testing/assets/index-xIQ312_Y.js"></script>
+  <script type="module" crossorigin src="/dropship-testing/assets/index-C8KbvpyS.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
