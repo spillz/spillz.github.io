@@ -8,7 +8,7 @@ const MESSAGE_START_SECONDS = 42;
 const SUNSET_SECONDS = 96;
 const BRANCH_LIMIT = 280;
 const LEAF_LIMIT = 720;
-const FLOWER_LIMIT = 110;
+const FLOWER_LIMIT = 200;
 const MESSAGE_PETAL_LIMIT = 3000;
 
 let width = 0;
@@ -21,6 +21,7 @@ let leaves = [];
 let buds = [];
 let clouds = [];
 let messagePetals = [];
+let messageTextLines = [];
 
 function mulberry32(seed) {
   return function random() {
@@ -196,6 +197,8 @@ function addFoliage(branch, random) {
       side: random() < 0.5 ? -1 : 1,
       size: lerp(18, 42, random()) * Math.max(0.72, 1.15 - branch.depth * 0.045),
       tilt: lerp(-0.75, 0.75, random()),
+      curl: lerp(-0.34, 0.34, random()),
+      stem: lerp(0.1, 0.24, random()),
       birth: branch.birth + branch.duration * u + lerp(1.4, 7.6, random()),
       color: random() < 0.5 ? "#2f8f47" : random() < 0.78 ? "#4aaa52" : "#7ac45a",
     });
@@ -210,6 +213,8 @@ function addFoliage(branch, random) {
       birth: branch.birth + branch.duration + lerp(4, 13, random()),
       hue,
       rotation: random() * Math.PI * 2,
+      lean: lerp(-0.28, 0.28, random()),
+      cup: lerp(0.82, 1.18, random()),
     });
   }
 }
@@ -285,6 +290,8 @@ function generateGrowth() {
       phase: random() * Math.PI * 2,
     });
   }
+
+  buds.sort((a, b) => branchPoint(a.branch, a.u).y - branchPoint(b.branch, b.u).y);
 }
 
 function generatePetalMessage() {
@@ -314,9 +321,16 @@ function generatePetalMessage() {
     y = Math.max(titleSize, (groundHeight - totalTextHeight) * 0.5 + titleSize * 0.5);
   }
 
+  messageTextLines = [];
   for (const line of lines) {
-    textCtx.font = `${line.weight} ${line.size}px Georgia, "Times New Roman", serif`;
+    textCtx.font = `${line.weight} ${line.size}px Georgia Bold, "Times New Roman", serif`;
     textCtx.fillText(line.text, pixelWidth * 0.5, y, pixelWidth * 0.94);
+    messageTextLines.push({
+      ...line,
+      x: pixelWidth * 0.5,
+      y: soilY + y,
+      maxWidth: pixelWidth * 0.94,
+    });
     y += line.size * 0.9 + lineGap;
   }
 
@@ -377,39 +391,7 @@ function generatePetalMessage() {
     }
   }
 
-  const selected = [];
-  const count = Math.min(MESSAGE_PETAL_LIMIT, candidates.length);
-  if (count > 0) {
-    const binsX = Math.ceil(Math.sqrt(count * (width / Math.max(1, groundHeight))));
-    const binsY = Math.ceil(count / binsX);
-    const bins = Array.from({ length: binsX * binsY }, () => []);
-
-    for (const candidate of candidates) {
-      const bx = clamp(Math.floor((candidate.x / pixelWidth) * binsX), 0, binsX - 1);
-      const by = clamp(Math.floor((candidate.y / pixelHeight) * binsY), 0, binsY - 1);
-      bins[by * binsX + bx].push(candidate);
-    }
-
-    for (const bin of bins) {
-      if (bin.length > 0 && selected.length < count) {
-        selected.push(bin[Math.floor(random() * bin.length)]);
-      }
-    }
-
-    let pass = 0;
-    while (selected.length < count && pass < 4) {
-      for (const bin of bins) {
-        if (bin.length > 1 && selected.length < count) {
-          selected.push(bin[Math.floor(random() * bin.length)]);
-        }
-      }
-      pass += 1;
-    }
-
-    while (selected.length < count) {
-      selected.push(candidates[Math.floor(random() * candidates.length)]);
-    }
-  }
+  const selected = selectEvenMaskPoints(candidates, Math.min(MESSAGE_PETAL_LIMIT, candidates.length), pixelWidth, pixelHeight);
 
   const flowerSources = buds.map((bud) => {
     const point = branchPoint(bud.branch, bud.u);
@@ -422,11 +404,15 @@ function generatePetalMessage() {
     };
   });
   const fallbackSource = { x: width * 0.5, y: soilY - height * 0.32, radius: 36, angle: -Math.PI / 2, matureAt: MESSAGE_START_SECONDS };
+  const sourceUseCounts = new Array(Math.max(1, flowerSources.length)).fill(0);
 
   messagePetals = selected.map((point, index) => {
-    const source = flowerSources.length > 0 ? flowerSources[index % flowerSources.length] : fallbackSource;
-    const sourceRadius = source.radius * Math.sqrt(random());
-    const sourceAngle = random() * Math.PI * 2;
+    const sourceIndex = flowerSources.length > 0 ? index % flowerSources.length : 0;
+    const source = flowerSources.length > 0 ? flowerSources[sourceIndex] : fallbackSource;
+    const sourceCount = sourceUseCounts[sourceIndex];
+    sourceUseCounts[sourceIndex] += 1;
+    const sourceAngle = sourceCount * 2.399963229728653 + sourceIndex * 0.37;
+    const sourceRadius = source.radius * Math.sqrt(((sourceCount * 0.61803398875) % 1) * 0.86 + 0.08);
     const targetX = point.x + lerp(-0.45, 0.45, random());
     const targetY = soilY + point.y + lerp(-0.4, 0.4, random());
     return {
@@ -443,6 +429,59 @@ function generatePetalMessage() {
       phase: random() * Math.PI * 2,
     };
   });
+}
+
+function selectEvenMaskPoints(candidates, count, pixelWidth, pixelHeight) {
+  if (count <= 0 || candidates.length === 0) {
+    return [];
+  }
+  if (count >= candidates.length) {
+    return candidates.slice();
+  }
+
+  const selected = [];
+  const taken = new Uint8Array(candidates.length);
+  const nearest = new Float32Array(candidates.length);
+  nearest.fill(Number.POSITIVE_INFINITY);
+
+  const seedIndex = candidates.reduce((best, candidate, index) => (candidate.alpha > candidates[best].alpha ? index : best), 0);
+  let currentIndex = seedIndex;
+
+  for (let selectedCount = 0; selectedCount < count; selectedCount += 1) {
+    const current = candidates[currentIndex];
+    selected.push(current);
+    taken[currentIndex] = 1;
+
+    let farthestIndex = -1;
+    let farthestScore = -1;
+    for (let i = 0; i < candidates.length; i += 1) {
+      if (taken[i]) {
+        continue;
+      }
+
+      const candidate = candidates[i];
+      const dx = (candidate.x - current.x) / pixelWidth;
+      const dy = (candidate.y - current.y) / pixelHeight;
+      const distance = dx * dx + dy * dy;
+      if (distance < nearest[i]) {
+        nearest[i] = distance;
+      }
+
+      const edgePreference = 0.82 + (candidate.alpha / 255) * 0.18;
+      const score = nearest[i] * edgePreference;
+      if (score > farthestScore) {
+        farthestScore = score;
+        farthestIndex = i;
+      }
+    }
+
+    if (farthestIndex < 0) {
+      break;
+    }
+    currentIndex = farthestIndex;
+  }
+
+  return selected;
 }
 
 function resize() {
@@ -596,22 +635,35 @@ function drawLeaf(leaf, time) {
 
   const progress = smooth((time - leaf.birth) / 8);
   const point = branchPoint(leaf.branch, leaf.u);
-  const angle = branchTangent(leaf.branch, leaf.u) + leaf.side * (Math.PI * 0.58 + leaf.tilt * 0.3);
+  const stemAngle = branchTangent(leaf.branch, leaf.u) + leaf.side * (Math.PI * 0.5 + leaf.tilt * 0.22);
+  const leafAngle = stemAngle + leaf.side * (0.24 + leaf.curl * progress);
   const size = leaf.size * lerp(0.15, 1, progress);
+  const stemLength = size * leaf.stem;
 
   ctx.save();
   ctx.translate(point.x, point.y);
-  ctx.rotate(angle);
+  ctx.rotate(stemAngle);
+  ctx.strokeStyle = "rgba(38, 103, 37, 0.58)";
+  ctx.lineWidth = Math.max(0.7, size * 0.035);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(stemLength * 0.45, leaf.side * size * 0.035, stemLength, 0);
+  ctx.stroke();
+  ctx.translate(stemLength, 0);
+  ctx.rotate(leafAngle - stemAngle);
   ctx.fillStyle = leaf.color;
   ctx.strokeStyle = "rgba(20, 80, 33, 0.32)";
   ctx.lineWidth = 0.7;
   ctx.beginPath();
-  ctx.ellipse(size * 0.42, 0, size * 0.62, size * 0.22, 0, 0, Math.PI * 2);
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(size * 0.26, -size * 0.3, size * 0.78, -size * 0.2, size * 1.02, 0);
+  ctx.bezierCurveTo(size * 0.72, size * 0.3, size * 0.25, size * 0.24, 0, 0);
   ctx.fill();
   ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.lineTo(size * 0.82, 0);
+  ctx.quadraticCurveTo(size * 0.42, leaf.curl * size * 0.08, size * 0.94, 0);
   ctx.strokeStyle = "rgba(236, 255, 211, 0.28)";
   ctx.stroke();
   ctx.restore();
@@ -628,71 +680,141 @@ function drawBud(bud, time) {
 
   const point = branchPoint(bud.branch, bud.u);
   const angle = branchTangent(bud.branch, bud.u);
-  const budProgress = smooth((time - (bud.birth - 8)) / 8);
-  const bloom = smooth((time - bud.birth) / 18);
-  const size = bud.size * lerp(0.42, 1, budProgress);
+  const emerge = smooth((time - (bud.birth - 8)) / 8);
+  const open = smooth((time - (bud.birth - 2)) / 9);
+  const sphere = smooth((time - (bud.birth + 7)) / 10);
+  const petals = smooth((time - (bud.birth + 13)) / 18);
+  const size = bud.size * lerp(0.42, 1, emerge);
+  const openAngle = lerp(0.06, 1.34, open);
+  const coreRadius = size * lerp(0.06, 0.34, sphere);
+  const coreY = -size * lerp(0.16, 0.03, sphere);
 
   ctx.save();
   ctx.translate(point.x, point.y);
-  ctx.rotate(angle + Math.PI / 2);
+  ctx.rotate(angle + Math.PI / 2 + bud.lean * petals);
 
-  ctx.fillStyle = "#377f37";
-  for (let i = 0; i < 5; i += 1) {
+  const shellFall = smooth(clamp((sphere - 0.35) / 0.42, 0, 1));
+  const shellFade = 1 - smooth(clamp((sphere - 0.78) / 0.22, 0, 1));
+  const shellAlpha = shellFade;
+
+  ctx.globalAlpha = shellAlpha;
+  ctx.fillStyle = "#327b35";
+  for (let i = 0; i < 3; i += 1) {
     ctx.save();
-    ctx.rotate((i / 5) * Math.PI * 2 + bud.rotation);
+    const shellSide = Math.cos((i / 3) * Math.PI * 2 + bud.rotation) < 0 ? -1 : 1;
+    ctx.translate(shellSide * size * (0.08 * open + 0.1 * shellFall), size * 0.32 * shellFall);
+    ctx.rotate((i / 3) * Math.PI * 2 + bud.rotation + open * 0.12 + shellSide * shellFall * 0.45);
     ctx.beginPath();
-    ctx.ellipse(0, -size * 0.22, size * 0.13, size * 0.36, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -size * lerp(0.25, 0.42, open), size * 0.09, size * lerp(0.34, 0.5, open), open * 0.26, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
+  ctx.globalAlpha = 1;
 
-  if (bloom < 0.06) {
-    ctx.fillStyle = `hsl(${bud.hue}, 68%, 62%)`;
-    ctx.beginPath();
-    ctx.ellipse(0, -size * 0.1, size * 0.28, size * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    drawCarnation(size, bloom, bud.hue, bud.rotation);
+  if (sphere > 0.02) {
+    ctx.save();
+    ctx.translate(0, coreY);
+    drawBudPetals(size, petals, bud.hue, bud.rotation, bud.cup, coreRadius);
+    ctx.restore();
   }
-  ctx.restore();
-}
 
-function drawCarnation(size, bloom, hue, rotation) {
-  const openSize = size * lerp(0.35, 1.35, bloom);
-  for (let layer = 0; layer < 2; layer += 1) {
-    const count = 7 + layer * 4;
-    const radius = openSize * lerp(0.16, 0.55, layer);
-    const petalSize = openSize * lerp(0.38, 0.26, layer);
-    ctx.fillStyle = `hsl(${hue + layer * 5}, ${72 + layer * 3}%, ${64 + layer * 4}%)`;
-    ctx.strokeStyle = `hsla(${hue - 8}, 72%, 45%, 0.22)`;
-    ctx.lineWidth = 0.6;
-    for (let i = 0; i < count; i += 1) {
-      const a = rotation + (i / count) * Math.PI * 2 + layer * 0.35;
-      const wobble = 1 + Math.sin(i * 2.1 + rotation) * 0.12;
+  if (sphere > 0.02) {
+    ctx.fillStyle = `hsl(${bud.hue}, 72%, 66%)`;
+    ctx.strokeStyle = `hsla(${bud.hue - 12}, 58%, 38%, 0.28)`;
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.arc(0, coreY, coreRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  if (shellAlpha > 0.02) {
+    ctx.globalAlpha = shellAlpha;
+    ctx.fillStyle = "#3b8a3b";
+    ctx.strokeStyle = "rgba(25, 86, 31, 0.32)";
+    for (let side = -1; side <= 1; side += 2) {
       ctx.save();
-      ctx.translate(Math.cos(a) * radius, Math.sin(a) * radius);
-      ctx.rotate(a + Math.PI / 2);
+      ctx.translate(side * size * (0.1 + 0.18 * open + 0.16 * shellFall), size * 0.46 * shellFall);
+      ctx.rotate(side * (openAngle + shellFall * 0.7));
       ctx.beginPath();
-      ctx.moveTo(0, -petalSize * 0.54 * wobble);
-      ctx.bezierCurveTo(petalSize * 0.45, -petalSize * 0.45, petalSize * 0.58, petalSize * 0.18, 0, petalSize * 0.52);
-      ctx.bezierCurveTo(-petalSize * 0.58, petalSize * 0.16, -petalSize * 0.45, -petalSize * 0.46, 0, -petalSize * 0.54 * wobble);
+      ctx.moveTo(0, size * 0.22);
+      ctx.bezierCurveTo(side * size * 0.18, size * 0.02, side * size * 0.22, -size * 0.36, side * size * 0.06, -size * 0.55);
+      ctx.bezierCurveTo(side * size * 0.01, -size * 0.28, side * size * 0.02, -size * 0.02, 0, size * 0.22);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
       ctx.restore();
     }
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+function drawBudPetals(size, openness, hue, rotation, cup = 1, coreRx = 0) {
+  for (let layer = 0; layer < 2; layer += 1) {
+    const count = 7 + layer * 4;
+    const layerOpen = smooth(clamp((openness - layer * 0.14) / 0.86, 0, 1));
+    if (layerOpen <= 0) {
+      continue;
+    }
+    const petalSize = size * lerp(layer === 0 ? 0.12 : 0.08, layer === 0 ? 0.46 : 0.43, layerOpen) * cup;
+    const radius = layer === 0
+      ? lerp(coreRx * 0.28, size * 0.15, layerOpen)
+      : lerp(coreRx * 0.55, size * 0.35, layerOpen);
+    ctx.fillStyle = `hsl(${hue + layer * 5}, ${72 + layer * 3}%, ${64 + layer * 4}%)`;
+    ctx.strokeStyle = `hsla(${hue - 8}, 72%, 45%, 0.22)`;
+    ctx.lineWidth = 0.6;
+    for (let i = 0; i < count; i += 1) {
+      const folded = (1 - layerOpen) * 0.72;
+      const a = rotation + (i / count) * Math.PI * 2 + layer * 0.35 + Math.sin(i * 1.7 + rotation) * folded;
+      const petalLength = petalSize * lerp(0.8, 1.7, layerOpen);
+      const petalWidth = petalSize * lerp(0.34, 0.5, layerOpen);
+      ctx.save();
+      ctx.translate(Math.cos(a) * radius, Math.sin(a) * radius);
+      ctx.rotate(a + Math.PI / 2 + Math.sin(i + rotation) * (1 - layerOpen) * 0.55);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, petalLength, petalWidth, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+function drawPetalTextShadow(time) {
+  const fade = smooth((time - (MESSAGE_START_SECONDS + 25)) / 11);
+  if (fade <= 0 || messageTextLines.length === 0) {
+    return;
   }
 
-  ctx.fillStyle = `hsl(${hue - 12}, 74%, 54%)`;
-  ctx.beginPath();
-  ctx.arc(0, 0, openSize * 0.16, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(55, 24, 28, 0.24)";
+  ctx.shadowBlur = 5;
+  ctx.globalAlpha = fade * 0.42;
+  ctx.fillStyle = "#6f2538";
+  for (const line of messageTextLines) {
+    ctx.font = `${line.weight} ${line.size}px Roboto Bold, "Times New Roman", serif`;
+    ctx.fillText(line.text, line.x + 1.2, line.y + 1.2, line.maxWidth);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = fade * 0.18;
+  ctx.fillStyle = "#ffd5dd";
+  for (const line of messageTextLines) {
+    ctx.font = `${line.weight} ${line.size}px Roboto Bold, "Times New Roman", serif`;
+    ctx.fillText(line.text, line.x - 0.8, line.y - 0.8, line.maxWidth);
+  }
+  ctx.restore();
 }
 
 function drawPetalMessage(time) {
   if (time < MESSAGE_START_SECONDS - 1) {
     return;
   }
+
+  drawPetalTextShadow(time);
 
   ctx.save();
   for (const petal of messagePetals) {
@@ -713,7 +835,7 @@ function drawPetalMessage(time) {
       angleDelta(petal.startAngle, petal.targetAngle) * settle +
       Math.sin(fallTime * 2.8 + petal.phase) * (1 - settle) * 1.05;
 
-    ctx.globalAlpha = lerp(0.35, 0.95, progress);
+    ctx.globalAlpha = 1;
     ctx.fillStyle = `hsl(${petal.hue}, 74%, ${lerp(61, 76, progress)}%)`;
     ctx.strokeStyle = `hsla(${petal.hue - 10}, 70%, 42%, 0.25)`;
     ctx.lineWidth = 0.55;
@@ -780,6 +902,7 @@ const tune = {
   delay: null,
   feedback: null,
   filter: null,
+  compressor: null,
   timer: null,
   step: 0,
   nextTime: 0,
@@ -836,7 +959,13 @@ function setupMusic() {
 
   tune.context = new AudioContext();
   tune.master = tune.context.createGain();
-  tune.master.gain.value = 0.18;
+  tune.master.gain.value = 0.42;
+  tune.compressor = tune.context.createDynamicsCompressor();
+  tune.compressor.threshold.value = -18;
+  tune.compressor.knee.value = 24;
+  tune.compressor.ratio.value = 4;
+  tune.compressor.attack.value = 0.008;
+  tune.compressor.release.value = 0.22;
 
   tune.filter = tune.context.createBiquadFilter();
   tune.filter.type = "lowpass";
@@ -853,12 +982,16 @@ function setupMusic() {
   tune.delay.connect(tune.feedback);
   tune.feedback.connect(tune.delay);
   tune.delay.connect(tune.master);
-  tune.master.connect(tune.context.destination);
+  tune.master.connect(tune.compressor);
+  tune.compressor.connect(tune.context.destination);
 }
 
 function playElectricPianoNote(note, start, duration, velocity = 0.5) {
   const frequency = noteFrequency(note);
   const gain = tune.context.createGain();
+  const fundamentalGain = tune.context.createGain();
+  const overtoneGain = tune.context.createGain();
+  const chimeGain = tune.context.createGain();
   const fundamental = tune.context.createOscillator();
   const overtone = tune.context.createOscillator();
   const chime = tune.context.createOscillator();
@@ -874,10 +1007,16 @@ function playElectricPianoNote(note, start, duration, velocity = 0.5) {
   gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity), start + 0.018);
   gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity * 0.38), start + 0.18);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  fundamentalGain.gain.setValueAtTime(0.8, start);
+  overtoneGain.gain.setValueAtTime(0.28, start);
+  chimeGain.gain.setValueAtTime(0.16, start);
 
-  fundamental.connect(gain);
-  overtone.connect(gain);
-  chime.connect(gain);
+  fundamental.connect(fundamentalGain);
+  overtone.connect(overtoneGain);
+  chime.connect(chimeGain);
+  fundamentalGain.connect(gain);
+  overtoneGain.connect(gain);
+  chimeGain.connect(gain);
   gain.connect(tune.filter);
 
   fundamental.start(start);
@@ -888,22 +1027,29 @@ function playElectricPianoNote(note, start, duration, velocity = 0.5) {
   chime.stop(start + duration + 0.08);
 }
 
+function playOpeningChord(start) {
+  const notes = ["C3", "G3", "C4", "E4", "G4"];
+  for (let i = 0; i < notes.length; i += 1) {
+    playElectricPianoNote(notes[i], start + i * 0.035, beatSeconds * 3.2, i === 0 ? 0.42 : 0.32);
+  }
+}
+
 function scheduleStep(time) {
   const beat = tune.step % 64;
   const chordIndex = Math.floor(beat / 8) % chords.length;
   const chord = chords[chordIndex];
   const position = beat % 8;
 
-  playElectricPianoNote(chord[position % chord.length], time, beatSeconds * 1.6, 0.18);
+  playElectricPianoNote(chord[position % chord.length], time, beatSeconds * 1.6, 0.28);
   if (position === 0 || position === 4) {
     for (let i = 0; i < chord.length; i += 1) {
-      playElectricPianoNote(chord[i], time + i * 0.018, beatSeconds * 2.4, i === 0 ? 0.22 : 0.12);
+      playElectricPianoNote(chord[i], time + i * 0.018, beatSeconds * 2.4, i === 0 ? 0.34 : 0.22);
     }
   }
 
   const lead = melody[beat];
   if (lead) {
-    playElectricPianoNote(lead, time + beatSeconds * 0.04, beatSeconds * 1.15, 0.26);
+    playElectricPianoNote(lead, time + beatSeconds * 0.04, beatSeconds * 1.15, 0.38);
   }
 
   tune.step += 1;
@@ -923,8 +1069,23 @@ function openEnvelope() {
 
   envelopeCover.classList.add("opening");
   window.setTimeout(() => {
+    enterFullscreen();
+  }, 850);
+  window.setTimeout(() => {
     envelopeCover.remove();
   }, 2100);
+}
+
+async function enterFullscreen() {
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) {
+    return;
+  }
+
+  try {
+    await document.documentElement.requestFullscreen();
+  } catch {
+    // Fullscreen is optional; some browsers deny it despite a click gesture.
+  }
 }
 
 async function toggleMusic() {
@@ -937,9 +1098,10 @@ async function toggleMusic() {
   if (!tune.playing) {
     await tune.context.resume();
     tune.master.gain.cancelScheduledValues(tune.context.currentTime);
-    tune.master.gain.setTargetAtTime(0.18, tune.context.currentTime, 0.05);
+    tune.master.gain.setTargetAtTime(0.42, tune.context.currentTime, 0.05);
     tune.playing = true;
     tune.nextTime = tune.context.currentTime + 0.05;
+    playOpeningChord(tune.context.currentTime + 0.03);
     tune.timer = window.setInterval(musicScheduler, 80);
     musicScheduler();
     musicToggle.setAttribute("aria-pressed", "true");
@@ -952,7 +1114,7 @@ async function toggleMusic() {
     window.setTimeout(() => {
       if (!tune.playing && tune.context) {
         tune.context.suspend();
-        tune.master.gain.value = 0.18;
+        tune.master.gain.value = 0.42;
       }
     }, 220);
     musicToggle.setAttribute("aria-pressed", "false");
