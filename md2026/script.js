@@ -15,7 +15,8 @@ let width = 0;
 let height = 0;
 let dpr = 1;
 let soilY = 0;
-let startTime = performance.now();
+let startTime = 0;
+let animationStarted = false;
 let branches = [];
 let leaves = [];
 let buds = [];
@@ -870,7 +871,7 @@ function drawSunsetTint(time) {
 }
 
 function draw(timeMs) {
-  const time = (timeMs - startTime) / 1000;
+  const time = animationStarted ? Math.max(0, (timeMs - startTime) / 1000) : 0;
   const displayTime = Math.min(time, GROWTH_SECONDS + 60);
 
   ctx.clearRect(0, 0, width, height);
@@ -1067,6 +1068,8 @@ function openEnvelope() {
     return;
   }
 
+  animationStarted = true;
+  startTime = performance.now();
   envelopeCover.classList.add("opening");
   window.setTimeout(() => {
     enterFullscreen();
