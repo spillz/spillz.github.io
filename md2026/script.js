@@ -7,8 +7,8 @@ const GROWTH_SECONDS = 82;
 const MESSAGE_START_SECONDS = 42;
 const SUNSET_SECONDS = 96;
 const BRANCH_LIMIT = 280;
-const LEAF_LIMIT = 720;
-const FLOWER_LIMIT = 200;
+const LEAF_LIMIT = 1680;
+const FLOWER_LIMIT = 240;
 const MESSAGE_PETAL_LIMIT = 3000;
 
 let width = 0;
@@ -188,35 +188,155 @@ function chooseChildCandidate(map, branch, random, u) {
   return best;
 }
 
+function leafColor(random) {
+  return random() < 0.5 ? "#2f8f47" : random() < 0.78 ? "#4aaa52" : "#7ac45a";
+}
+
+function addLeaf(branch, random, u, options = {}) {
+  if (leaves.length >= LEAF_LIMIT) {
+    return false;
+  }
+
+  const minSize = options.minSize || 18;
+  const maxSize = options.maxSize || 42;
+  const sizeScale = options.sizeScale || 1;
+  const branchDelay = branch.role === "twig" ? 1.65 : 2.8;
+  const birthDelay = options.birthDelay === undefined ? lerp(0.22, branchDelay, random()) : options.birthDelay;
+  leaves.push({
+    branch,
+    u,
+    side: options.side || (random() < 0.5 ? -1 : 1),
+    size: lerp(minSize, maxSize, random()) * Math.max(0.72, 1.15 - branch.depth * 0.045) * sizeScale,
+    tilt: lerp(-0.75, 0.75, random()),
+    curl: lerp(-0.34, 0.34, random()),
+    stem: lerp(0.1, 0.24, random()),
+    birth: branch.birth + branch.duration * u + birthDelay,
+    color: leafColor(random),
+  });
+  return true;
+}
+
+function addBud(branch, random, u = lerp(0.78, 1, random())) {
+  if (buds.length >= FLOWER_LIMIT) {
+    return false;
+  }
+
+  const hue = lerp(327, 350, random());
+  buds.push({
+    branch,
+    u,
+    size: lerp(24, 46, random()) * Math.max(0.72, 1.12 - branch.depth * 0.035),
+    birth: branch.birth + branch.duration + lerp(3.2, 10.5, random()),
+    hue,
+    rotation: random() * Math.PI * 2,
+    lean: lerp(-0.28, 0.28, random()),
+    cup: lerp(0.82, 1.18, random()),
+  });
+  return true;
+}
+
 function addFoliage(branch, random) {
-  const leafCount = clamp(Math.round(branch.length * 10 + (7 - branch.depth) * 0.5), 1, 6);
+  const leafCount = clamp(Math.round(branch.length * 12 + (7 - branch.depth) * 0.55), branch.depth > 4 ? 2 : 1, branch.role === "twig" ? 7 : 6);
   for (let i = 0; i < leafCount && leaves.length < LEAF_LIMIT; i += 1) {
     const u = lerp(0.18, 0.98, (i + random() * 0.8) / leafCount);
-    leaves.push({
-      branch,
-      u,
-      side: random() < 0.5 ? -1 : 1,
-      size: lerp(18, 42, random()) * Math.max(0.72, 1.15 - branch.depth * 0.045),
-      tilt: lerp(-0.75, 0.75, random()),
-      curl: lerp(-0.34, 0.34, random()),
-      stem: lerp(0.1, 0.24, random()),
-      birth: branch.birth + branch.duration * u + lerp(1.4, 7.6, random()),
-      color: random() < 0.5 ? "#2f8f47" : random() < 0.78 ? "#4aaa52" : "#7ac45a",
-    });
+    addLeaf(branch, random, u);
   }
 
   if (branch.depth >= 2 && buds.length < FLOWER_LIMIT && (branch.role === "twig" ? random() > 0.38 : random() > 0.76)) {
-    const hue = lerp(327, 350, random());
-    buds.push({
-      branch,
-      u: lerp(0.78, 1, random()),
-      size: lerp(24, 46, random()) * Math.max(0.72, 1.12 - branch.depth * 0.035),
-      birth: branch.birth + branch.duration + lerp(4, 13, random()),
-      hue,
-      rotation: random() * Math.PI * 2,
-      lean: lerp(-0.28, 0.28, random()),
-      cup: lerp(0.82, 1.18, random()),
-    });
+    addBud(branch, random);
+  }
+}
+
+function dressSparseGrowth(random) {
+  const leafCounts = new Map();
+  const childCounts = new Map();
+
+  for (const branch of branches) {
+    leafCounts.set(branch, 0);
+    childCounts.set(branch, 0);
+  }
+  for (const leaf of leaves) {
+    leafCounts.set(leaf.branch, (leafCounts.get(leaf.branch) || 0) + 1);
+  }
+  for (const branch of branches) {
+    if (branch.parent) {
+      childCounts.set(branch.parent, (childCounts.get(branch.parent) || 0) + 1);
+    }
+  }
+
+  for (const branch of branches) {
+    if (branch.role === "trunk") {
+      continue;
+    }
+
+    const isTerminal = (childCounts.get(branch) || 0) === 0;
+    const baseLeaves = branch.depth > 4 || isTerminal ? 3 : 2;
+    let count = leafCounts.get(branch) || 0;
+    let added = 0;
+
+    while (count < baseLeaves && leaves.length < LEAF_LIMIT) {
+      const step = baseLeaves <= 1 ? 1 : added / (baseLeaves - 1);
+      const u = clamp(lerp(0.34, 0.95, step + random() * 0.16), 0.28, 0.98);
+      addLeaf(branch, random, u, {
+        side: added % 2 === 0 ? -1 : 1,
+        birthDelay: lerp(0.1, branch.role === "twig" ? 1.1 : 1.6, random()),
+      });
+      count += 1;
+      added += 1;
+    }
+    leafCounts.set(branch, count);
+  }
+
+  const dressedBranches = branches.slice().sort((a, b) => {
+    const ay = branchPoint(a, 0.86).y;
+    const by = branchPoint(b, 0.86).y;
+    return ay - by || b.depth - a.depth;
+  });
+
+  for (const branch of dressedBranches) {
+    if (branch.role === "trunk") {
+      continue;
+    }
+
+    const tip = branchPoint(branch, 0.92);
+    const isTopCanopy = tip.y < soilY * 0.56;
+    const isTerminal = (childCounts.get(branch) || 0) === 0;
+    const targetLeaves = clamp(
+      2 + (branch.depth > 2 ? 1 : 0) + (branch.depth > 4 ? 1 : 0) + (isTerminal ? 2 : 0) + (isTopCanopy ? 2 : 0),
+      2,
+      8,
+    );
+    let count = leafCounts.get(branch) || 0;
+    let added = 0;
+
+    while (count < targetLeaves && leaves.length < LEAF_LIMIT) {
+      const step = targetLeaves <= 1 ? 1 : added / (targetLeaves - 1);
+      const u = clamp(lerp(0.42, 0.99, step + random() * 0.18), 0.36, 0.995);
+      const side = added % 2 === 0 ? -1 : 1;
+      const topScale = isTopCanopy || isTerminal ? 1.08 : 1;
+      addLeaf(branch, random, u, {
+        side,
+        sizeScale: topScale,
+        birthDelay: lerp(0.12, branch.role === "twig" ? 1.35 : 1.95, random()),
+      });
+      count += 1;
+      added += 1;
+    }
+  }
+
+  const buddedBranches = new Set(buds.map((bud) => bud.branch));
+  for (const branch of dressedBranches) {
+    if (branch.depth < 3 || buds.length >= FLOWER_LIMIT || buddedBranches.has(branch)) {
+      continue;
+    }
+
+    const tip = branchPoint(branch, 0.9);
+    const isTopCanopy = tip.y < soilY * 0.58;
+    const isTerminal = (childCounts.get(branch) || 0) === 0;
+    if ((isTerminal && random() > 0.16) || (isTopCanopy && random() > 0.42)) {
+      addBud(branch, random, lerp(0.84, 1, random()));
+      buddedBranches.add(branch);
+    }
   }
 }
 
@@ -281,6 +401,8 @@ function generateGrowth() {
       queue.push(child);
     }
   }
+
+  dressSparseGrowth(random);
 
   for (let i = 0; i < 10; i += 1) {
     clouds.push({
@@ -687,8 +809,8 @@ function drawBud(bud, time) {
   const petals = smooth((time - (bud.birth + 13)) / 18);
   const size = bud.size * lerp(0.42, 1, emerge);
   const openAngle = lerp(0.06, 1.34, open);
-  const coreRadius = size * lerp(0.06, 0.34, sphere);
-  const coreY = -size * lerp(0.16, 0.03, sphere);
+  const bloomRadius = size * lerp(0.06, 0.34, sphere);
+  const bloomY = -size * lerp(0.16, 0.03, sphere);
 
   ctx.save();
   ctx.translate(point.x, point.y);
@@ -714,19 +836,9 @@ function drawBud(bud, time) {
 
   if (sphere > 0.02) {
     ctx.save();
-    ctx.translate(0, coreY);
-    drawBudPetals(size, petals, bud.hue, bud.rotation, bud.cup, coreRadius);
+    ctx.translate(0, bloomY);
+    drawBudPetals(size, petals, bud.hue, bud.rotation, bud.cup, bloomRadius);
     ctx.restore();
-  }
-
-  if (sphere > 0.02) {
-    ctx.fillStyle = `hsl(${bud.hue}, 72%, 66%)`;
-    ctx.strokeStyle = `hsla(${bud.hue - 12}, 58%, 38%, 0.28)`;
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.arc(0, coreY, coreRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
   }
 
   if (shellAlpha > 0.02) {
@@ -751,32 +863,62 @@ function drawBud(bud, time) {
   ctx.restore();
 }
 
-function drawBudPetals(size, openness, hue, rotation, cup = 1, coreRx = 0) {
-  for (let layer = 0; layer < 2; layer += 1) {
-    const count = 7 + layer * 4;
-    const layerOpen = smooth(clamp((openness - layer * 0.14) / 0.86, 0, 1));
+function drawCarnationPetal(length, widthLeaf, ruffle, hue, baseLight, tipLight) {
+  const gradient = ctx.createLinearGradient(0, length * 0.2, 0, -length * 0.86);
+  gradient.addColorStop(0, `hsl(${hue - 3}, 76%, ${baseLight}%)`);
+  gradient.addColorStop(0.58, `hsl(${hue + 2}, 78%, ${lerp(baseLight, tipLight, 0.62)}%)`);
+  gradient.addColorStop(1, `hsl(${hue + 5}, 82%, ${tipLight}%)`);
+  ctx.fillStyle = gradient;
+
+  ctx.beginPath();
+  ctx.moveTo(0, length * 0.2);
+  ctx.bezierCurveTo(-widthLeaf * 0.62, length * 0.02, -widthLeaf * 0.98, -length * 0.34, -widthLeaf * 0.46, -length * 0.78);
+  for (let i = 0; i <= 4; i += 1) {
+    const t = i / 4;
+    const x = lerp(-widthLeaf * 0.44, widthLeaf * 0.44, t);
+    const y = -length * (0.82 + Math.sin((t + ruffle) * Math.PI * 4) * 0.045);
+    ctx.quadraticCurveTo(x - widthLeaf * 0.12, y - length * 0.06, x, y);
+  }
+  ctx.bezierCurveTo(widthLeaf * 0.98, -length * 0.34, widthLeaf * 0.62, length * 0.02, 0, length * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawBudPetals(size, openness, hue, rotation, cup = 1, bloomRadius = 0) {
+  const layers = [
+    { count: 8, delay: 0, radius: 0.34, length: 0.56, width: 0.25, baseLight: 54, tipLight: 74, backShade: 5, spread: 0.82 },
+    { count: 7, delay: 0.12, radius: 0.22, length: 0.48, width: 0.22, baseLight: 50, tipLight: 70, backShade: 2.5, spread: 0.58 },
+    { count: 5, delay: 0.24, radius: 0.1, length: 0.38, width: 0.19, baseLight: 45, tipLight: 64, backShade: 0, spread: 0.34 },
+  ];
+
+  for (let layer = 0; layer < layers.length; layer += 1) {
+    const config = layers[layer];
+    const layerOpen = smooth(clamp((openness - config.delay) / (1 - config.delay), 0, 1));
     if (layerOpen <= 0) {
       continue;
     }
-    const petalSize = size * lerp(layer === 0 ? 0.12 : 0.08, layer === 0 ? 0.46 : 0.43, layerOpen) * cup;
-    const radius = layer === 0
-      ? lerp(coreRx * 0.28, size * 0.15, layerOpen)
-      : lerp(coreRx * 0.55, size * 0.35, layerOpen);
-    ctx.fillStyle = `hsl(${hue + layer * 5}, ${72 + layer * 3}%, ${64 + layer * 4}%)`;
-    ctx.strokeStyle = `hsla(${hue - 8}, 72%, 45%, 0.22)`;
+
+    const radius = lerp(bloomRadius * 0.24, size * config.radius, layerOpen);
+    const length = size * config.length * lerp(0.3, 1, layerOpen) * cup;
+    const widthLeaf = size * config.width * lerp(0.45, 1, layerOpen);
+    ctx.strokeStyle = `hsla(${hue - 10}, 72%, 42%, ${0.18 + layer * 0.02})`;
     ctx.lineWidth = 0.6;
-    for (let i = 0; i < count; i += 1) {
-      const folded = (1 - layerOpen) * 0.72;
-      const a = rotation + (i / count) * Math.PI * 2 + layer * 0.35 + Math.sin(i * 1.7 + rotation) * folded;
-      const petalLength = petalSize * lerp(0.8, 1.7, layerOpen);
-      const petalWidth = petalSize * lerp(0.34, 0.5, layerOpen);
+    for (let i = 0; i < config.count; i += 1) {
+      const folded = (1 - layerOpen) * config.spread;
+      const a = rotation + (i / config.count) * Math.PI * 2 + layer * 0.31 + Math.sin(i * 1.7 + rotation) * folded;
+      const petalRadius = radius * lerp(0.08, 0.78, layerOpen);
       ctx.save();
-      ctx.translate(Math.cos(a) * radius, Math.sin(a) * radius);
-      ctx.rotate(a + Math.PI / 2 + Math.sin(i + rotation) * (1 - layerOpen) * 0.55);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, petalLength, petalWidth, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.translate(Math.cos(a) * petalRadius, Math.sin(a) * petalRadius);
+      ctx.rotate(a + Math.PI / 2 + Math.sin(i + rotation) * (1 - layerOpen) * 0.45);
+      drawCarnationPetal(
+        length,
+        widthLeaf,
+        rotation + i * 0.37 + layer,
+        hue + layer * 3,
+        config.baseLight - config.backShade,
+        config.tipLight - config.backShade + layerOpen * 2,
+      );
       ctx.restore();
     }
   }
@@ -910,27 +1052,33 @@ const tune = {
   playing: false,
 };
 
-const tempo = 76;
+const tempo = 72;
 const beatSeconds = 60 / tempo;
 const chords = [
-  ["C3", "G3", "C4", "E4"],
+  ["D3", "A3", "D4", "F#4"],
   ["G2", "D3", "B3", "D4"],
-  ["A2", "E3", "C4", "E4"],
-  ["F2", "C3", "A3", "C4"],
-  ["D3", "A3", "C4", "F4"],
+  ["A2", "E3", "A3", "C#4"],
+  ["D3", "A3", "D4", "F#4"],
+  ["B2", "F#3", "B3", "D4"],
   ["G2", "D3", "G3", "B3"],
-  ["C3", "E3", "G3", "D4"],
-  ["F2", "C3", "F3", "A3"],
+  ["D3", "A3", "D4", "A4"],
+  ["A2", "E3", "A3", "E4"],
+];
+const bassLine = [
+  "D2", "D2", "A1", "D2", "G1", "G1", "D2", "G1",
+  "A1", "A1", "E2", "A1", "D2", "D2", "A1", "D2",
+  "B1", "B1", "F#2", "B1", "G1", "G1", "D2", "G1",
+  "D2", "D2", "A1", "D2", "A1", "A1", "E2", "A1",
 ];
 const melody = [
-  "E4", null, "G4", "A4", "G4", null, "E4", "D4",
-  "C4", null, "E4", "G4", "E4", null, "D4", "C4",
-  "A3", null, "C4", "E4", "G4", null, "E4", "C4",
-  "F4", null, "E4", "D4", "C4", null, "G3", null,
-  "D4", null, "F4", "A4", "G4", null, "F4", "D4",
-  "B3", null, "D4", "G4", "F4", null, "D4", "B3",
-  "E4", null, "G4", "C5", "B4", null, "G4", "E4",
-  "A4", null, "G4", "E4", "F4", null, "E4", null,
+  "F#4", null, "A4", null, "B4", "A4", "F#4", null,
+  "G4", null, "B4", "A4", "G4", null, "E4", null,
+  "E4", null, "A4", "B4", "C#5", null, "A4", "E4",
+  "F#4", null, "A4", "F#4", "D4", null, null, null,
+  "D4", null, "F#4", "A4", "B4", null, "A4", "F#4",
+  "G4", null, "B4", "D5", "B4", null, "G4", null,
+  "A4", null, "F#4", "D4", "F#4", null, "A4", null,
+  "E4", null, "C#4", "E4", "A4", null, null, null,
 ];
 
 function noteFrequency(note) {
@@ -960,7 +1108,7 @@ function setupMusic() {
 
   tune.context = new AudioContext();
   tune.master = tune.context.createGain();
-  tune.master.gain.value = 0.42;
+  tune.master.gain.value = 0.48;
   tune.compressor = tune.context.createDynamicsCompressor();
   tune.compressor.threshold.value = -18;
   tune.compressor.knee.value = 24;
@@ -970,13 +1118,13 @@ function setupMusic() {
 
   tune.filter = tune.context.createBiquadFilter();
   tune.filter.type = "lowpass";
-  tune.filter.frequency.value = 4200;
+  tune.filter.frequency.value = 3600;
   tune.filter.Q.value = 0.6;
 
   tune.delay = tune.context.createDelay(1.2);
-  tune.delay.delayTime.value = beatSeconds * 0.75;
+  tune.delay.delayTime.value = beatSeconds * 0.5;
   tune.feedback = tune.context.createGain();
-  tune.feedback.gain.value = 0.18;
+  tune.feedback.gain.value = 0.11;
 
   tune.filter.connect(tune.master);
   tune.filter.connect(tune.delay);
@@ -987,51 +1135,96 @@ function setupMusic() {
   tune.compressor.connect(tune.context.destination);
 }
 
-function playElectricPianoNote(note, start, duration, velocity = 0.5) {
+function playAcousticStringNote(note, start, duration, velocity = 0.5) {
   const frequency = noteFrequency(note);
   const gain = tune.context.createGain();
-  const fundamentalGain = tune.context.createGain();
-  const overtoneGain = tune.context.createGain();
-  const chimeGain = tune.context.createGain();
-  const fundamental = tune.context.createOscillator();
-  const overtone = tune.context.createOscillator();
-  const chime = tune.context.createOscillator();
+  const body = tune.context.createBiquadFilter();
+  const bodyGain = tune.context.createGain();
+  const stringGain = tune.context.createGain();
+  const shimmerGain = tune.context.createGain();
+  const bodyOsc = tune.context.createOscillator();
+  const stringOsc = tune.context.createOscillator();
+  const shimmerOsc = tune.context.createOscillator();
 
-  fundamental.type = "triangle";
-  overtone.type = "sine";
-  chime.type = "sine";
-  fundamental.frequency.setValueAtTime(frequency, start);
-  overtone.frequency.setValueAtTime(frequency * 2.01, start);
-  chime.frequency.setValueAtTime(frequency * 3.98, start);
+  body.type = "bandpass";
+  body.frequency.setValueAtTime(clamp(frequency * 1.35, 220, 1900), start);
+  body.Q.setValueAtTime(0.72, start);
+  bodyOsc.type = "triangle";
+  stringOsc.type = "sawtooth";
+  shimmerOsc.type = "sine";
+  bodyOsc.frequency.setValueAtTime(frequency, start);
+  stringOsc.frequency.setValueAtTime(frequency * 2.003, start);
+  shimmerOsc.frequency.setValueAtTime(frequency * 3.01, start);
 
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity), start + 0.018);
-  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity * 0.38), start + 0.18);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity), start + 0.012);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity * 0.34), start + 0.13);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  fundamentalGain.gain.setValueAtTime(0.8, start);
-  overtoneGain.gain.setValueAtTime(0.28, start);
-  chimeGain.gain.setValueAtTime(0.16, start);
+  bodyGain.gain.setValueAtTime(0.78, start);
+  stringGain.gain.setValueAtTime(0.18, start);
+  shimmerGain.gain.setValueAtTime(0.09, start);
 
-  fundamental.connect(fundamentalGain);
-  overtone.connect(overtoneGain);
-  chime.connect(chimeGain);
-  fundamentalGain.connect(gain);
-  overtoneGain.connect(gain);
-  chimeGain.connect(gain);
+  bodyOsc.connect(bodyGain);
+  stringOsc.connect(stringGain);
+  shimmerOsc.connect(shimmerGain);
+  bodyGain.connect(body);
+  stringGain.connect(body);
+  shimmerGain.connect(body);
+  body.connect(gain);
   gain.connect(tune.filter);
 
-  fundamental.start(start);
-  overtone.start(start);
-  chime.start(start);
-  fundamental.stop(start + duration + 0.08);
-  overtone.stop(start + duration + 0.08);
-  chime.stop(start + duration + 0.08);
+  bodyOsc.start(start);
+  stringOsc.start(start);
+  shimmerOsc.start(start);
+  bodyOsc.stop(start + duration + 0.08);
+  stringOsc.stop(start + duration + 0.08);
+  shimmerOsc.stop(start + duration + 0.08);
+}
+
+function playBassNote(note, start, duration, velocity = 0.5) {
+  const frequency = noteFrequency(note);
+  const gain = tune.context.createGain();
+  const filter = tune.context.createBiquadFilter();
+  const bodyGain = tune.context.createGain();
+  const edgeGain = tune.context.createGain();
+  const bodyOsc = tune.context.createOscillator();
+  const edgeOsc = tune.context.createOscillator();
+
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(620, start);
+  filter.Q.setValueAtTime(0.55, start);
+  bodyOsc.type = "sine";
+  edgeOsc.type = "triangle";
+  bodyOsc.frequency.setValueAtTime(frequency, start);
+  edgeOsc.frequency.setValueAtTime(frequency * 2, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity), start + 0.026);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, velocity * 0.62), start + 0.24);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  bodyGain.gain.setValueAtTime(0.9, start);
+  edgeGain.gain.setValueAtTime(0.16, start);
+
+  bodyOsc.connect(bodyGain);
+  edgeOsc.connect(edgeGain);
+  bodyGain.connect(filter);
+  edgeGain.connect(filter);
+  filter.connect(gain);
+  gain.connect(tune.master);
+
+  bodyOsc.start(start);
+  edgeOsc.start(start);
+  bodyOsc.stop(start + duration + 0.1);
+  edgeOsc.stop(start + duration + 0.1);
 }
 
 function playOpeningChord(start) {
-  const notes = ["C3", "G3", "C4", "E4", "G4"];
+  const notes = ["D2", "A2", "D3", "A3", "D4", "F#4"];
   for (let i = 0; i < notes.length; i += 1) {
-    playElectricPianoNote(notes[i], start + i * 0.035, beatSeconds * 3.2, i === 0 ? 0.42 : 0.32);
+    if (i < 2) {
+      playBassNote(notes[i], start + i * 0.045, beatSeconds * 3.2, 0.34);
+    } else {
+      playAcousticStringNote(notes[i], start + i * 0.032, beatSeconds * 2.4, 0.28);
+    }
   }
 }
 
@@ -1040,17 +1233,27 @@ function scheduleStep(time) {
   const chordIndex = Math.floor(beat / 8) % chords.length;
   const chord = chords[chordIndex];
   const position = beat % 8;
+  const bass = bassLine[Math.floor(beat / 2) % bassLine.length];
+  const arpeggio = position % 2 === 0 ? [0, 2, 3] : [1, 2];
+  const accent = position === 0 || position === 4;
 
-  playElectricPianoNote(chord[position % chord.length], time, beatSeconds * 1.6, 0.28);
+  for (let i = 0; i < arpeggio.length; i += 1) {
+    const note = chord[arpeggio[i] % chord.length];
+    const delay = i * beatSeconds * 0.18;
+    playAcousticStringNote(note, time + delay, beatSeconds * (accent ? 1.45 : 1.05), accent ? 0.25 - i * 0.03 : 0.17);
+  }
+  if (position === 2 || position === 6) {
+    playAcousticStringNote(chord[(position / 2) % chord.length], time + beatSeconds * 0.08, beatSeconds * 0.9, 0.14);
+  }
   if (position === 0 || position === 4) {
-    for (let i = 0; i < chord.length; i += 1) {
-      playElectricPianoNote(chord[i], time + i * 0.018, beatSeconds * 2.4, i === 0 ? 0.34 : 0.22);
-    }
+    playBassNote(bass, time, beatSeconds * 2.7, position === 0 ? 0.34 : 0.28);
+  } else if (position === 6) {
+    playBassNote(bass, time + beatSeconds * 0.08, beatSeconds * 1.25, 0.2);
   }
 
   const lead = melody[beat];
   if (lead) {
-    playElectricPianoNote(lead, time + beatSeconds * 0.04, beatSeconds * 1.15, 0.38);
+    playAcousticStringNote(lead, time + beatSeconds * 0.04, beatSeconds * 1.28, 0.31);
   }
 
   tune.step += 1;
