@@ -1052,7 +1052,7 @@ const tune = {
   playing: false,
 };
 
-const tempo = 72;
+const tempo = 48;
 const beatSeconds = 60 / tempo;
 const chords = [
   ["D3", "A3", "D4", "F#4"],
