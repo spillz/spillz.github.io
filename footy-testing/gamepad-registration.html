@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gamepad Calibration</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #11151c;
+      color: #edf2f7;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin: 0 0 10px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+
+    .grid,
+    .left-column,
+    .button-grid,
+    .axis-grid,
+    .mapping-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .grid {
+      grid-template-columns: minmax(320px, 0.9fr) minmax(320px, 1.1fr);
+      align-items: start;
+    }
+
+    .panel {
+      background: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .muted {
+      color: #a0aec0;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #2d3748;
+      color: #cbd5e0;
+      font-size: 13px;
+    }
+
+    .status.on {
+      background: #22543d;
+      color: #c6f6d5;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      border: 1px solid #4a5568;
+      border-radius: 6px;
+      background: #2d3748;
+      color: #edf2f7;
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: #2b6cb0;
+      border-color: #4299e1;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .step {
+      min-height: 80px;
+      display: grid;
+      align-content: center;
+      font-size: 22px;
+      line-height: 1.35;
+    }
+
+    .hint {
+      min-height: 24px;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    .readout {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 12px;
+      font-size: 14px;
+    }
+
+    .value {
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .axis-grid {
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      margin-top: 12px;
+    }
+
+    .axis,
+    .game-button {
+      padding: 8px;
+      border-radius: 6px;
+      background: #2d3748;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .axis.on,
+    .game-button.on {
+      background: #2b6cb0;
+    }
+
+    .button-grid {
+      grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+      margin-top: 12px;
+    }
+
+    .mapping-grid {
+      grid-template-columns: minmax(120px, 0.8fr) minmax(150px, 1fr);
+      font-size: 14px;
+    }
+
+    .mapping-name,
+    .mapping-value {
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #2d3748;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .mapping-value.unset {
+      color: #a0aec0;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 14px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Gamepad Calibration</h1>
+    <p class="muted">Press any gamepad button or move a stick if the browser has not exposed the controller yet.</p>
+
+    <section class="grid">
+      <div class="left-column">
+        <article class="panel">
+          <h2>Calibration</h2>
+          <div class="readout">
+            <span>Controller</span><span id="padName" class="value">none</span>
+            <span>Mapping</span><span id="padMapping" class="value">none</span>
+            <span>Axes / buttons</span><span id="padShape" class="value">0 / 0</span>
+            <span>Saved profile</span><span id="savedStatus" class="status">no</span>
+          </div>
+          <div id="step" class="step muted">Connect a controller to begin.</div>
+          <div id="inputHint" class="hint muted"></div>
+          <div class="actions">
+            <button id="capture" class="primary" disabled>Capture Step</button>
+            <button id="skip" disabled>Skip Step</button>
+            <button id="restart" disabled>Restart</button>
+            <button id="save" disabled>Save Profile</button>
+            <button id="returnGame" disabled>Return to Game</button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>Mapping</h2>
+          <div id="mapping" class="mapping-grid"></div>
+        </article>
+      </div>
+
+      <article class="panel">
+        <h2>Diagnostics</h2>
+        <div class="readout">
+          <span>Controller ID</span><span id="diagId" class="value">none</span>
+          <span>Index</span><span id="diagIndex" class="value">none</span>
+          <span>Timestamp</span><span id="diagTimestamp" class="value">0</span>
+        </div>
+        <div id="axes" class="axis-grid"></div>
+        <div id="buttons" class="button-grid"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const PROFILE_VERSION = 1;
+    const params = new URLSearchParams(window.location.search);
+    const requestedIndex = Number(params.get('index') ?? -1);
+    const returnUrl = params.get('return') || 'index.html';
+    const steps = [
+      { key: 'start', label: 'Press Start/Menu to begin registration.' },
+      { key: 'neutral', label: 'Leave both sticks neutral, then tap Start/Menu.' },
+      { key: 'leftX', label: 'Hold the left stick hard right, then tap Start/Menu.' },
+      { key: 'leftY', label: 'Hold the left stick hard down, then tap Start/Menu.' },
+      { key: 'rightX', label: 'Hold the right stick hard right, then tap Start/Menu.' },
+      { key: 'rightY', label: 'Hold the right stick hard down, then tap Start/Menu.' },
+      { key: 'faceSouth', label: 'Hold the bottom face button, then tap Start/Menu.' },
+      { key: 'faceEast', label: 'Hold the right face button, then tap Start/Menu.' },
+      { key: 'faceWest', label: 'Hold the left face button, then tap Start/Menu.' },
+      { key: 'faceNorth', label: 'Hold the top face button, then tap Start/Menu.' },
+      { key: 'leftBumper', label: 'Hold the left bumper, then tap Start/Menu.' },
+      { key: 'rightBumper', label: 'Hold the right bumper, then tap Start/Menu.' },
+      { key: 'leftTrigger', label: 'Hold the left trigger, then tap Start/Menu.' },
+      { key: 'rightTrigger', label: 'Hold the right trigger, then tap Start/Menu.' },
+      { key: 'back', label: 'Hold the back / select button, then tap Start/Menu.' },
+      { key: 'leftStick', label: 'Hold the left stick button, then tap Start/Menu.' },
+      { key: 'rightStick', label: 'Hold the right stick button, then tap Start/Menu.' },
+      { key: 'dpadUp', label: 'Hold d-pad up, then tap Start/Menu.' },
+      { key: 'dpadDown', label: 'Hold d-pad down, then tap Start/Menu.' },
+      { key: 'dpadLeft', label: 'Hold d-pad left, then tap Start/Menu.' },
+      { key: 'dpadRight', label: 'Hold d-pad right, then tap Start/Menu.' },
+      { key: 'home', label: 'Hold the home / guide button if exposed, then tap Start/Menu.' },
+    ];
+
+    const els = {
+      padName: document.getElementById('padName'),
+      padMapping: document.getElementById('padMapping'),
+      padShape: document.getElementById('padShape'),
+      savedStatus: document.getElementById('savedStatus'),
+      step: document.getElementById('step'),
+      inputHint: document.getElementById('inputHint'),
+      capture: document.getElementById('capture'),
+      skip: document.getElementById('skip'),
+      restart: document.getElementById('restart'),
+      save: document.getElementById('save'),
+      returnGame: document.getElementById('returnGame'),
+      diagId: document.getElementById('diagId'),
+      diagIndex: document.getElementById('diagIndex'),
+      diagTimestamp: document.getElementById('diagTimestamp'),
+      axes: document.getElementById('axes'),
+      buttons: document.getElementById('buttons'),
+      mapping: document.getElementById('mapping'),
+    };
+
+    let activeIndex = Number.isFinite(requestedIndex) ? requestedIndex : -1;
+    let stepIndex = 0;
+    let neutralAxes = [];
+    let lastButtons = [];
+    let axisHold = { key: '', index: -1, time: 0, mapping: null };
+    let lastFrameTime = performance.now();
+    const profileAxes = {};
+    const profileButtons = {};
+    const axisKeys = ['leftX', 'leftY', 'rightX', 'rightY'];
+    const buttonKeys = [
+      'faceSouth', 'faceEast', 'faceWest', 'faceNorth',
+      'leftBumper', 'rightBumper', 'leftTrigger', 'rightTrigger',
+      'back', 'start', 'leftStick', 'rightStick',
+      'dpadUp', 'dpadDown', 'dpadLeft', 'dpadRight', 'home',
+    ];
+    const dpadDirections = {
+      dpadUp: 'up',
+      dpadDown: 'down',
+      dpadLeft: 'left',
+      dpadRight: 'right',
+    };
+
+    function fixed(value) {
+      return Number(value || 0).toFixed(3);
+    }
+
+    function profileKey(pad) {
+      return `gamepadProfile:${pad.id}`;
+    }
+
+    function isButtonHeld(button) {
+      return !!button && (button.pressed || button.value > 0.5);
+    }
+
+    function findPad() {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      if (activeIndex >= 0 && pads[activeIndex]?.connected) return pads[activeIndex];
+      for (const pad of pads) {
+        if (!pad || !pad.connected) continue;
+        const active = pad.buttons.some(isButtonHeld)
+          || pad.axes.some(value => Math.abs(value || 0) > 0.05);
+        if (active) {
+          activeIndex = pad.index;
+          return pad;
+        }
+      }
+      for (const pad of pads) {
+        if (pad?.connected) {
+          activeIndex = pad.index;
+          return pad;
+        }
+      }
+      return null;
+    }
+
+    function strongestAxis(pad) {
+      let bestIndex = -1;
+      let bestDelta = 0;
+      let bestValue = 0;
+      pad.axes.forEach((value, index) => {
+        const delta = Math.abs((value || 0) - (neutralAxes[index] || 0));
+        if (delta > bestDelta) {
+          bestIndex = index;
+          bestDelta = delta;
+          bestValue = value || 0;
+        }
+      });
+      return { index: bestIndex, delta: bestDelta, value: bestValue };
+    }
+
+    function strongestButton(pad) {
+      let bestIndex = -1;
+      let bestValue = 0;
+      pad.buttons.forEach((button, index) => {
+        if (index === profileButtons.start && stepIndex > 0) return;
+        const value = button.value || (button.pressed ? 1 : 0);
+        if (value > bestValue) {
+          bestIndex = index;
+          bestValue = value;
+        }
+      });
+      return { index: bestIndex, value: bestValue };
+    }
+
+    function startJustPressed(pad) {
+      const index = profileButtons.start;
+      if (typeof index !== 'number') return false;
+      return isButtonHeld(pad.buttons[index]) && !isButtonHeld(lastButtons[index]);
+    }
+
+    function anyButtonJustPressed(pad) {
+      let bestIndex = -1;
+      let bestValue = 0;
+      pad.buttons.forEach((button, index) => {
+        const value = button.value || (button.pressed ? 1 : 0);
+        if (value > bestValue && isButtonHeld(button) && !isButtonHeld(lastButtons[index])) {
+          bestIndex = index;
+          bestValue = value;
+        }
+      });
+      return { index: bestIndex, value: bestValue };
+    }
+
+    function hatDirections(value) {
+      const axis = value ?? 3.285714;
+      if (axis < -1.1 || axis > 1.1) return new Set();
+      const sector = Math.round((axis + 1) / (2 / 7));
+      switch (Math.max(0, Math.min(7, sector))) {
+        case 0: return new Set(['up']);
+        case 1: return new Set(['up', 'right']);
+        case 2: return new Set(['right']);
+        case 3: return new Set(['down', 'right']);
+        case 4: return new Set(['down']);
+        case 5: return new Set(['down', 'left']);
+        case 6: return new Set(['left']);
+        case 7: return new Set(['up', 'left']);
+        default: return new Set();
+      }
+    }
+
+    function strongestHatAxis(pad, direction) {
+      let bestIndex = -1;
+      let bestDelta = 0;
+      pad.axes.forEach((value, index) => {
+        const neutral = neutralAxes[index] ?? 3.285714;
+        const delta = Math.abs((value || 0) - neutral);
+        if (delta > bestDelta && hatDirections(value).has(direction)) {
+          bestIndex = index;
+          bestDelta = delta;
+        }
+      });
+      return { index: bestIndex, delta: bestDelta };
+    }
+
+    function currentAxisCandidate(pad) {
+      const step = steps[stepIndex];
+      if (!step || !(step.key.endsWith('X') || step.key.endsWith('Y'))) return null;
+      const axis = strongestAxis(pad);
+      if (axis.index < 0 || axis.delta < 0.65 || Math.abs(axis.value) < 0.75) return null;
+      return { index: axis.index, invert: axis.value < 0 };
+    }
+
+    function hasCaptureCandidate(pad) {
+      const step = steps[stepIndex];
+      if (!step || step.key === 'neutral') return true;
+      if (step.key.endsWith('X') || step.key.endsWith('Y')) return !!currentAxisCandidate(pad);
+      const button = strongestButton(pad);
+      if (button.index >= 0 && button.value >= 0.5) return true;
+      const dpadDirection = dpadDirections[step.key];
+      return !!dpadDirection && strongestHatAxis(pad, dpadDirection).index >= 0;
+    }
+
+    function updateAxisHold(pad, dt) {
+      const step = steps[stepIndex];
+      if (!step || !(step.key.endsWith('X') || step.key.endsWith('Y'))) {
+        axisHold = { key: '', index: -1, time: 0, mapping: null };
+        return;
+      }
+      const mapping = currentAxisCandidate(pad);
+      if (!mapping) {
+        axisHold = { key: step.key, index: -1, time: 0, mapping: null };
+        return;
+      }
+      if (axisHold.key !== step.key || axisHold.index !== mapping.index) {
+        axisHold = { key: step.key, index: mapping.index, time: 0, mapping };
+      }
+      axisHold.time += dt;
+    }
+
+    function axisReady() {
+      return axisHold.mapping && axisHold.time >= 0.45;
+    }
+
+    function captureStep() {
+      const pad = findPad();
+      if (!pad) return;
+      const step = steps[stepIndex];
+      if (!step) return;
+      if (step.key === 'start') {
+        const button = anyButtonJustPressed(pad);
+        if (button.index < 0 || button.value < 0.5) return;
+        profileButtons.start = button.index;
+      } else if (step.key === 'neutral') {
+        neutralAxes = pad.axes.map(value => value || 0);
+      } else if (step.key.endsWith('X') || step.key.endsWith('Y')) {
+        if (!axisReady()) return;
+        profileAxes[step.key] = axisHold.mapping;
+      } else {
+        const button = strongestButton(pad);
+        const dpadDirection = dpadDirections[step.key];
+        if (button.index >= 0 && button.value >= 0.5) {
+          profileButtons[step.key] = button.index;
+        } else if (dpadDirection) {
+          const hat = strongestHatAxis(pad, dpadDirection);
+          if (hat.index < 0 || hat.delta < 0.25) return;
+          profileButtons[step.key] = { type: 'hatAxis', index: hat.index, direction: dpadDirection };
+        } else {
+          return;
+        }
+      }
+      stepIndex += 1;
+      axisHold = { key: '', index: -1, time: 0, mapping: null };
+      renderCalibration(pad);
+    }
+
+    function skipStep() {
+      const pad = findPad();
+      if (!pad || stepIndex >= steps.length) return;
+      stepIndex += 1;
+      axisHold = { key: '', index: -1, time: 0, mapping: null };
+      renderCalibration(pad);
+      renderMapping();
+    }
+
+    function buildProfile(pad) {
+      return {
+        id: pad.id,
+        mapping: pad.mapping,
+        axesLength: pad.axes.length,
+        buttonsLength: pad.buttons.length,
+        axes: {
+          leftX: profileAxes.leftX,
+          leftY: profileAxes.leftY,
+          rightX: profileAxes.rightX,
+          rightY: profileAxes.rightY,
+        },
+        buttons: {
+          faceSouth: profileButtons.faceSouth,
+          faceEast: profileButtons.faceEast,
+          faceWest: profileButtons.faceWest,
+          faceNorth: profileButtons.faceNorth,
+          leftTrigger: profileButtons.leftTrigger,
+          leftBumper: profileButtons.leftBumper,
+          rightBumper: profileButtons.rightBumper,
+          rightTrigger: profileButtons.rightTrigger,
+          back: profileButtons.back,
+          start: profileButtons.start,
+          leftStick: profileButtons.leftStick,
+          rightStick: profileButtons.rightStick,
+          dpadUp: profileButtons.dpadUp,
+          dpadDown: profileButtons.dpadDown,
+          dpadLeft: profileButtons.dpadLeft,
+          dpadRight: profileButtons.dpadRight,
+          home: profileButtons.home,
+        },
+        version: PROFILE_VERSION,
+      };
+    }
+
+    function saveProfile() {
+      const pad = findPad();
+      if (!pad || stepIndex < steps.length) return;
+      localStorage.setItem(profileKey(pad), JSON.stringify(buildProfile(pad)));
+      renderCalibration(pad);
+    }
+
+    function restart() {
+      stepIndex = 0;
+      neutralAxes = [];
+      for (const key of Object.keys(profileAxes)) delete profileAxes[key];
+      for (const key of Object.keys(profileButtons)) delete profileButtons[key];
+      renderCalibration(findPad());
+      renderMapping();
+    }
+
+    function renderCalibration(pad) {
+      els.capture.disabled = !pad || stepIndex >= steps.length;
+      els.skip.disabled = !pad || stepIndex >= steps.length;
+      els.restart.disabled = !pad;
+      els.save.disabled = !pad || stepIndex < steps.length;
+      els.returnGame.disabled = false;
+      if (!pad) {
+        els.step.textContent = 'Connect a controller to begin.';
+        els.savedStatus.textContent = 'no';
+        els.savedStatus.className = 'status';
+        return;
+      }
+      els.padName.textContent = pad.id;
+      els.padMapping.textContent = pad.mapping || 'raw';
+      els.padShape.textContent = `${pad.axes.length} / ${pad.buttons.length}`;
+      const saved = !!localStorage.getItem(profileKey(pad));
+      els.savedStatus.textContent = saved ? 'yes' : 'no';
+      els.savedStatus.className = `status ${saved ? 'on' : ''}`;
+      els.step.textContent = stepIndex >= steps.length ? 'Calibration complete. Save the profile.' : steps[stepIndex].label;
+      if (stepIndex === 0) {
+        els.inputHint.textContent = 'The first button you press is saved as Start/Menu and becomes the confirm button.';
+      } else if (steps[stepIndex]?.key?.endsWith('X') || steps[stepIndex]?.key?.endsWith('Y')) {
+        els.inputHint.textContent = axisReady()
+          ? 'Axis held. Tap Start/Menu to confirm.'
+          : 'Hold the stick hard in the requested direction until this prompt says it is ready.';
+      } else if (stepIndex < steps.length) {
+        els.inputHint.textContent = 'Hold the requested input and tap Start/Menu. Tap Start/Menu alone to skip unavailable inputs.';
+      } else {
+        els.inputHint.textContent = '';
+      }
+      renderMapping();
+    }
+
+    function formatMapping(mapping) {
+      if (typeof mapping === 'number') return `Button ${mapping}`;
+      if (mapping?.type === 'hatAxis') return `Axis ${mapping.index} hat ${mapping.direction}`;
+      if (mapping && typeof mapping.index === 'number') {
+        return `Axis ${mapping.index}${mapping.invert ? ' inverted' : ''}`;
+      }
+      return 'unset';
+    }
+
+    function renderMapping() {
+      els.mapping.innerHTML = '';
+      for (const key of axisKeys) {
+        appendMappingRow(key, profileAxes[key]);
+      }
+      for (const key of buttonKeys) {
+        appendMappingRow(key, profileButtons[key]);
+      }
+    }
+
+    function appendMappingRow(name, mapping) {
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'mapping-name';
+      nameDiv.textContent = name;
+      const valueDiv = document.createElement('div');
+      const text = formatMapping(mapping);
+      valueDiv.className = `mapping-value ${text === 'unset' ? 'unset' : ''}`;
+      valueDiv.textContent = text;
+      els.mapping.appendChild(nameDiv);
+      els.mapping.appendChild(valueDiv);
+    }
+
+    function renderDiagnostics(pad) {
+      els.axes.innerHTML = '';
+      els.buttons.innerHTML = '';
+      els.diagId.textContent = pad?.id ?? 'none';
+      els.diagIndex.textContent = pad ? String(pad.index) : 'none';
+      els.diagTimestamp.textContent = pad ? fixed(pad.timestamp) : '0';
+      if (!pad) return;
+      pad.axes.forEach((value, index) => {
+        const div = document.createElement('div');
+        div.className = `axis ${Math.abs(value || 0) > 0.25 ? 'on' : ''}`;
+        div.textContent = `Axis ${index}: ${fixed(value)}`;
+        els.axes.appendChild(div);
+      });
+      pad.buttons.forEach((button, index) => {
+        const div = document.createElement('div');
+        div.className = `game-button ${isButtonHeld(button) ? 'on' : ''}`;
+        div.textContent = `${index}: ${fixed(button.value)}`;
+        els.buttons.appendChild(div);
+      });
+    }
+
+    function update() {
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+      const pad = findPad();
+      if (pad) {
+        updateAxisHold(pad, dt);
+        if (stepIndex === 0) {
+          captureStep();
+        } else if (startJustPressed(pad)) {
+          const before = stepIndex;
+          captureStep();
+          if (stepIndex === before && !hasCaptureCandidate(pad)) skipStep();
+        }
+        lastButtons = pad.buttons.slice();
+      }
+      renderCalibration(pad);
+      renderDiagnostics(pad);
+      requestAnimationFrame(update);
+    }
+
+    els.capture.addEventListener('click', captureStep);
+    els.skip.addEventListener('click', skipStep);
+    els.restart.addEventListener('click', restart);
+    els.save.addEventListener('click', saveProfile);
+    els.returnGame.addEventListener('click', () => { window.location.href = returnUrl; });
+    update();
+    renderMapping();
+  </script>
+</body>
+</html>

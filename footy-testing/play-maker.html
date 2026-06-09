@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Footy Stoppage Play Maker</title>
+  <style>
+    :root {
+      --bg: #ece3d2;
+      --paper: #f5efe5;
+      --panel: rgba(255,255,255,0.46);
+      --ink: #172117;
+      --muted: #627062;
+      --line: rgba(67, 55, 32, 0.15);
+      --accent: #b14e1f;
+      --field-a: #6ba154;
+      --field-b: #4d7e44;
+      --field-c: #355d35;
+      --ruck: rgba(115, 255, 89, 0.95);
+      --opp-ruck: rgba(255, 130, 130, 0.95);
+      --center: rgba(26, 217, 255, 0.95);
+      --rr: rgba(255, 209, 46, 0.95);
+      --rover: rgba(255, 122, 31, 0.95);
+      --white: rgba(255,255,255,0.96);
+      --warn: rgba(214, 42, 42, 0.96);
+      --shadow: 0 20px 42px rgba(53, 40, 18, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.7), transparent 34%),
+        linear-gradient(180deg, var(--bg), #dfd3c1);
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.5), rgba(255,255,255,0.14)), var(--paper);
+      border: 1px solid rgba(91, 73, 38, 0.12);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px;
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      padding: 14px;
+      min-height: calc(100vh - 36px);
+    }
+
+    .group {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 15px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    h1, h2 {
+      margin: 0;
+      letter-spacing: 0.02em;
+    }
+
+    h1 { font-size: 1.24rem; }
+
+    h2 {
+      font-size: 0.95rem;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .hint, label, input, select, textarea, button {
+      font-size: 0.92rem;
+    }
+
+    .hint {
+      color: var(--muted);
+      line-height: 1.36;
+    }
+
+    .row, .row3 {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row { grid-template-columns: 1fr 1fr; }
+    .row3 { grid-template-columns: repeat(3, 1fr); }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+    }
+
+    input, select, textarea, button {
+      width: 100%;
+      padding: 9px 11px;
+      border-radius: 11px;
+      border: 1px solid rgba(100, 82, 46, 0.18);
+      background: rgba(255,255,255,0.92);
+      color: var(--ink);
+      font: inherit;
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 220px;
+      line-height: 1.36;
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #ffffff, #efe4cf);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .slot-card {
+      position: relative;
+      padding-left: 22px;
+    }
+
+    .slot-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      border-radius: 15px 0 0 15px;
+      background: var(--slot-color);
+    }
+
+    .slot-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--slot-color);
+      color: #102010;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+    }
+
+    .toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+    }
+
+    .slot-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .slot-hidden {
+      display: none;
+    }
+
+    .stage-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 4px 6px 0 6px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      color: var(--muted);
+      justify-content: flex-end;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,0.22);
+      background: currentColor;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      min-height: 660px;
+      border-radius: 18px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 25% 18%, rgba(255,255,255,0.14), transparent 24%),
+        linear-gradient(180deg, var(--field-a), var(--field-b));
+      border: 1px solid rgba(20, 49, 24, 0.26);
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .tool-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .tiny-btn {
+      width: 42px;
+      min-width: 42px;
+      padding: 9px 0;
+      font-size: 1rem;
+    }
+
+    .toast {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(23, 33, 23, 0.92);
+      color: rgba(255,255,255,0.96);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+      opacity: 0;
+      transform: translateY(-8px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      z-index: 10;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .canvas-wrap.disabled {
+      opacity: 0.45;
+    }
+
+    .mono { font-family: Consolas, "Courier New", monospace; }
+    .small { font-size: 0.82rem; }
+
+    @media (max-width: 1180px) {
+      body { grid-template-columns: 1fr; }
+      .sidebar { max-height: none; }
+      .stage { min-height: 72vh; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="panel sidebar">
+    <section class="group">
+      <h1>Stoppage Play Maker</h1>
+      <div class="hint">
+        Add or modify an existing play. Define type of play and a descriptive name. Each follower is asssigned <span class="mono">tag</span>, <span class="mono">zone</span>, or <span class="mono">burst</span> roles with associated coordinates. Coordinates are relative to contest point at <span class="mono">(0,0)</span>.
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Stored Plays</h2>
+      <div class="tool-row">
+        <label>Plays
+          <select id="playIdDropdown"></select>
+        </label>
+        <button id="newPlay" class="tiny-btn" title="New Play">+</button>
+        <button id="deletePlay" class="tiny-btn" title="Delete Play">&#128465;</button>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Play Meta</h2>
+      <div class="row">
+        <label>Play Id
+          <input id="playId" value="custom_ball_up_play">
+        </label>
+      </div>
+      <div>
+        <label>Play Name
+          <input id="playName" value="Custom">
+        </label>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Contest</h2>
+      <div>
+        <label>Contest Type
+          <select id="contestType">
+            <option value="ballUp">ballUp</option>
+            <option value="throwIn">throwIn</option>
+            <option value="centerBounce">centerBounce</option>
+          </select>
+        </label>
+      </div>
+      <div class="row3">
+        <button id="roundNumbers">Round Numbers</button>
+        <button id="resetLayout">Reset Layout</button>
+        <button id="copySpec">Copy JSON</button>
+      </div>
+      <div class="hint">
+        Double click any tap diamond to toggle the burst arrow for that player. Boundary preview is normalized with the boundary at the top, offense to the right, defense to the left.
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>Ruck</h2>
+      <div class="row">
+        <label>Ruck Role
+          <select id="ruckRole">
+            <option value="jump">jump</option>
+            <option value="wrestle">wrestle</option>
+          </select>
+        </label>
+        <label>Tap Type
+          <select id="tapType">
+            <option value="space">space</option>
+            <option value="front">front</option>
+            <option value="left">left</option>
+            <option value="right">right</option>
+            <option value="back">back</option>
+            <option value="neutral">neutral</option>
+            <option value="custom">custom</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="group slot-card" style="--slot-color: var(--center)">
+      <div class="slot-title">
+        <h2>Follower 1</h2>
+        <span class="pill">C</span>
+      </div>
+      <div class="slot-section">
+        <label>Role
+          <select id="centerRole"></select>
+        </label>
+      </div>
+      <div class="slot-section" id="centerTagWrap">
+        <label>Tag Target
+          <select id="centerTagTarget"></select>
+        </label>
+      </div>
+      <div class="slot-section" id="centerMoveWrap">
+        <label>Burst Relative Speed
+          <input id="centerBurstSpeed" type="number" min="0" max="1" step="0.05" value="0.75">
+        </label>
+      </div>
+    </section>
+
+    <section class="group slot-card" style="--slot-color: var(--rr)">
+      <div class="slot-title">
+        <h2>Follower 2</h2>
+        <span class="pill">RR</span>
+      </div>
+      <div class="slot-section">
+        <label>Role
+          <select id="rrRole"></select>
+        </label>
+      </div>
+      <div class="slot-section" id="rrTagWrap">
+        <label>Tag Target
+          <select id="rrTagTarget"></select>
+        </label>
+      </div>
+      <div class="slot-section" id="rrMoveWrap">
+        <label>Burst Relative Speed
+          <input id="rrBurstSpeed" type="number" min="0" max="1" step="0.05" value="0.75">
+        </label>
+      </div>
+    </section>
+
+    <section class="group slot-card" style="--slot-color: var(--rover)">
+      <div class="slot-title">
+        <h2>Follower 3</h2>
+        <span class="pill">Rover</span>
+      </div>
+      <div class="slot-section">
+        <label>Role
+          <select id="roverRole"></select>
+        </label>
+      </div>
+      <div class="slot-section" id="roverTagWrap">
+        <label>Tag Target
+          <select id="roverTagTarget"></select>
+        </label>
+      </div>
+      <div class="slot-section" id="roverMoveWrap">
+        <label>Burst Relative Speed
+          <input id="roverBurstSpeed" type="number" min="0" max="1" step="0.05" value="0.75">
+        </label>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>State JSON</h2>
+      <div class="row3">
+        <button id="copyState">Copy State</button>
+        <button id="loadState">Load State</button>
+        <button id="clearOutput">Clear Output</button>
+      </div>
+      <textarea id="stateArea" class="mono small"></textarea>
+    </section>
+  </aside>
+
+  <main class="panel stage">
+    <div class="stage-top">
+      <div>
+        <h1 id="stageTitle">Custom Play</h1>
+        <div class="hint" id="stageHint">Drag contest ring, tap diamond, setup circles, tap diamonds, and burst arrow tips.</div>
+      </div>
+      <div class="legend">
+        <span style="color: var(--ruck)"><i class="swatch"></i>Home Ruck</span>
+        <span style="color: var(--opp-ruck)"><i class="swatch"></i>Opp Ruck</span>
+        <span style="color: var(--center)"><i class="swatch"></i>Follower 1</span>
+        <span style="color: var(--rr)"><i class="swatch"></i>Follower 2</span>
+        <span style="color: var(--rover)"><i class="swatch"></i>Follower 3</span>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <svg id="fieldSvg" viewBox="0 0 960 720" aria-label="Field editor"></svg>
+    </div>
+    <div class="footer">
+      <section class="group">
+        <h2>Simplified Play JSON</h2>
+        <textarea id="specOutput" class="mono small"></textarea>
+      </section>
+      <section class="group">
+        <h2>Integration Notes</h2>
+        <textarea id="notesOutput" class="mono small"></textarea>
+      </section>
+    </div>
+  </main>
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const VIEW_HALF = 20;
+    const SVG_W = 960;
+    const SVG_H = 720;
+    const MARGIN = 56;
+    const BURST_ARROW_MAX_M = 10;
+    const STORAGE_PREFIX = 'playmaker/';
+    const STORAGE_SCHEMA_KEY = 'playmaker/schema-version';
+    const STORAGE_SCHEMA_VERSION = '3';
+    const VALID_CONTEST_TYPES = Object.freeze(['ballUp', 'throwIn', 'centerBounce']);
+    const COLORS = Object.freeze({
+      ruck: 'rgba(115, 255, 89, 0.95)',
+      oppRuck: 'rgba(255, 130, 130, 0.95)',
+      center: 'rgba(26, 217, 255, 0.95)',
+      rr: 'rgba(255, 209, 46, 0.95)',
+      rover: 'rgba(255, 122, 31, 0.95)',
+      white: 'rgba(255,255,255,0.96)',
+      warn: 'rgba(214, 42, 42, 0.96)',
+      shadow: 'rgba(0,0,0,0.24)',
+      ink: 'rgba(255,255,255,0.95)'
+    });
+    const ROLE_OPTIONS = [
+      { value: 'tag', label: 'tag' },
+      { value: 'zone', label: 'zone' },
+      { value: 'burst', label: 'burst' },
+    ];
+    const TARGET_OPTIONS = [
+      { value: 'C', label: 'Follower 1 (C)' },
+      { value: 'RR', label: 'Follower 2 (RR)' },
+      { value: 'Rover', label: 'Follower 3 (Rover)' },
+    ];
+    const TAP_ALIASES = Object.freeze({
+      space: { x: -12, y: -7 },
+      front: { x: 0, y: -10 },
+      left: { x: -8, y: -2 },
+      right: { x: 8, y: -2 },
+      back: { x: 0, y: 8 },
+      neutral: { x: 0, y: 0 },
+    });
+    const TAG_VIS_POINTS = Object.freeze({
+      C: { x: 0, y: -14 },
+      RR: { x: -5, y: -12 },
+      Rover: { x: 5, y: -12 },
+    });
+    const SLOT_DEFS = Object.freeze([
+      { key: 'center', stateKey: 'center', label: 'Follower 1', position: 'C', color: COLORS.center },
+      { key: 'rr', stateKey: 'ruckRover', label: 'Follower 2', position: 'RR', color: COLORS.rr },
+      { key: 'rover', stateKey: 'rover', label: 'Follower 3', position: 'Rover', color: COLORS.rover },
+    ]);
+
+    const svg = document.getElementById('fieldSvg');
+    const canvasWrap = document.querySelector('.canvas-wrap');
+    const specOutput = document.getElementById('specOutput');
+    const notesOutput = document.getElementById('notesOutput');
+    const stateArea = document.getElementById('stateArea');
+    const toast = document.getElementById('toast');
+
+    const state = {
+      id: 'custom_ball_up_play',
+      name: 'Custom',
+      contestType: 'ballUp',
+      ruck: {
+        role: 'jump',
+        setup: { x: 0, y: 3 },
+        tap: { x: -12, y: -7 },
+      },
+      center: {
+        role: 'zone',
+        tagTarget: 'RR',
+        setup: { x: -11, y: 12 },
+        tap: { x: -8, y: 4 },
+        burstVel: { x: 0, y: 0 },
+      },
+      ruckRover: {
+        role: 'burst',
+        tagTarget: 'C',
+        setup: { x: 9, y: 8 },
+        tap: { x: 6, y: -1 },
+        burstVel: { x: 0.62, y: -0.5 },
+      },
+      rover: {
+        role: 'tag',
+        tagTarget: 'Rover',
+        setup: { x: 15, y: 10 },
+        tap: { x: 16, y: -1 },
+        burstVel: { x: 0, y: 0 },
+      },
+    };
+
+    const uiState = {
+      contest: { x: 0, y: 0 },
+      tapType: 'space',
+      prevRoleBySlot: {
+        center: 'zone',
+        rr: 'burst',
+        rover: 'zone',
+      },
+    };
+
+    const inputs = {
+      playIdDropdown: document.getElementById('playIdDropdown'),
+      newPlay: document.getElementById('newPlay'),
+      deletePlay: document.getElementById('deletePlay'),
+      playId: document.getElementById('playId'),
+      playName: document.getElementById('playName'),
+      contestType: document.getElementById('contestType'),
+      ruckRole: document.getElementById('ruckRole'),
+      tapType: document.getElementById('tapType'),
+      stageTitle: document.getElementById('stageTitle'),
+      stageHint: document.getElementById('stageHint'),
+    };
+
+    let activeStorageId = state.id;
+    let toastTimer = 0;
+
+    function slotInput(name) {
+      return document.getElementById(name);
+    }
+
+    function populateSelect(select, values) {
+      select.innerHTML = '';
+      for (const value of values) {
+        const option = document.createElement('option');
+        option.value = value.value;
+        option.textContent = value.label;
+        select.appendChild(option);
+      }
+    }
+
+    for (const slot of SLOT_DEFS) {
+      populateSelect(slotInput(slot.key + 'Role'), ROLE_OPTIONS);
+      populateSelect(slotInput(slot.key + 'TagTarget'), TARGET_OPTIONS);
+    }
+
+    function round(value) {
+      return Math.round(value * 100) / 100;
+    }
+
+    function signed(value) {
+      return value >= 0 ? `+${round(value)}` : `${round(value)}`;
+    }
+
+    function clonePoint(point) {
+      return { x: point.x, y: point.y };
+    }
+
+    function add(a, b) {
+      return { x: a.x + b.x, y: a.y + b.y };
+    }
+
+    function sub(a, b) {
+      return { x: a.x - b.x, y: a.y - b.y };
+    }
+
+    function scale(v, amount) {
+      return { x: v.x * amount, y: v.y * amount };
+    }
+
+    function dot(a, b) {
+      return a.x * b.x + a.y * b.y;
+    }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function normalize(v) {
+      const len = Math.hypot(v.x, v.y);
+      if (len < 1e-6) return { x: 0, y: 0 };
+      return { x: v.x / len, y: v.y / len };
+    }
+
+    function activePlayId() {
+      return inputs.playId.value.trim();
+    }
+
+    function isValidPlayId(id) {
+      return /^[A-Za-z0-9_-]+$/.test(id);
+    }
+
+    function playStorageKey(id) {
+      return STORAGE_PREFIX + id;
+    }
+
+    function cloneState() {
+      return JSON.parse(JSON.stringify(state));
+    }
+
+    function slotState(slotKey) {
+      const slot = SLOT_DEFS.find(function matches(def) { return def.key === slotKey; });
+      return slot ? state[slot.stateKey] : null;
+    }
+
+    function isValidContestType(contestType) {
+      return typeof contestType === 'string' && VALID_CONTEST_TYPES.includes(contestType);
+    }
+
+    function defaultRuckSetupForContestType(contestType) {
+      if (contestType === 'centerBounce') return { x: 0, y: 8 };
+      if (contestType === 'throwIn') return { x: -1.8, y: 4 };
+      return { x: 0, y: 3 };
+    }
+
+    function applyDefaultLayout(target) {
+      target.id = 'custom_ball_up_play';
+      target.name = 'Custom';
+      target.contestType = 'ballUp';
+      target.ruck = {
+        role: 'jump',
+        setup: { x: 0, y: 3 },
+        tap: { x: -12, y: -7 },
+      };
+      target.center = {
+        role: 'zone',
+        tagTarget: 'RR',
+        setup: { x: -11, y: 12 },
+        tap: { x: -8, y: 4 },
+        burstVel: { x: 0, y: 0 },
+      };
+      target.ruckRover = {
+        role: 'burst',
+        tagTarget: 'C',
+        setup: { x: 9, y: 8 },
+        tap: { x: 6, y: -1 },
+        burstVel: { x: 0.62, y: -0.5 },
+      };
+      target.rover = {
+        role: 'tag',
+        tagTarget: 'Rover',
+        setup: { x: 15, y: 10 },
+        tap: { x: 16, y: -1 },
+        burstVel: { x: 0, y: 0 },
+      };
+      uiState.contest = { x: 0, y: 0 };
+      uiState.tapType = 'space';
+      uiState.prevRoleBySlot = {
+        center: 'zone',
+        rr: 'burst',
+        rover: 'zone',
+      };
+    }
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(function hideToast() {
+        toast.classList.remove('show');
+      }, 1300);
+    }
+
+    function listStoredPlayIds() {
+      const ids = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+        ids.push(key.slice(STORAGE_PREFIX.length));
+      }
+      return ids.sort();
+    }
+
+    function storedPlaySummary(id) {
+      const raw = localStorage.getItem(playStorageKey(id));
+      if (!raw) return { id, name: '' };
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !isValidContestType(parsed.contestType)) {
+          localStorage.removeItem(playStorageKey(id));
+          return null;
+        }
+        return { id, name: parsed.name ?? '' };
+      } catch (_error) {
+        localStorage.removeItem(playStorageKey(id));
+        return null;
+      }
+    }
+
+    function refreshStoredPlayOptions() {
+      const current = activeStorageId;
+      inputs.playIdDropdown.innerHTML = '';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = 'Stored plays';
+      inputs.playIdDropdown.appendChild(blank);
+      for (const id of listStoredPlayIds()) {
+        const summary = storedPlaySummary(id);
+        if (!summary) continue;
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `${summary.id} | ${summary.name || '(unnamed)'}`;
+        if (id === current) option.selected = true;
+        inputs.playIdDropdown.appendChild(option);
+      }
+      if (!current) inputs.playIdDropdown.value = '';
+      if (current) inputs.playId.value = current;
+    }
+
+    function saveActivePlay() {
+      if (!activeStorageId) return;
+      localStorage.setItem(playStorageKey(activeStorageId), JSON.stringify(cloneState()));
+      refreshStoredPlayOptions();
+    }
+
+    function loadStoredPlay(id) {
+      const raw = localStorage.getItem(playStorageKey(id));
+      if (!raw) return;
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (_error) {
+        localStorage.removeItem(playStorageKey(id));
+        if (activeStorageId === id) activeStorageId = '';
+        refreshStoredPlayOptions();
+        updateGuiEnabled();
+        showToast('Deleted invalid stored play.');
+        return;
+      }
+      if (!parsed || typeof parsed !== 'object' || !isValidContestType(parsed.contestType)) {
+        localStorage.removeItem(playStorageKey(id));
+        if (activeStorageId === id) activeStorageId = '';
+        refreshStoredPlayOptions();
+        updateGuiEnabled();
+        showToast('Deleted invalid stored play.');
+        return;
+      }
+      applyDefaultLayout(state);
+      if (typeof parsed.id === 'string') state.id = parsed.id;
+      if (typeof parsed.name === 'string') state.name = parsed.name;
+      state.contestType = parsed.contestType;
+      if (parsed.ruck) {
+        state.ruck.role = parsed.ruck.role ?? state.ruck.role;
+        if (parsed.ruck.setup) state.ruck.setup = clonePoint(parsed.ruck.setup);
+        if (parsed.ruck.tap) state.ruck.tap = clonePoint(parsed.ruck.tap);
+      }
+      for (const slot of SLOT_DEFS) {
+        const next = parsed[slot.stateKey];
+        const current = state[slot.stateKey];
+        if (!next || !current) continue;
+        current.role = next.role ?? current.role;
+        current.tagTarget = next.tagTarget ?? current.tagTarget;
+        if (next.setup) current.setup = clonePoint(next.setup);
+        if (next.tap) current.tap = clonePoint(next.tap);
+        if (next.burstVel) current.burstVel = clonePoint(next.burstVel);
+      }
+      uiState.tapType = tapAliasForPoint(state.ruck.tap);
+      uiState.contest = { x: 0, y: 0 };
+      uiState.prevRoleBySlot = {
+        center: state.center.role === 'tag' ? 'zone' : state.center.role,
+        rr: state.ruckRover.role === 'tag' ? 'zone' : state.ruckRover.role,
+        rover: state.rover.role === 'tag' ? 'zone' : state.rover.role,
+      };
+      activeStorageId = id;
+      syncInputsFromState();
+      inputs.playIdDropdown.value = id;
+      render(false);
+    }
+
+    function updateGuiEnabled() {
+      const enabled = !!activePlayId();
+      canvasWrap.classList.toggle('disabled', !enabled);
+      svg.style.pointerEvents = enabled ? 'auto' : 'none';
+      const allowedIds = new Set(['newPlay', 'deletePlay', 'playId', 'playIdDropdown']);
+      for (const element of document.querySelectorAll('input, select, button, textarea')) {
+        const htmlElement = /** @type {HTMLInputElement|HTMLSelectElement|HTMLButtonElement|HTMLTextAreaElement} */ (element);
+        if (allowedIds.has(htmlElement.id)) continue;
+        htmlElement.disabled = !enabled;
+      }
+      inputs.deletePlay.disabled = !activeStorageId;
+    }
+
+    function flushLegacyDatastore() {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+        localStorage.removeItem(key);
+      }
+    }
+
+    function ensureStorageSchema() {
+      if (localStorage.getItem(STORAGE_SCHEMA_KEY) === STORAGE_SCHEMA_VERSION) return;
+      flushLegacyDatastore();
+      localStorage.setItem(STORAGE_SCHEMA_KEY, STORAGE_SCHEMA_VERSION);
+    }
+
+    function ensureDefaultStoredPlay() {
+      applyDefaultLayout(state);
+      state.id = 'custom_ball_up_play';
+      state.name = 'Custom Ball Up Play';
+      activeStorageId = state.id;
+      syncInputsFromState();
+      saveActivePlay();
+    }
+    function previewRuckPoints() {
+      const home = add(uiState.contest, state.ruck.setup);
+      if (state.contestType === 'centerBounce') {
+        return {
+          home,
+          away: add(uiState.contest, { x: state.ruck.setup.x, y: -state.ruck.setup.y }),
+        };
+      }
+      if (state.contestType === 'throwIn') {
+        return {
+          home,
+          away: add(uiState.contest, { x: -state.ruck.setup.x, y: state.ruck.setup.y }),
+        };
+      }
+      return {
+        home,
+        away: add(uiState.contest, { x: state.ruck.setup.x, y: -state.ruck.setup.y }),
+      };
+    }
+
+    function previewTapPointForAlias(alias) {
+      const relative = TAP_ALIASES[alias] ?? TAP_ALIASES.space;
+      return add(uiState.contest, relative);
+    }
+
+    function tapAliasForPoint(point) {
+      for (const [alias, relative] of Object.entries(TAP_ALIASES)) {
+        const candidate = add(uiState.contest, relative);
+        if (dist(candidate, point) <= 0.15) return alias;
+      }
+      return 'custom';
+    }
+
+    function tagVisualPoint(position) {
+      return add(uiState.contest, TAG_VIS_POINTS[position]);
+    }
+
+    function clampLocal(point) {
+      return {
+        x: round(Math.max(-VIEW_HALF, Math.min(VIEW_HALF, point.x))),
+        y: round(Math.max(-VIEW_HALF, Math.min(VIEW_HALF, point.y))),
+      };
+    }
+
+    function localToScreen(point) {
+      const usableW = SVG_W - MARGIN * 2;
+      const usableH = SVG_H - MARGIN * 2;
+      return {
+        x: MARGIN + ((point.x + VIEW_HALF) / (VIEW_HALF * 2)) * usableW,
+        y: MARGIN + ((point.y + VIEW_HALF) / (VIEW_HALF * 2)) * usableH,
+      };
+    }
+
+    function screenToLocal(x, y) {
+      const usableW = SVG_W - MARGIN * 2;
+      const usableH = SVG_H - MARGIN * 2;
+      return clampLocal({
+        x: (((x - MARGIN) / usableW) * (VIEW_HALF * 2)) - VIEW_HALF,
+        y: (((y - MARGIN) / usableH) * (VIEW_HALF * 2)) - VIEW_HALF,
+      });
+    }
+
+    function createSvg(tag, attrs = {}) {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attrs)) {
+        node.setAttribute(key, String(value));
+      }
+      return node;
+    }
+
+    function pathLine(a, b) {
+      const aa = localToScreen(a);
+      const bb = localToScreen(b);
+      return `M ${aa.x} ${aa.y} L ${bb.x} ${bb.y}`;
+    }
+
+    function relativeToContest(point) {
+      return sub(point, uiState.contest);
+    }
+
+    function coordText(point) {
+      return `(${signed(point.x)}, ${signed(point.y)})`;
+    }
+
+    function relativeCoordText(point) {
+      return coordText(relativeToContest(point));
+    }
+
+    function syncInputsFromState() {
+      inputs.playId.value = state.id;
+      inputs.playName.value = state.name;
+      inputs.contestType.value = state.contestType;
+      inputs.ruckRole.value = state.ruck.role;
+      inputs.tapType.value = uiState.tapType;
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        if (!current) continue;
+        slotInput(slot.key + 'Role').value = current.role;
+        slotInput(slot.key + 'TagTarget').value = current.tagTarget;
+        slotInput(slot.key + 'BurstSpeed').value = round(Math.hypot(current.burstVel?.x ?? 0, current.burstVel?.y ?? 0));
+      }
+    }
+
+    function syncStateFromInputs() {
+      state.id = activePlayId();
+      state.name = inputs.playName.value.trim() || 'Custom';
+      state.contestType = inputs.contestType.value;
+      state.ruck.role = inputs.ruckRole.value;
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        current.role = slotInput(slot.key + 'Role').value;
+        current.tagTarget = slotInput(slot.key + 'TagTarget').value;
+        const speed = Math.max(0, Math.min(1, Number(slotInput(slot.key + 'BurstSpeed').value) || 0));
+        const currentLen = Math.hypot(current.burstVel?.x ?? 0, current.burstVel?.y ?? 0);
+        if (currentLen > 1e-6) {
+          current.burstVel = {
+            x: round((current.burstVel.x / currentLen) * speed),
+            y: round((current.burstVel.y / currentLen) * speed),
+          };
+        } else {
+          current.burstVel = { x: round(speed), y: 0 };
+        }
+      }
+      state.ruck.setup = defaultRuckSetupForContestType(state.contestType);
+      uiState.tapType = inputs.tapType.value;
+    }
+
+    function refreshSlotUi() {
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        const tagWrap = document.getElementById(slot.key + 'TagWrap');
+        const moveWrap = document.getElementById(slot.key + 'MoveWrap');
+        tagWrap.classList.toggle('slot-hidden', current.role !== 'tag');
+        moveWrap.classList.toggle('slot-hidden', current.role !== 'burst');
+      }
+    }
+
+    function segmentListForSlot(slotState) {
+      if (slotState.role === 'tag') return [];
+      const segments = [{ from: slotState.setup, to: slotState.tap }];
+      if (slotState.role === 'burst') {
+        segments.push({ from: slotState.tap, to: burstTipForPlayer(slotState) });
+      }
+      return segments;
+    }
+
+    function orientation(a, b, c) {
+      return (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+    }
+
+    function onSegment(a, b, c) {
+      return Math.min(a.x, c.x) - 1e-6 <= b.x && b.x <= Math.max(a.x, c.x) + 1e-6
+        && Math.min(a.y, c.y) - 1e-6 <= b.y && b.y <= Math.max(a.y, c.y) + 1e-6;
+    }
+
+    function segmentsIntersect(a, b, c, d) {
+      const o1 = orientation(a, b, c);
+      const o2 = orientation(a, b, d);
+      const o3 = orientation(c, d, a);
+      const o4 = orientation(c, d, b);
+      if ((o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0)) return true;
+      if (Math.abs(o1) < 1e-6 && onSegment(a, c, b)) return true;
+      if (Math.abs(o2) < 1e-6 && onSegment(a, d, b)) return true;
+      if (Math.abs(o3) < 1e-6 && onSegment(c, a, d)) return true;
+      if (Math.abs(o4) < 1e-6 && onSegment(c, b, d)) return true;
+      return false;
+    }
+
+    function slotCrossesRuck(slotState) {
+      const rucks = previewRuckPoints();
+      const homeLane = { from: rucks.home, to: uiState.contest };
+      const awayLane = { from: rucks.away, to: uiState.contest };
+      for (const segment of segmentListForSlot(slotState)) {
+        if (segmentsIntersect(segment.from, segment.to, homeLane.from, homeLane.to)) return true;
+        if (segmentsIntersect(segment.from, segment.to, awayLane.from, awayLane.to)) return true;
+      }
+      return false;
+    }
+
+    function markerList() {
+      const rucks = previewRuckPoints();
+      const markers = [
+        { id: 'contest', point: uiState.contest, color: COLORS.white, label: 'Contest (+0, +0)', shape: 'ring', warn: false, draggable: true },
+        { id: 'ruckHome', point: rucks.home, color: COLORS.ruck, label: `Home Ruck ${relativeCoordText(rucks.home)}`, shape: 'square', warn: false, draggable: true },
+        { id: 'ruckAway', point: rucks.away, color: COLORS.oppRuck, label: `Opp Ruck ${relativeCoordText(rucks.away)}`, shape: 'square', warn: false, draggable: false },
+        { id: 'tap', point: state.ruck.tap, color: COLORS.ruck, label: `Tap ${relativeCoordText(state.ruck.tap)}`, shape: 'diamond', warn: false, draggable: true },
+      ];
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        const warn = slotCrossesRuck(current);
+        if (current.role === 'tag') {
+          const point = tagVisualPoint(slot.position);
+          markers.push({
+            id: slot.key + ':tag',
+            point,
+            color: slot.color,
+            label: `${slot.position} tag ${relativeCoordText(point)} -> ${current.tagTarget}`,
+            shape: 'cross',
+            warn: false,
+            draggable: false
+          });
+          continue;
+        }
+        markers.push({ id: slot.key + ':setup', point: current.setup, color: slot.color, label: `${slot.position} setup ${relativeCoordText(current.setup)}`, shape: 'circle', warn, draggable: true });
+        markers.push({ id: slot.key + ':tap', point: current.tap, color: slot.color, label: `${slot.position} tap ${relativeCoordText(current.tap)}`, shape: 'diamond', warn, draggable: true });
+        if (current.role === 'burst') {
+          const burstTip = add(current.tap, scale(normalize(current.burstVel), BURST_ARROW_MAX_M * Math.max(Math.hypot(current.burstVel.x, current.burstVel.y), 0.2)));
+          markers.push({ id: slot.key + ':burstTip', point: burstTip, color: slot.color, label: `${slot.position} burst ${relativeCoordText(burstTip)}`, shape: 'triangle', warn, draggable: true });
+        }
+      }
+      return markers;
+    }
+
+    function resetLayout() {
+      applyDefaultLayout(state);
+      syncInputsFromState();
+    }
+
+    function roundAllPositions() {
+      uiState.contest = clampLocal({ x: Math.round(uiState.contest.x), y: Math.round(uiState.contest.y) });
+      state.ruck.setup = clampLocal({ x: Math.round(state.ruck.setup.x), y: Math.round(state.ruck.setup.y) });
+      state.ruck.tap = clampLocal({ x: Math.round(state.ruck.tap.x), y: Math.round(state.ruck.tap.y) });
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        current.setup = clampLocal({ x: Math.round(current.setup.x), y: Math.round(current.setup.y) });
+        current.tap = clampLocal({ x: Math.round(current.tap.x), y: Math.round(current.tap.y) });
+        current.burstVel = { x: round(current.burstVel.x), y: round(current.burstVel.y) };
+      }
+      uiState.tapType = tapAliasForPoint(state.ruck.tap);
+    }
+
+    function burstTipForPlayer(playerState) {
+      const speed = Math.max(Math.hypot(playerState.burstVel.x, playerState.burstVel.y), 0.2);
+      return add(playerState.tap, scale(normalize(playerState.burstVel), BURST_ARROW_MAX_M * speed));
+    }
+
+    function buildPlayJson() {
+      const result = {
+        id: state.id,
+        name: state.name,
+        contestType: state.contestType,
+        ruck: {
+          role: state.ruck.role,
+          setup: clonePoint(state.ruck.setup),
+          tap: relativeToContest(state.ruck.tap),
+        },
+      };
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        if (current.role === 'tag') {
+          result[slot.stateKey] = {
+            role: 'tag',
+            tagTarget: current.tagTarget,
+          };
+          continue;
+        }
+        const entry = {
+          role: current.role,
+          setup: relativeToContest(current.setup),
+          tap: relativeToContest(current.tap),
+        };
+        if (current.role === 'burst') {
+          entry.burstVel = { x: round(current.burstVel.x), y: round(current.burstVel.y) };
+        }
+        result[slot.stateKey] = entry;
+      }
+      return result;
+    }
+
+    function buildIntegrationNotes() {
+      return [
+        'Proposed cleanup target:',
+        '',
+        'follower.role: tag | zone | burst',
+        'tag.tag_target: C | RR | Rover',
+        'zone/burst.setup_pos: hold until launch',
+        'zone/burst.tap_pos: arrive by tap time if feasible',
+        'burst.burst.dir + relativeSpeed: post-tap run vector',
+        'contestType: centerBounce | ballUp | throwIn',
+        'ruck.role: jump | wrestle',
+        'ruck starts: derived from stoppage type, preview only',
+        '',
+        'Suggested adapter rules:',
+        '- zone -> role: holdZone or receiver depending on downstream logic',
+        '- burst -> role: receiver/decoy + one post-tap velocity vector',
+        '- tag -> direct position-target assignment, no extra setup geometry',
+        '- center bounce ignores wrestle',
+      ].join('\n');
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).catch(function ignoreClipboardError() {});
+        return;
+      }
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      temp.remove();
+    }
+
+    function loadStateJson() {
+      try {
+        const parsed = JSON.parse(stateArea.value);
+        if (!parsed || typeof parsed !== 'object') return;
+        if (!isValidContestType(parsed.contestType)) {
+          alert('Could not load state JSON: invalid contestType.');
+          return;
+        }
+        applyDefaultLayout(state);
+        if (typeof parsed.id === 'string') state.id = parsed.id;
+        if (typeof parsed.name === 'string') state.name = parsed.name;
+        state.contestType = parsed.contestType;
+        if (parsed.ruck) {
+          state.ruck.role = parsed.ruck.role ?? state.ruck.role;
+          if (parsed.ruck.setup) state.ruck.setup = clonePoint(parsed.ruck.setup);
+          if (parsed.ruck.tap) state.ruck.tap = add(uiState.contest, clonePoint(parsed.ruck.tap));
+        }
+        for (const slot of SLOT_DEFS) {
+          const next = parsed[slot.stateKey];
+          const current = slotState(slot.key);
+          if (!next || !current) continue;
+          current.role = next.role ?? current.role;
+          current.tagTarget = next.tagTarget ?? current.tagTarget;
+          if (next.setup) current.setup = clonePoint(next.setup);
+          if (next.tap) current.tap = clonePoint(next.tap);
+          if (next.burstVel) current.burstVel = clonePoint(next.burstVel);
+        }
+        uiState.tapType = tapAliasForPoint(state.ruck.tap);
+        syncInputsFromState();
+        render();
+      } catch (_error) {
+        alert('Could not parse state JSON.');
+      }
+    }
+
+    function markerStroke(marker) {
+      return marker.warn ? COLORS.warn : 'rgba(12,12,12,0.45)';
+    }
+
+    function updateMarker(id, point) {
+      if (id === 'contest') {
+        uiState.contest = point;
+        return;
+      }
+      if (id === 'ruckHome') {
+        state.ruck.setup = relativeToContest(point);
+        return;
+      }
+      if (id === 'tap') {
+        state.ruck.tap = point;
+        uiState.tapType = tapAliasForPoint(point);
+        inputs.tapType.value = uiState.tapType;
+        return;
+      }
+      const [slotKey, part] = id.split(':');
+      const current = slotState(slotKey);
+      if (!current) return;
+      if (part === 'burstTip') {
+        const speed = Math.max(0, Math.min(1, Number(slotInput(slotKey + 'BurstSpeed').value) || Math.hypot(current.burstVel.x, current.burstVel.y)));
+        const dir = normalize(sub(point, current.tap));
+        current.burstVel = { x: round(dir.x * speed), y: round(dir.y * speed) };
+        return;
+      }
+      current[part] = point;
+    }
+
+    function toggleBurstForSlot(slotKey) {
+      const current = slotState(slotKey);
+      if (!current || current.role === 'tag') return;
+      uiState.prevRoleBySlot[slotKey] = current.role;
+      current.role = current.role === 'burst' ? 'zone' : 'burst';
+      if (current.role === 'burst' && Math.hypot(current.burstVel.x, current.burstVel.y) < 0.05) {
+        current.burstVel = { x: 0.62, y: -0.5 };
+      }
+      syncInputsFromState();
+      render();
+    }
+
+    function defaultTagTargetForSlot(slotKey) {
+      const slot = SLOT_DEFS.find(function matches(def) { return def.key === slotKey; });
+      return slot?.position ?? 'C';
+    }
+
+    function toggleTagForSlot(slotKey) {
+      const current = slotState(slotKey);
+      if (!current) return;
+      if (current.role === 'tag') {
+        current.role = uiState.prevRoleBySlot[slotKey] && uiState.prevRoleBySlot[slotKey] !== 'tag' ? uiState.prevRoleBySlot[slotKey] : 'zone';
+      } else {
+        uiState.prevRoleBySlot[slotKey] = current.role;
+        current.role = 'tag';
+        current.tagTarget = defaultTagTargetForSlot(slotKey);
+      }
+      syncInputsFromState();
+      render();
+    }
+
+    function render(shouldPersist = true) {
+      syncStateFromInputs();
+      if (uiState.tapType !== 'custom') {
+        state.ruck.tap = previewTapPointForAlias(uiState.tapType);
+      } else {
+        uiState.tapType = tapAliasForPoint(state.ruck.tap);
+        inputs.tapType.value = uiState.tapType;
+      }
+      refreshSlotUi();
+      updateGuiEnabled();
+      inputs.stageTitle.textContent = state.name || 'Custom Play';
+      inputs.stageHint.textContent = state.contestType === 'throwIn'
+        ? 'Boundary view is normalized: top = boundary, right = offense, left = defense. Ruck starts are visual only.'
+        : 'Local 40m view only. Positive X is right. Negative Y is forward/attacking. Ruck starts are visual only.';
+      svg.innerHTML = '';
+      const rucks = previewRuckPoints();
+
+      const defs = createSvg('defs');
+      const marker = createSvg('marker', {
+        id: 'arrowHead',
+        viewBox: '0 0 10 10',
+        refX: '9',
+        refY: '5',
+        markerWidth: '8',
+        markerHeight: '8',
+        orient: 'auto-start-reverse',
+      });
+      marker.appendChild(createSvg('path', { d: 'M 0 0 L 10 5 L 0 10 z', fill: 'rgba(255,255,255,0.7)' }));
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+
+      const frame = createSvg('rect', {
+        x: MARGIN,
+        y: MARGIN,
+        width: SVG_W - MARGIN * 2,
+        height: SVG_H - MARGIN * 2,
+        rx: 18,
+        fill: 'rgba(18, 55, 25, 0.10)',
+        stroke: 'rgba(255,255,255,0.20)',
+        'stroke-width': 2,
+      });
+      svg.appendChild(frame);
+
+      for (let x = -20; x <= 20; x += 5) {
+        const a = localToScreen({ x, y: -20 });
+        const b = localToScreen({ x, y: 20 });
+        svg.appendChild(createSvg('line', {
+          x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+          stroke: x === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.10)',
+          'stroke-width': x === 0 ? 2.2 : 1.2,
+        }));
+      }
+      for (let y = -20; y <= 20; y += 5) {
+        const a = localToScreen({ x: -20, y });
+        const b = localToScreen({ x: 20, y });
+        svg.appendChild(createSvg('line', {
+          x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+          stroke: y === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.10)',
+          'stroke-width': y === 0 ? 2.2 : 1.2,
+        }));
+      }
+
+      if (state.contestType === 'throwIn') {
+        const curve = `M ${MARGIN - 10} ${MARGIN + 12}
+          C ${SVG_W * 0.28} ${MARGIN - 18}, ${SVG_W * 0.72} ${MARGIN - 18}, ${SVG_W - MARGIN + 10} ${MARGIN + 12}`;
+        svg.appendChild(createSvg('path', {
+          d: curve,
+          stroke: 'rgba(255, 242, 200, 0.94)',
+          'stroke-width': 4,
+          fill: 'none',
+        }));
+        svg.appendChild(createSvg('text', {
+          x: MARGIN + 24, y: MARGIN + 4,
+          fill: COLORS.ink, 'font-size': 14, 'font-weight': 700,
+        })).textContent = 'Defense';
+        svg.appendChild(createSvg('text', {
+          x: SVG_W - MARGIN - 70, y: MARGIN + 4,
+          fill: COLORS.ink, 'font-size': 14, 'font-weight': 700,
+        })).textContent = 'Offense';
+        svg.appendChild(createSvg('text', {
+          x: SVG_W / 2 - 32, y: MARGIN - 10,
+          fill: 'rgba(255,255,255,0.88)', 'font-size': 13, 'font-weight': 700,
+        })).textContent = 'Boundary';
+      } else {
+        svg.appendChild(createSvg('text', {
+          x: MARGIN + 12, y: MARGIN + 4,
+          fill: 'rgba(255,255,255,0.88)', 'font-size': 13, 'font-weight': 700,
+        })).textContent = 'Left';
+        svg.appendChild(createSvg('text', {
+          x: SVG_W - MARGIN - 54, y: MARGIN + 4,
+          fill: 'rgba(255,255,255,0.88)', 'font-size': 13, 'font-weight': 700,
+        })).textContent = 'Right';
+        svg.appendChild(createSvg('text', {
+          x: SVG_W / 2 - 24, y: MARGIN - 10,
+          fill: 'rgba(255,255,255,0.88)', 'font-size': 13, 'font-weight': 700,
+        })).textContent = 'Forward';
+      }
+
+      svg.appendChild(createSvg('path', {
+        d: pathLine(rucks.home, uiState.contest),
+        stroke: 'rgba(255,255,255,0.30)',
+        'stroke-width': 2.2,
+        'stroke-dasharray': '8 6',
+        fill: 'none',
+      }));
+      svg.appendChild(createSvg('path', {
+        d: pathLine(rucks.away, uiState.contest),
+        stroke: 'rgba(255,255,255,0.30)',
+        'stroke-width': 2.2,
+        'stroke-dasharray': '8 6',
+        fill: 'none',
+      }));
+      svg.appendChild(createSvg('path', {
+        d: pathLine(uiState.contest, state.ruck.tap),
+        stroke: COLORS.ruck,
+        'stroke-width': 3,
+        'stroke-dasharray': '5 7',
+        fill: 'none',
+      }));
+
+      for (const slot of SLOT_DEFS) {
+        const current = slotState(slot.key);
+        if (!current || current.role === 'tag') continue;
+        const routeColor = slotCrossesRuck(current) ? COLORS.warn : slot.color;
+        svg.appendChild(createSvg('path', {
+          d: pathLine(current.setup, current.tap),
+          stroke: routeColor,
+          'stroke-width': 3,
+          'stroke-dasharray': '10 7',
+          fill: 'none',
+          opacity: 0.9,
+        }));
+        if (current.role === 'burst') {
+          svg.appendChild(createSvg('path', {
+            d: pathLine(current.tap, burstTipForPlayer(current)),
+            stroke: routeColor,
+            'stroke-width': 3,
+            fill: 'none',
+            opacity: 0.92,
+            'marker-end': 'url(#arrowHead)',
+          }));
+        }
+      }
+
+      for (const markerInfo of markerList()) {
+        const pos = localToScreen(markerInfo.point);
+        const group = createSvg('g', {
+          transform: `translate(${pos.x},${pos.y})`,
+          'data-marker-id': markerInfo.id,
+          style: markerInfo.draggable ? 'cursor: grab;' : 'cursor: default;',
+        });
+        group.appendChild(createSvg('circle', { cx: 2, cy: 3, r: 13, fill: COLORS.shadow, opacity: 0.33 }));
+        const stroke = markerStroke(markerInfo);
+        if (markerInfo.shape === 'circle') {
+          group.appendChild(createSvg('circle', { r: 11, fill: markerInfo.color, stroke, 'stroke-width': markerInfo.warn ? 4 : 2 }));
+        } else if (markerInfo.shape === 'square') {
+          group.appendChild(createSvg('rect', { x: -10, y: -10, width: 20, height: 20, rx: 4, fill: markerInfo.color, stroke, 'stroke-width': markerInfo.warn ? 4 : 2 }));
+        } else if (markerInfo.shape === 'cross') {
+          group.appendChild(createSvg('path', {
+            d: 'M -10 -10 L 10 10 M -10 10 L 10 -10',
+            stroke: markerInfo.color,
+            'stroke-width': 4.5,
+            'stroke-linecap': 'round',
+            fill: 'none'
+          }));
+        } else if (markerInfo.shape === 'diamond') {
+          group.appendChild(createSvg('path', { d: 'M 0 -12 L 11 0 L 0 12 L -11 0 Z', fill: markerInfo.color, stroke, 'stroke-width': markerInfo.warn ? 4 : 2 }));
+        } else if (markerInfo.shape === 'triangle') {
+          group.appendChild(createSvg('path', { d: 'M 0 -12 L 11 10 L -11 10 Z', fill: markerInfo.color, stroke, 'stroke-width': markerInfo.warn ? 4 : 2 }));
+        } else {
+          group.appendChild(createSvg('circle', { r: 13, fill: 'none', stroke, 'stroke-width': markerInfo.warn ? 5 : 4 }));
+          group.appendChild(createSvg('circle', { r: 4, fill: markerInfo.color }));
+        }
+        const label = createSvg('text', {
+          x: 16, y: -16,
+          fill: COLORS.ink,
+          'font-size': 12,
+          'font-weight': 700,
+          'paint-order': 'stroke',
+          stroke: 'rgba(19, 34, 19, 0.56)',
+          'stroke-width': 4,
+          'stroke-linejoin': 'round',
+        });
+        label.textContent = markerInfo.label;
+        group.appendChild(label);
+        svg.appendChild(group);
+      }
+
+      specOutput.value = JSON.stringify(buildPlayJson(), null, 2);
+      notesOutput.value = buildIntegrationNotes();
+      stateArea.value = JSON.stringify(state, null, 2);
+      if (shouldPersist) saveActivePlay();
+    }
+
+    let dragging = null;
+    let dragMoved = false;
+    let pointerDownMarker = null;
+    let pointerDownPos = null;
+    let lastMarkerClick = { id: null, at: 0 };
+
+    svg.addEventListener('pointerdown', function onPointerDown(event) {
+      const markerGroup = event.target.closest('[data-marker-id]');
+      if (!markerGroup) return;
+      const markerId = markerGroup.getAttribute('data-marker-id');
+      if (markerId === 'ruckAway') return;
+      dragging = markerId;
+      dragMoved = false;
+      pointerDownMarker = markerId;
+      pointerDownPos = { x: event.clientX, y: event.clientY };
+      svg.setPointerCapture(event.pointerId);
+    });
+
+    svg.addEventListener('pointermove', function onPointerMove(event) {
+      if (!dragging) return;
+      if (pointerDownPos && Math.hypot(event.clientX - pointerDownPos.x, event.clientY - pointerDownPos.y) > 4) {
+        dragMoved = true;
+      }
+      const rect = svg.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * SVG_W;
+      const y = ((event.clientY - rect.top) / rect.height) * SVG_H;
+      updateMarker(dragging, screenToLocal(x, y));
+      render();
+    });
+
+    svg.addEventListener('pointerup', function onPointerUp(event) {
+      const markerId = pointerDownMarker;
+      const now = performance.now();
+      if (!dragMoved && markerId) {
+        if (lastMarkerClick.id === markerId && now - lastMarkerClick.at <= 360) {
+          if (markerId.endsWith(':tap')) {
+            toggleBurstForSlot(markerId.split(':')[0]);
+          } else if (markerId.endsWith(':setup') || markerId.endsWith(':tag')) {
+            toggleTagForSlot(markerId.split(':')[0]);
+          }
+          lastMarkerClick = { id: null, at: 0 };
+        } else {
+          lastMarkerClick = { id: markerId, at: now };
+        }
+      }
+      dragging = null;
+      dragMoved = false;
+      pointerDownMarker = null;
+      pointerDownPos = null;
+      if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+    });
+
+    svg.addEventListener('pointercancel', function onPointerCancel(event) {
+      dragging = null;
+      dragMoved = false;
+      pointerDownMarker = null;
+      pointerDownPos = null;
+      if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+    });
+
+    inputs.newPlay.addEventListener('click', function () {
+      activeStorageId = null;
+      inputs.playId.value = '';
+      inputs.playIdDropdown.value = '';
+      updateGuiEnabled();
+      inputs.playId.focus();
+      inputs.playId.select();
+    });
+
+    inputs.playIdDropdown.addEventListener('change', function () {
+      const id = inputs.playIdDropdown.value;
+      if (!id) return;
+      loadStoredPlay(id);
+    });
+
+    inputs.deletePlay.addEventListener('click', function () {
+      if (!activeStorageId) return;
+      localStorage.removeItem(playStorageKey(activeStorageId));
+      activeStorageId = null;
+      ensureDefaultStoredPlay();
+      refreshStoredPlayOptions();
+      loadStoredPlay(activeStorageId);
+    });
+
+    inputs.playId.addEventListener('input', function () {
+      state.id = activePlayId();
+      updateGuiEnabled();
+    });
+
+    inputs.playId.addEventListener('blur', function () {
+      const nextId = activePlayId();
+      if (!nextId) {
+        if (activeStorageId) inputs.playId.value = activeStorageId;
+        updateGuiEnabled();
+        return;
+      }
+      if (!isValidPlayId(nextId)) {
+        showToast('Play Id must use letters, numbers, _ or -');
+        if (activeStorageId) {
+          inputs.playId.value = activeStorageId;
+          state.id = activeStorageId;
+        }
+        updateGuiEnabled();
+        return;
+      }
+      if (nextId !== activeStorageId && localStorage.getItem(playStorageKey(nextId))) {
+        loadStoredPlay(nextId);
+        return;
+      }
+      state.id = nextId;
+      const added = nextId !== activeStorageId;
+      activeStorageId = nextId;
+      saveActivePlay();
+      refreshStoredPlayOptions();
+      updateGuiEnabled();
+      if (added) showToast(`${nextId} added`);
+    });
+
+    inputs.tapType.addEventListener('change', function () {
+      syncStateFromInputs();
+      if (uiState.tapType !== 'custom') {
+        state.ruck.tap = previewTapPointForAlias(uiState.tapType);
+      }
+      render();
+    });
+
+    document.getElementById('roundNumbers').addEventListener('click', function () {
+      syncStateFromInputs();
+      roundAllPositions();
+      render();
+    });
+    document.getElementById('resetLayout').addEventListener('click', function () {
+      resetLayout();
+      render();
+    });
+    document.getElementById('copySpec').addEventListener('click', function () {
+      copyText(specOutput.value);
+    });
+    document.getElementById('copyState').addEventListener('click', function () {
+      copyText(stateArea.value);
+    });
+    document.getElementById('loadState').addEventListener('click', loadStateJson);
+    document.getElementById('clearOutput').addEventListener('click', function () {
+      specOutput.value = '';
+      notesOutput.value = '';
+      stateArea.value = '';
+    });
+
+    for (const element of document.querySelectorAll('input, select')) {
+      const htmlElement = /** @type {HTMLInputElement|HTMLSelectElement} */ (element);
+      if (htmlElement.id === 'playId' || htmlElement.id === 'tapType' || htmlElement.id === 'playIdDropdown') continue;
+      element.addEventListener('input', render);
+      element.addEventListener('change', render);
+    }
+
+    ensureStorageSchema();
+    if (listStoredPlayIds().length === 0) ensureDefaultStoredPlay();
+    if (!localStorage.getItem(playStorageKey(activeStorageId))) {
+      activeStorageId = listStoredPlayIds()[0] ?? '';
+    }
+    refreshStoredPlayOptions();
+    loadStoredPlay(activeStorageId);
+  </script>
+</body>
+</html>
