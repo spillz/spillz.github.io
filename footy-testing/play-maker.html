@@ -40,7 +40,7 @@
 
     body {
       display: grid;
-      grid-template-columns: 400px 1fr;
+      grid-template-columns: 460px 1fr;
       gap: 18px;
       padding: 18px;
     }
@@ -264,6 +264,10 @@
       align-items: end;
     }
 
+    #playIdDropdown {
+      min-width: 0;
+    }
+
     .tiny-btn {
       width: 42px;
       min-width: 42px;
@@ -323,6 +327,10 @@
         </label>
         <button id="newPlay" class="tiny-btn" title="New Play">+</button>
         <button id="deletePlay" class="tiny-btn" title="Delete Play">&#128465;</button>
+      </div>
+      <div class="row">
+        <button id="exportStoredJson">Export JSON</button>
+        <button id="importStoredJson">Import JSON</button>
       </div>
     </section>
 
@@ -605,6 +613,7 @@
 
     let activeStorageId = state.id;
     let toastTimer = 0;
+    let stateAreaMode = 'state';
 
     function slotInput(name) {
       return document.getElementById(name);
@@ -675,10 +684,6 @@
       return STORAGE_PREFIX + id;
     }
 
-    function cloneState() {
-      return JSON.parse(JSON.stringify(state));
-    }
-
     function slotState(slotKey) {
       const slot = SLOT_DEFS.find(function matches(def) { return def.key === slotKey; });
       return slot ? state[slot.stateKey] : null;
@@ -746,36 +751,89 @@
       const ids = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
+        if (key === STORAGE_SCHEMA_KEY) continue;
         if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
         ids.push(key.slice(STORAGE_PREFIX.length));
       }
       return ids.sort();
     }
 
+    function listValidStoredPlayIds() {
+      const ids = [];
+      for (const id of listStoredPlayIds()) {
+        const summary = storedPlaySummary(id);
+        if (!summary) continue;
+        ids.push(id);
+      }
+      return ids;
+    }
+
     function storedPlaySummary(id) {
+      const parsed = parseStoredPlay(id);
+      if (!parsed) return null;
+      return { id, name: parsed.name ?? '' };
+    }
+
+    function isVec2(value) {
+      return !!value && typeof value === 'object'
+        && typeof value.x === 'number' && Number.isFinite(value.x)
+        && typeof value.y === 'number' && Number.isFinite(value.y);
+    }
+
+    function isValidFollowerSpec(value) {
+      if (!value || typeof value !== 'object') return false;
+      if (!['tag', 'zone', 'burst'].includes(value.role)) return false;
+      if (value.tagTarget !== undefined && !['C', 'RR', 'Rover'].includes(value.tagTarget)) return false;
+      if (value.setup !== undefined && !isVec2(value.setup)) return false;
+      if (value.tap !== undefined && !isVec2(value.tap)) return false;
+      if (value.burstVel !== undefined && !isVec2(value.burstVel)) return false;
+      return true;
+    }
+
+    function isValidStoredPlay(value) {
+      if (!value || typeof value !== 'object') return false;
+      if (typeof value.id !== 'string' || !value.id.length) return false;
+      if (typeof value.name !== 'string') return false;
+      if (!isValidContestType(value.contestType)) return false;
+      if (!value.ruck || typeof value.ruck !== 'object') return false;
+      if (!['jump', 'wrestle'].includes(value.ruck.role)) return false;
+      if (!isVec2(value.ruck.setup) || !isVec2(value.ruck.tap)) return false;
+      return isValidFollowerSpec(value.center)
+        && isValidFollowerSpec(value.ruckRover)
+        && isValidFollowerSpec(value.rover);
+    }
+
+    function parseStoredPlay(id) {
       const raw = localStorage.getItem(playStorageKey(id));
-      if (!raw) return { id, name: '' };
+      if (!raw) return null;
       try {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object' && !isValidContestType(parsed.contestType)) {
+        if (!isValidStoredPlay(parsed)) {
           localStorage.removeItem(playStorageKey(id));
           return null;
         }
-        return { id, name: parsed.name ?? '' };
+        return parsed;
       } catch (_error) {
         localStorage.removeItem(playStorageKey(id));
         return null;
       }
     }
 
+    function listValidStoredPlays() {
+      const plays = [];
+      for (const id of listStoredPlayIds()) {
+        const parsed = parseStoredPlay(id);
+        if (!parsed) continue;
+        plays.push(parsed);
+      }
+      return plays;
+    }
+
     function refreshStoredPlayOptions() {
       const current = activeStorageId;
+      const validIds = listValidStoredPlayIds();
       inputs.playIdDropdown.innerHTML = '';
-      const blank = document.createElement('option');
-      blank.value = '';
-      blank.textContent = 'Stored plays';
-      inputs.playIdDropdown.appendChild(blank);
-      for (const id of listStoredPlayIds()) {
+      for (const id of validIds) {
         const summary = storedPlaySummary(id);
         if (!summary) continue;
         const option = document.createElement('option');
@@ -784,32 +842,23 @@
         if (id === current) option.selected = true;
         inputs.playIdDropdown.appendChild(option);
       }
-      if (!current) inputs.playIdDropdown.value = '';
+      if (current && validIds.includes(current)) {
+        inputs.playIdDropdown.value = current;
+      } else if (validIds.length > 0) {
+        inputs.playIdDropdown.value = validIds[0];
+      }
       if (current) inputs.playId.value = current;
     }
 
     function saveActivePlay() {
       if (!activeStorageId) return;
-      localStorage.setItem(playStorageKey(activeStorageId), JSON.stringify(cloneState()));
+      localStorage.setItem(playStorageKey(activeStorageId), JSON.stringify(buildPlayJson()));
       refreshStoredPlayOptions();
     }
 
     function loadStoredPlay(id) {
-      const raw = localStorage.getItem(playStorageKey(id));
-      if (!raw) return;
-      let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch (_error) {
-        localStorage.removeItem(playStorageKey(id));
-        if (activeStorageId === id) activeStorageId = '';
-        refreshStoredPlayOptions();
-        updateGuiEnabled();
-        showToast('Deleted invalid stored play.');
-        return;
-      }
-      if (!parsed || typeof parsed !== 'object' || !isValidContestType(parsed.contestType)) {
-        localStorage.removeItem(playStorageKey(id));
+      const parsed = parseStoredPlay(id);
+      if (!parsed) {
         if (activeStorageId === id) activeStorageId = '';
         refreshStoredPlayOptions();
         updateGuiEnabled();
@@ -1186,6 +1235,16 @@
       temp.remove();
     }
 
+    async function readClipboardText() {
+      if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.readText === 'function') {
+        try {
+          return await navigator.clipboard.readText();
+        } catch (_error) {
+        }
+      }
+      return '';
+    }
+
     function loadStateJson() {
       try {
         const parsed = JSON.parse(stateArea.value);
@@ -1473,7 +1532,9 @@
 
       specOutput.value = JSON.stringify(buildPlayJson(), null, 2);
       notesOutput.value = buildIntegrationNotes();
-      stateArea.value = JSON.stringify(state, null, 2);
+      if (stateAreaMode !== 'bulk') {
+        stateArea.value = JSON.stringify(state, null, 2);
+      }
       if (shouldPersist) saveActivePlay();
     }
 
@@ -1555,8 +1616,13 @@
     inputs.deletePlay.addEventListener('click', function () {
       if (!activeStorageId) return;
       localStorage.removeItem(playStorageKey(activeStorageId));
-      activeStorageId = null;
-      ensureDefaultStoredPlay();
+      const remaining = listValidStoredPlayIds();
+      if (remaining.length === 0) {
+        activeStorageId = null;
+        ensureDefaultStoredPlay();
+      } else {
+        activeStorageId = remaining[0];
+      }
       refreshStoredPlayOptions();
       loadStoredPlay(activeStorageId);
     });
@@ -1595,6 +1661,55 @@
       if (added) showToast(`${nextId} added`);
     });
 
+    document.getElementById('exportStoredJson').addEventListener('click', function () {
+      const plays = listValidStoredPlays();
+      stateAreaMode = 'bulk';
+      stateArea.value = JSON.stringify(plays, null, 2);
+      copyText(stateArea.value);
+      showToast(`Exported ${plays.length} play${plays.length === 1 ? '' : 's'} to clipboard`);
+    });
+
+    document.getElementById('importStoredJson').addEventListener('click', async function () {
+      stateAreaMode = 'bulk';
+      const clipboardText = await readClipboardText();
+      const importText = clipboardText.trim().length > 0 ? clipboardText : stateArea.value;
+      if (clipboardText.trim().length > 0) {
+        stateArea.value = clipboardText;
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(importText);
+      } catch (_error) {
+        alert('Could not parse import JSON.');
+        return;
+      }
+      const imported = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object' && Array.isArray(parsed.plays)
+          ? parsed.plays
+          : [parsed];
+      const valid = imported.filter(isValidStoredPlay);
+      if (valid.length === 0) {
+        alert('No valid plays found in import JSON.');
+        return;
+      }
+      for (const play of valid) {
+        localStorage.setItem(playStorageKey(play.id), JSON.stringify(play));
+      }
+      const previous = activeStorageId;
+      refreshStoredPlayOptions();
+      const validIds = listValidStoredPlayIds();
+      activeStorageId = previous && validIds.includes(previous)
+        ? previous
+        : (valid.find(function hasCurrentId(play) { return validIds.includes(play.id); })?.id ?? validIds[0] ?? '');
+      if (activeStorageId) {
+        loadStoredPlay(activeStorageId);
+      } else {
+        updateGuiEnabled();
+      }
+      showToast(`Imported ${valid.length} play${valid.length === 1 ? '' : 's'}`);
+    });
+
     inputs.tapType.addEventListener('change', function () {
       syncStateFromInputs();
       if (uiState.tapType !== 'custom') {
@@ -1616,10 +1731,16 @@
       copyText(specOutput.value);
     });
     document.getElementById('copyState').addEventListener('click', function () {
+      stateAreaMode = 'state';
+      stateArea.value = JSON.stringify(state, null, 2);
       copyText(stateArea.value);
     });
-    document.getElementById('loadState').addEventListener('click', loadStateJson);
+    document.getElementById('loadState').addEventListener('click', function () {
+      stateAreaMode = 'state';
+      loadStateJson();
+    });
     document.getElementById('clearOutput').addEventListener('click', function () {
+      stateAreaMode = 'state';
       specOutput.value = '';
       notesOutput.value = '';
       stateArea.value = '';
@@ -1633,12 +1754,20 @@
     }
 
     ensureStorageSchema();
-    if (listStoredPlayIds().length === 0) ensureDefaultStoredPlay();
-    if (!localStorage.getItem(playStorageKey(activeStorageId))) {
-      activeStorageId = listStoredPlayIds()[0] ?? '';
+    let validStoredIds = listValidStoredPlayIds();
+    if (validStoredIds.length === 0) {
+      ensureDefaultStoredPlay();
+      validStoredIds = listValidStoredPlayIds();
+    }
+    if (!activeStorageId || !validStoredIds.includes(activeStorageId)) {
+      activeStorageId = validStoredIds[0] ?? '';
     }
     refreshStoredPlayOptions();
-    loadStoredPlay(activeStorageId);
+    if (activeStorageId) {
+      loadStoredPlay(activeStorageId);
+    } else {
+      updateGuiEnabled();
+    }
   </script>
 </body>
 </html>
