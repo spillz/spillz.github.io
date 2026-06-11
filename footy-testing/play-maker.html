@@ -556,37 +556,7 @@
     const stateArea = document.getElementById('stateArea');
     const toast = document.getElementById('toast');
 
-    const state = {
-      id: 'custom_ball_up_play',
-      name: 'Custom',
-      contestType: 'ballUp',
-      ruck: {
-        role: 'jump',
-        setup: { x: 0, y: 3 },
-        tap: { x: -12, y: -7 },
-      },
-      center: {
-        role: 'zone',
-        tagTarget: 'RR',
-        setup: { x: -11, y: 12 },
-        tap: { x: -8, y: 4 },
-        burstVel: { x: 0, y: 0 },
-      },
-      ruckRover: {
-        role: 'burst',
-        tagTarget: 'C',
-        setup: { x: 9, y: 8 },
-        tap: { x: 6, y: -1 },
-        burstVel: { x: 0.62, y: -0.5 },
-      },
-      rover: {
-        role: 'tag',
-        tagTarget: 'Rover',
-        setup: { x: 15, y: 10 },
-        tap: { x: 16, y: -1 },
-        burstVel: { x: 0, y: 0 },
-      },
-    };
+    const state = {};
 
     const uiState = {
       contest: { x: 0, y: 0 },
@@ -611,6 +581,7 @@
       stageHint: document.getElementById('stageHint'),
     };
 
+    let defaultPlays = [];
     let activeStorageId = state.id;
     let toastTimer = 0;
     let stateAreaMode = 'state';
@@ -644,6 +615,39 @@
 
     function clonePoint(point) {
       return { x: point.x, y: point.y };
+    }
+
+    function cloneFollowerSpec(follower) {
+      return {
+        role: follower.role,
+        tagTarget: follower.tagTarget ?? 'C',
+        setup: follower.setup ? clonePoint(follower.setup) : { x: 0, y: 0 },
+        tap: follower.tap ? clonePoint(follower.tap) : { x: 0, y: 0 },
+        burstVel: follower.burstVel ? clonePoint(follower.burstVel) : { x: 0, y: 0 },
+      };
+    }
+
+    function clonePlay(play) {
+      return {
+        id: play.id,
+        name: play.name,
+        contestType: play.contestType,
+        ruck: {
+          role: play.ruck.role,
+          setup: clonePoint(play.ruck.setup),
+          tap: clonePoint(play.ruck.tap),
+        },
+        center: cloneFollowerSpec(play.center),
+        ruckRover: cloneFollowerSpec(play.ruckRover),
+        rover: cloneFollowerSpec(play.rover),
+      };
+    }
+
+    function defaultPlayForId(id) {
+      if (defaultPlays.length === 0) return null;
+      return defaultPlays.find(function matches(play) {
+        return play.id === id;
+      }) ?? defaultPlays[0];
     }
 
     function add(a, b) {
@@ -699,42 +703,24 @@
       return { x: 0, y: 3 };
     }
 
-    function applyDefaultLayout(target) {
-      target.id = 'custom_ball_up_play';
-      target.name = 'Custom';
-      target.contestType = 'ballUp';
-      target.ruck = {
-        role: 'jump',
-        setup: { x: 0, y: 3 },
-        tap: { x: -12, y: -7 },
-      };
-      target.center = {
-        role: 'zone',
-        tagTarget: 'RR',
-        setup: { x: -11, y: 12 },
-        tap: { x: -8, y: 4 },
-        burstVel: { x: 0, y: 0 },
-      };
-      target.ruckRover = {
-        role: 'burst',
-        tagTarget: 'C',
-        setup: { x: 9, y: 8 },
-        tap: { x: 6, y: -1 },
-        burstVel: { x: 0.62, y: -0.5 },
-      };
-      target.rover = {
-        role: 'tag',
-        tagTarget: 'Rover',
-        setup: { x: 15, y: 10 },
-        tap: { x: 16, y: -1 },
-        burstVel: { x: 0, y: 0 },
-      };
+    function applyDefaultLayout(target, play = defaultPlayForId(null)) {
+      if (!play) {
+        throw new Error('Default plays have not been loaded.');
+      }
+      const next = clonePlay(play);
+      target.id = next.id;
+      target.name = next.name;
+      target.contestType = next.contestType;
+      target.ruck = next.ruck;
+      target.center = next.center;
+      target.ruckRover = next.ruckRover;
+      target.rover = next.rover;
       uiState.contest = { x: 0, y: 0 };
-      uiState.tapType = 'space';
+      uiState.tapType = tapAliasForPoint(target.ruck.tap);
       uiState.prevRoleBySlot = {
-        center: 'zone',
-        rr: 'burst',
-        rover: 'zone',
+        center: target.center.role === 'tag' ? 'zone' : target.center.role,
+        rr: target.ruckRover.role === 'tag' ? 'zone' : target.ruckRover.role,
+        rover: target.rover.role === 'tag' ? 'zone' : target.rover.role,
       };
     }
 
@@ -803,6 +789,26 @@
         && isValidFollowerSpec(value.rover);
     }
 
+    function isValidDefaultPlayList(value) {
+      return Array.isArray(value) && value.every(function isValidPlay(play) {
+        return isValidStoredPlay(play);
+      });
+    }
+
+    async function loadDefaultPlays() {
+      const response = await fetch('./assets/default-plays.json', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to load assets/default-plays.json (${response.status})`);
+      }
+      const parsed = await response.json();
+      if (!isValidDefaultPlayList(parsed)) {
+        throw new Error('assets/default-plays.json is invalid.');
+      }
+      defaultPlays = parsed.map(function cloneDefaultPlay(play) {
+        return clonePlay(play);
+      });
+    }
+
     function parseStoredPlay(id) {
       const raw = localStorage.getItem(playStorageKey(id));
       if (!raw) return null;
@@ -865,7 +871,7 @@
         showToast('Deleted invalid stored play.');
         return;
       }
-      applyDefaultLayout(state);
+      applyDefaultLayout(state, defaultPlayForId(parsed.id));
       if (typeof parsed.id === 'string') state.id = parsed.id;
       if (typeof parsed.name === 'string') state.name = parsed.name;
       state.contestType = parsed.contestType;
@@ -925,12 +931,13 @@
     }
 
     function ensureDefaultStoredPlay() {
-      applyDefaultLayout(state);
-      state.id = 'custom_ball_up_play';
-      state.name = 'Custom Ball Up Play';
-      activeStorageId = state.id;
+      for (const play of defaultPlays) {
+        localStorage.setItem(playStorageKey(play.id), JSON.stringify(clonePlay(play)));
+      }
+      applyDefaultLayout(state, defaultPlayForId(null));
+      activeStorageId = defaultPlayForId(null)?.id ?? '';
       syncInputsFromState();
-      saveActivePlay();
+      refreshStoredPlayOptions();
     }
     function previewRuckPoints() {
       const home = add(uiState.contest, state.ruck.setup);
@@ -1146,7 +1153,7 @@
     }
 
     function resetLayout() {
-      applyDefaultLayout(state);
+      applyDefaultLayout(state, defaultPlayForId(activeStorageId || state.id));
       syncInputsFromState();
     }
 
@@ -1753,21 +1760,30 @@
       element.addEventListener('change', render);
     }
 
-    ensureStorageSchema();
-    let validStoredIds = listValidStoredPlayIds();
-    if (validStoredIds.length === 0) {
-      ensureDefaultStoredPlay();
-      validStoredIds = listValidStoredPlayIds();
+    async function initializeEditor() {
+      await loadDefaultPlays();
+      ensureStorageSchema();
+      let validStoredIds = listValidStoredPlayIds();
+      if (validStoredIds.length === 0) {
+        ensureDefaultStoredPlay();
+        validStoredIds = listValidStoredPlayIds();
+      }
+      if (!activeStorageId || !validStoredIds.includes(activeStorageId)) {
+        activeStorageId = validStoredIds[0] ?? '';
+      }
+      refreshStoredPlayOptions();
+      if (activeStorageId) {
+        loadStoredPlay(activeStorageId);
+      } else {
+        updateGuiEnabled();
+      }
     }
-    if (!activeStorageId || !validStoredIds.includes(activeStorageId)) {
-      activeStorageId = validStoredIds[0] ?? '';
-    }
-    refreshStoredPlayOptions();
-    if (activeStorageId) {
-      loadStoredPlay(activeStorageId);
-    } else {
+
+    initializeEditor().catch(function handleInitializationError(error) {
+      console.error(error);
       updateGuiEnabled();
-    }
+      alert(`Could not load default plays: ${error instanceof Error ? error.message : String(error)}`);
+    });
   </script>
 </body>
 </html>
