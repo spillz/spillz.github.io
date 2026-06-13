@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>The Footy: Headless Sim</title>
+  <link rel="icon" type="image/x-icon" href="/footy-testing/footy_192x192_icon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1417;
+      --panel: rgba(20, 30, 34, 0.92);
+      --panel-strong: #162127;
+      --line: rgba(190, 224, 210, 0.18);
+      --text: #f1f4ec;
+      --muted: #aab7ac;
+      --accent: #b7d36b;
+      --accent-strong: #86b64b;
+      --danger: #d9816b;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+      font-family: "Titillium Web", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(183, 211, 107, 0.09), transparent 38%),
+        radial-gradient(circle at top right, rgba(57, 99, 82, 0.2), transparent 28%),
+        linear-gradient(180deg, #0d1215 0%, #131b20 100%);
+      color: var(--text);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 28px;
+    }
+
+    main {
+      max-width: 1260px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 22px 24px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+    }
+
+    .subhead {
+      margin: 0;
+      max-width: 840px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
+    }
+
+    .panel {
+      padding: 20px;
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 21px;
+      letter-spacing: -0.02em;
+    }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+    }
+
+    .control-row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    label,
+    .check-row,
+    .metric {
+      display: grid;
+      gap: 6px;
+    }
+
+    .label-text,
+    .metric-name,
+    .summary-label {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    select,
+    input,
+    button,
+    textarea {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      background: rgba(10, 16, 18, 0.9);
+      color: var(--text);
+      font: inherit;
+    }
+
+    select,
+    input,
+    textarea {
+      width: 100%;
+      padding: 11px 12px;
+    }
+
+    textarea {
+      min-height: 300px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      line-height: 1.45;
+    }
+
+    button {
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+      color: #10210f;
+      border-color: transparent;
+      font-weight: 700;
+    }
+
+    .secondary {
+      background: rgba(26, 39, 43, 0.95);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 8px;
+    }
+
+    .check-row {
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+    }
+
+    .check-row input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .status {
+      min-height: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .metric,
+    .summary-card {
+      background: rgba(11, 18, 21, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .metric-value,
+    .summary-value {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .summary-detail {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .results {
+      display: grid;
+      gap: 16px;
+    }
+
+    .results-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .report-block {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 12px;
+    }
+
+    .report-block textarea {
+      min-height: 360px;
+    }
+
+    .minor-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 940px) {
+      body {
+        padding: 16px;
+      }
+
+      .grid,
+      .results-grid,
+      .summary-grid,
+      .control-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <script type="module" crossorigin src="/footy-testing/assets/gameSim-7KaqPoR6.js"></script>
+  <link rel="modulepreload" crossorigin href="/footy-testing/assets/tournament-CLF4Bth5.js">
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="eyebrow">Balance Harness</div>
+      <h1>Headless Match Simulator</h1>
+      <p class="subhead">Run the full in-match state machine without rendering, compare saved Club Mode rosters or a generated league snapshot, and inspect whether stronger teams actually convert ratings into wins.</p>
+    </section>
+
+    <section class="grid">
+      <aside class="panel">
+        <h2>Match Setup</h2>
+        <div class="controls">
+          <div class="control-row">
+            <label>
+              <span class="label-text">Roster Source</span>
+              <select id="rosterSource"></select>
+            </label>
+            <label>
+              <span class="label-text">Career Slot</span>
+              <select id="careerSlot"></select>
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <span class="label-text">Home Team</span>
+              <select id="homeTeam"></select>
+            </label>
+            <label>
+              <span class="label-text">Away Team</span>
+              <select id="awayTeam"></select>
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <span class="label-text">Runs</span>
+              <input id="runCount" type="number" min="1" max="2000" step="1" value="100">
+            </label>
+            <label>
+              <span class="label-text">Quarter Minutes</span>
+              <input id="quarterMinutes" type="number" min="1" max="30" step="1" value="5">
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <span class="label-text">Sim Dt</span>
+              <input id="simDt" type="number" min="0.004166" max="0.1" step="0.001" value="0.016667">
+            </label>
+            <label>
+              <span class="label-text">Base Seed</span>
+              <input id="baseSeed" type="number" step="1" value="1000">
+            </label>
+          </div>
+          <label class="check-row">
+            <input id="alternateHomeAway" type="checkbox" checked>
+            <span>Alternate home and away across runs to reduce home-ground bias.</span>
+          </label>
+          <div class="actions">
+            <button id="runBatch" class="primary">Run Batch</button>
+            <button id="refreshSources" class="secondary">Refresh Sources</button>
+            <button id="downloadJson" class="secondary" disabled>Download JSON</button>
+            <button id="downloadCsv" class="secondary" disabled>Download CSV</button>
+          </div>
+          <div id="status" class="status">Loading simulation assets...</div>
+          <div class="minor-note">Generated league mode freezes one drafted league snapshot for repeated tests. Career slot mode uses the saved rosters from `localStorage`.</div>
+        </div>
+      </aside>
+
+      <section class="panel results">
+        <h2>Results</h2>
+        <div class="results-grid">
+          <div class="summary-card">
+            <div class="summary-label">Favorite Win Rate</div>
+            <div id="favoriteWinRate" class="summary-value">-</div>
+            <div id="favoriteWinRateDetail" class="summary-detail">Run a batch to populate.</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Average Margin</div>
+            <div id="averageMargin" class="summary-value">-</div>
+            <div id="averageMarginDetail" class="summary-detail">Run a batch to populate.</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">Average Score</div>
+            <div id="averageScore" class="summary-value">-</div>
+            <div id="averageScoreDetail" class="summary-detail">Run a batch to populate.</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Home Rating</div>
+            <div id="homeRating" class="metric-value">-</div>
+            <div id="homeRatingDetail" class="summary-detail"></div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Away Rating</div>
+            <div id="awayRating" class="metric-value">-</div>
+            <div id="awayRatingDetail" class="summary-detail"></div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Progress</div>
+            <div id="progressLabel" class="metric-value" style="font-size: 18px;">Idle</div>
+            <div id="progressDetail" class="summary-detail">Ready for a new batch.</div>
+          </div>
+          <div class="metric">
+            <div class="metric-name">Context</div>
+            <div id="contextLabel" class="metric-value" style="font-size: 18px;">-</div>
+            <div id="contextDetail" class="summary-detail"></div>
+          </div>
+          <div class="report-block">
+            <label>
+              <span class="label-text">Report View</span>
+              <select id="reportView" disabled></select>
+            </label>
+            <textarea id="report" spellcheck="false" readonly></textarea>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
