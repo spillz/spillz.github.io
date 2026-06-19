@@ -273,8 +273,8 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/footy-testing/assets/gameSim-C5VSi0EH.js"></script>
-  <link rel="modulepreload" crossorigin href="/footy-testing/assets/tournament-DAxTt8hp.js">
+  <script type="module" crossorigin src="/footy-testing/assets/gameSim-Be8B6hdb.js"></script>
+  <link rel="modulepreload" crossorigin href="/footy-testing/assets/tournament-p1fZAjmP.js">
 </head>
 <body>
   <main>
@@ -331,6 +331,10 @@
           <label class="check-row">
             <input id="alternateHomeAway" type="checkbox" checked>
             <span>Alternate home and away across runs to reduce home-ground bias.</span>
+          </label>
+          <label class="check-row">
+            <input id="decisionDebug" type="checkbox">
+            <span>Add targeted free-kick and close-range disposal decision debug lines to the report.</span>
           </label>
           <div class="actions">
             <button id="runBatch" class="primary">Run Batch</button>
@@ -442,6 +446,10 @@
               <select id="reportView" disabled></select>
             </label>
             <textarea id="report" spellcheck="false" readonly></textarea>
+            <div class="actions">
+              <button id="copyReport" class="secondary" disabled>Copy Report</button>
+              <button id="copyAllReports" class="secondary" disabled>Copy All Reports</button>
+            </div>
           </div>
         </div>
       </section>
