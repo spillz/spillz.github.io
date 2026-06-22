@@ -18,7 +18,7 @@
       --field-c: #355d35;
       --ruck: rgba(115, 255, 89, 0.95);
       --opp-ruck: rgba(255, 130, 130, 0.95);
-      --center: rgba(26, 217, 255, 0.95);
+      --center: rgba(184, 89, 255, 0.95);
       --rr: rgba(255, 209, 46, 0.95);
       --rover: rgba(255, 122, 31, 0.95);
       --white: rgba(255,255,255,0.96);
@@ -505,6 +505,8 @@
     const SVG_H = 720;
     const MARGIN = 56;
     const BURST_ARROW_MAX_M = 10;
+    const CENTER_BOUNCE_INNER_CIRCLE_M = 3;
+    const CENTER_BOUNCE_OUTER_CIRCLE_M = 10;
     const STORAGE_PREFIX = 'playmaker/';
     const STORAGE_SCHEMA_KEY = 'playmaker/schema-version';
     const STORAGE_SCHEMA_VERSION = '3';
@@ -512,7 +514,7 @@
     const COLORS = Object.freeze({
       ruck: 'rgba(115, 255, 89, 0.95)',
       oppRuck: 'rgba(255, 130, 130, 0.95)',
-      center: 'rgba(26, 217, 255, 0.95)',
+      center: 'rgba(184, 89, 255, 0.95)',
       rr: 'rgba(255, 209, 46, 0.95)',
       rover: 'rgba(255, 122, 31, 0.95)',
       white: 'rgba(255,255,255,0.96)',
@@ -1001,6 +1003,18 @@
       });
     }
 
+    function localCircleToScreenEllipse(center, radius) {
+      const usableW = SVG_W - MARGIN * 2;
+      const usableH = SVG_H - MARGIN * 2;
+      const pos = localToScreen(center);
+      return {
+        cx: pos.x,
+        cy: pos.y,
+        rx: (radius / (VIEW_HALF * 2)) * usableW,
+        ry: (radius / (VIEW_HALF * 2)) * usableH,
+      };
+    }
+
     function createSvg(tag, attrs = {}) {
       const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
       for (const [key, value] of Object.entries(attrs)) {
@@ -1013,6 +1027,22 @@
       const aa = localToScreen(a);
       const bb = localToScreen(b);
       return `M ${aa.x} ${aa.y} L ${bb.x} ${bb.y}`;
+    }
+
+    function appendCenterBounceCircle(radius, strokeWidth, strokeDasharray = '') {
+      const ellipse = localCircleToScreenEllipse(uiState.contest, radius);
+      const attrs = {
+        cx: ellipse.cx,
+        cy: ellipse.cy,
+        rx: ellipse.rx,
+        ry: ellipse.ry,
+        fill: 'none',
+        stroke: 'rgba(255,255,255,0.58)',
+        'stroke-width': strokeWidth,
+        'pointer-events': 'none',
+      };
+      if (strokeDasharray) attrs['stroke-dasharray'] = strokeDasharray;
+      svg.appendChild(createSvg('ellipse', attrs));
     }
 
     function relativeToContest(point) {
@@ -1409,6 +1439,11 @@
           stroke: y === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.10)',
           'stroke-width': y === 0 ? 2.2 : 1.2,
         }));
+      }
+
+      if (state.contestType === 'centerBounce') {
+        appendCenterBounceCircle(CENTER_BOUNCE_OUTER_CIRCLE_M, 2.8);
+        appendCenterBounceCircle(CENTER_BOUNCE_INNER_CIRCLE_M, 2.2, '7 5');
       }
 
       if (state.contestType === 'throwIn') {
