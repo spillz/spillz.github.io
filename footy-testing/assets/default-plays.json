@@ -1,0 +1,565 @@
+[
+  {
+    "id": "ballUp1",
+    "name": "Sharp cut",
+    "contestType": "ballUp",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 3
+      },
+      "tap": {
+        "x": 0,
+        "y": -7
+      }
+    },
+    "center": {
+      "role": "zone",
+      "setup": {
+        "x": -5,
+        "y": 12
+      },
+      "tap": {
+        "x": 0,
+        "y": 7
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": 4,
+        "y": 9
+      },
+      "tap": {
+        "x": 5,
+        "y": -2
+      },
+      "burstVel": {
+        "x": -0.57,
+        "y": -0.57
+      }
+    },
+    "rover": {
+      "role": "tag",
+      "tagTarget": "Rover"
+    }
+  },
+  {
+    "id": "ballUp2",
+    "name": "Forward rush",
+    "contestType": "ballUp",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 3
+      },
+      "tap": {
+        "x": 0.02,
+        "y": -12.76
+      }
+    },
+    "center": {
+      "role": "zone",
+      "setup": {
+        "x": 4.3,
+        "y": 8.72
+      },
+      "tap": {
+        "x": -0.03,
+        "y": 4.87
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": -4.92,
+        "y": 7.27
+      },
+      "tap": {
+        "x": -4.77,
+        "y": -6.04
+      },
+      "burstVel": {
+        "x": 0.46,
+        "y": -0.67
+      }
+    },
+    "rover": {
+      "role": "zone",
+      "setup": {
+        "x": 5.2,
+        "y": 3.18
+      },
+      "tap": {
+        "x": 2.85,
+        "y": -9.35
+      }
+    }
+  },
+  {
+    "id": "ballUp3",
+    "name": "Backup release wide",
+    "contestType": "ballUp",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 3
+      },
+      "tap": {
+        "x": -5.65,
+        "y": 5.14
+      }
+    },
+    "center": {
+      "role": "burst",
+      "setup": {
+        "x": -4,
+        "y": 9.02
+      },
+      "tap": {
+        "x": -10.22,
+        "y": 6.29
+      },
+      "burstVel": {
+        "x": -0.21,
+        "y": -0.77
+      }
+    },
+    "ruckRover": {
+      "role": "zone",
+      "setup": {
+        "x": -6.83,
+        "y": -5.26
+      },
+      "tap": {
+        "x": -6.18,
+        "y": 5.24
+      }
+    },
+    "rover": {
+      "role": "zone",
+      "setup": {
+        "x": 7.79,
+        "y": -2.59
+      },
+      "tap": {
+        "x": -0.03,
+        "y": 9.39
+      }
+    }
+  },
+  {
+    "id": "ballUp4",
+    "name": "Defensive",
+    "contestType": "ballUp",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 3
+      },
+      "tap": {
+        "x": -5.65,
+        "y": 5.14
+      }
+    },
+    "center": {
+      "role": "tag",
+      "tagTarget": "C"
+    },
+    "ruckRover": {
+      "role": "tag",
+      "tagTarget": "RR"
+    },
+    "rover": {
+      "role": "zone",
+      "setup": {
+        "x": 5.1,
+        "y": 5.07
+      },
+      "tap": {
+        "x": 0.07,
+        "y": 8.28
+      }
+    }
+  },
+  {
+    "id": "centerBounce1",
+    "name": "Forward wide option",
+    "contestType": "centerBounce",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 8
+      },
+      "tap": {
+        "x": -4.94,
+        "y": -10.16
+      }
+    },
+    "center": {
+      "role": "zone",
+      "setup": {
+        "x": 0,
+        "y": 12
+      },
+      "tap": {
+        "x": -0.66,
+        "y": 5.64
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": 9,
+        "y": 8
+      },
+      "tap": {
+        "x": 3.72,
+        "y": -5.5
+      },
+      "burstVel": {
+        "x": -0.66,
+        "y": -0.46
+      }
+    },
+    "rover": {
+      "role": "zone",
+      "setup": {
+        "x": -10.08,
+        "y": 4.5
+      },
+      "tap": {
+        "x": -10.22,
+        "y": -10.29
+      }
+    }
+  },
+  {
+    "id": "centerBounce2",
+    "name": "Shift out",
+    "contestType": "centerBounce",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 8
+      },
+      "tap": {
+        "x": 7.94,
+        "y": -6.31
+      }
+    },
+    "center": {
+      "role": "zone",
+      "setup": {
+        "x": 0,
+        "y": 12
+      },
+      "tap": {
+        "x": 5.35,
+        "y": 5.14
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": 1.42,
+        "y": 9.43
+      },
+      "tap": {
+        "x": 2.61,
+        "y": -0.23
+      },
+      "burstVel": {
+        "x": 0.55,
+        "y": -0.58
+      }
+    },
+    "rover": {
+      "role": "tag",
+      "tagTarget": "Rover"
+    }
+  },
+  {
+    "id": "centerBounce3",
+    "name": "Switch up",
+    "contestType": "centerBounce",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 8
+      },
+      "tap": {
+        "x": -2.57,
+        "y": -5.63
+      }
+    },
+    "center": {
+      "role": "burst",
+      "setup": {
+        "x": 6.29,
+        "y": 7.23
+      },
+      "tap": {
+        "x": 5.3,
+        "y": -4.25
+      },
+      "burstVel": {
+        "x": -0.11,
+        "y": -0.79
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": -4.94,
+        "y": 9.43
+      },
+      "tap": {
+        "x": -5.33,
+        "y": 0.61
+      },
+      "burstVel": {
+        "x": 0.34,
+        "y": -0.72
+      }
+    },
+    "rover": {
+      "role": "zone",
+      "setup": {
+        "x": 8.71,
+        "y": -5.94
+      },
+      "tap": {
+        "x": 0.26,
+        "y": 7.5
+      }
+    }
+  },
+  {
+    "id": "centerBounce4",
+    "name": "Tap forward",
+    "contestType": "centerBounce",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": 0,
+        "y": 8
+      },
+      "tap": {
+        "x": -2.57,
+        "y": -5.63
+      }
+    },
+    "center": {
+      "role": "tag",
+      "tagTarget": "C"
+    },
+    "ruckRover": {
+      "role": "tag",
+      "tagTarget": "RR"
+    },
+    "rover": {
+      "role": "burst",
+      "setup": {
+        "x": 7.57,
+        "y": -1.72
+      },
+      "tap": {
+        "x": 1.08,
+        "y": -3.74
+      },
+      "burstVel": {
+        "x": 0.01,
+        "y": -0.8
+      }
+    }
+  },
+  {
+    "id": "throwIn1",
+    "name": "Over the back",
+    "contestType": "throwIn",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": -1.8,
+        "y": 4
+      },
+      "tap": {
+        "x": 4.38,
+        "y": 7.84
+      }
+    },
+    "center": {
+      "role": "burst",
+      "setup": {
+        "x": -10,
+        "y": -5
+      },
+      "tap": {
+        "x": -0.3,
+        "y": 6.96
+      },
+      "burstVel": {
+        "x": 0.78,
+        "y": 0.17
+      }
+    },
+    "ruckRover": {
+      "role": "tag",
+      "tagTarget": "RR"
+    },
+    "rover": {
+      "role": "tag",
+      "tagTarget": "Rover"
+    }
+  },
+  {
+    "id": "throwIn2",
+    "name": "Offensive thrust",
+    "contestType": "throwIn",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": -1.8,
+        "y": 4
+      },
+      "tap": {
+        "x": 9.46,
+        "y": -2.19
+      }
+    },
+    "center": {
+      "role": "zone",
+      "setup": {
+        "x": -10,
+        "y": -5
+      },
+      "tap": {
+        "x": -5.28,
+        "y": 4.23
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": -4,
+        "y": -14
+      },
+      "tap": {
+        "x": 3,
+        "y": -6
+      },
+      "burstVel": {
+        "x": 0.71,
+        "y": 0.36
+      }
+    },
+    "rover": {
+      "role": "tag",
+      "tagTarget": "Rover"
+    }
+  },
+  {
+    "id": "throwIn3",
+    "name": "Swing",
+    "contestType": "throwIn",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": -1.8,
+        "y": 4
+      },
+      "tap": {
+        "x": 4.6,
+        "y": -1.55
+      }
+    },
+    "center": {
+      "role": "tag",
+      "tagTarget": "C"
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": -6.32,
+        "y": 6.45
+      },
+      "tap": {
+        "x": 0.04,
+        "y": -4.05
+      },
+      "burstVel": {
+        "x": 0.71,
+        "y": 0.36
+      }
+    },
+    "rover": {
+      "role": "tag",
+      "tagTarget": "Rover"
+    }
+  },
+  {
+    "id": "throwIn4",
+    "name": "Defensive centering",
+    "contestType": "throwIn",
+    "ruck": {
+      "role": "jump",
+      "setup": {
+        "x": -1.8,
+        "y": 4
+      },
+      "tap": {
+        "x": -5.62,
+        "y": 4.53
+      }
+    },
+    "center": {
+      "role": "zone",
+      "setup": {
+        "x": -4.44,
+        "y": -11.07
+      },
+      "tap": {
+        "x": -10.32,
+        "y": -2.9
+      }
+    },
+    "ruckRover": {
+      "role": "burst",
+      "setup": {
+        "x": -11.58,
+        "y": -5.97
+      },
+      "tap": {
+        "x": -11.43,
+        "y": 8.75
+      },
+      "burstVel": {
+        "x": 0.61,
+        "y": 0.52
+      }
+    },
+    "rover": {
+      "role": "burst",
+      "setup": {
+        "x": 3.75,
+        "y": -11.07
+      },
+      "tap": {
+        "x": -3.15,
+        "y": -2.76
+      },
+      "burstVel": {
+        "x": -0.2,
+        "y": 0.77
+      }
+    }
+  }
+]

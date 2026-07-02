@@ -1,16 +1,1 @@
-{
-  "name": "The Footy",
-  "short_name": "footy",
-  "description": "Fast-paced Aussie Rules football game",
-  "start_url": "index.html",
-  "display": "fullscreen",
-  "background_color": "#000000",
-  "theme_color": "#ffffff",
-  "icons": [
-    {
-      "src": "footy_192x192_icon.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    }
-  ]
-}
+{"name":"The Footy","short_name":"Footy","description":"Fast-paced Aussie Rules football game","start_url":"/footy-testing/","display":"fullscreen","background_color":"#000000","theme_color":"#ffffff","lang":"en","scope":"/footy-testing/","icons":[{"src":"/footy-testing/footy_192x192_icon.png","sizes":"192x192","type":"image/png"},{"src":"/footy-testing/footy_512x512_icon.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}
