@@ -11,24 +11,31 @@
     <link rel="manifest" href="/delve/manifest.webmanifest" />
     <link rel="icon" href="/delve/icons/icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="/delve/icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
     <title>Dwarven Descent Prototype</title>
-    <script type="module" crossorigin src="/delve/assets/index-D9l9TJnM.js"></script>
-    <link rel="stylesheet" crossorigin href="/delve/assets/index-BH44BGaR.css">
+    <script type="module" crossorigin src="/delve/assets/index-BSoT8JKx.js"></script>
+    <link rel="stylesheet" crossorigin href="/delve/assets/index-Dw46lo8U.css">
   </head>
   <body>
     <main id="app">
       <section class="game-shell" aria-label="Dwarven Descent game prototype">
         <div class="topbar">
-          <div>
-            <h1>Dwarven Descent</h1>
-            <p>WASD or gamepad left stick/d-pad move, attack, or climb 1-high blocks. Shift or button 0 modifies movement to mine. Space or button 1 waits. The emergency grapple catches overhead stone within 5 tiles.</p>
-          </div>
           <div id="stats" class="stats"></div>
+          <div id="log" class="log"></div>
         </div>
         <canvas id="game" width="960" height="640"></canvas>
-        <div class="footer">
-          <div id="legend" class="legend"></div>
-          <div id="log" class="log"></div>
+        <div id="help" class="help" aria-hidden="true">
+          <div class="help-panel">
+            <h1>Dwarven Descent</h1>
+            <p>WASD or gamepad left stick/d-pad move, attack, or climb 1-high blocks. Shift or button 0 modifies movement to mine. Space or button 1 waits. The emergency grapple catches overhead stone within 5 tiles.</p>
+            <div id="legend" class="legend"></div>
+          </div>
+        </div>
+        <div id="game-over" class="game-over" aria-hidden="true">
+          <h1 id="game-over-title"></h1>
+          <p>Press Esc or Start to restart.</p>
         </div>
       </section>
     </main>
