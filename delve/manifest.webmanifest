@@ -2,22 +2,24 @@
   "name": "Dwarven Descent Prototype",
   "short_name": "Dwarven Descent",
   "description": "A compact mining roguelike prototype about digging, climbing, and escaping unstable caverns.",
+  "id": "/delve/",
   "start_url": "/delve/",
   "scope": "/delve/",
   "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "orientation": "landscape",
   "background_color": "#101114",
   "theme_color": "#101114",
   "categories": ["games"],
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "/delve/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/delve/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
