@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dwarven-descent-v1';
+const CACHE_NAME = 'dwarven-descent-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
