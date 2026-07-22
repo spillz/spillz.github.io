@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101114" />
+    <meta name="description" content="A compact mining roguelike prototype about digging, climbing, and escaping unstable caverns." />
+    <link rel="manifest" href="/delve/manifest.webmanifest" />
+    <link rel="icon" href="/delve/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/delve/icon.svg" />
+    <title>Dwarven Descent Prototype</title>
+    <script type="module" crossorigin src="/delve/assets/index-BTIztIF8.js"></script>
+    <link rel="stylesheet" crossorigin href="/delve/assets/index-C3QvJ3hk.css">
+  </head>
+  <body>
+    <main id="app">
+      <section class="game-shell" aria-label="Dwarven Descent game prototype">
+        <div class="topbar">
+          <div>
+            <h1>Dwarven Descent</h1>
+            <p>WASD or gamepad left stick/d-pad move, attack, or climb 1-high blocks. Shift or button 0 modifies movement to mine. Space or button 1 waits. The emergency grapple catches overhead stone within 5 tiles.</p>
+          </div>
+          <div id="stats" class="stats"></div>
+        </div>
+        <canvas id="game" width="960" height="640"></canvas>
+        <div class="footer">
+          <div id="legend" class="legend"></div>
+          <div id="log" class="log"></div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

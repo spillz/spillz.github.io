@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Dwarven Descent icon</title>
+  <rect width="512" height="512" rx="96" fill="#101114"/>
+  <path d="M96 360h320v64H96z" fill="#35302a"/>
+  <path d="M112 280h288v80H112z" fill="#6f6a5f"/>
+  <path d="M144 200h224v80H144z" fill="#8c5a32"/>
+  <path d="M184 128h144v72H184z" fill="#b9854d"/>
+  <path d="M224 80h64v320h-64z" fill="#e6dfcf"/>
+  <path d="M184 152h144v32H184z" fill="#f0d083"/>
+  <path d="M176 400h160v40H176z" fill="#4ed97a"/>
+  <path d="M104 120h72v40h-72zM336 120h72v40h-72z" fill="#35c3d6"/>
+</svg>
