@@ -15,8 +15,9 @@ input{width:100%}button{margin:6px 6px 0 0;padding:7px 10px;border-radius:7px;bo
 button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc;background:#16486a}#stats{white-space:pre-wrap;font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:#dbe5f5}
 .legend{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0 2px;font-size:11px;color:#c8d2e3}.legend span{display:flex;align-items:center;gap:4px}.sw{width:9px;height:9px;border-radius:50%;display:inline-block}
 #hint{position:fixed;right:12px;bottom:10px;color:#95a3b9;font-size:12px;text-shadow:0 1px 3px #000}
+#fpsHud{position:fixed;left:12px;bottom:10px;z-index:2;font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:#ffd84a;text-shadow:0 1px 3px #000;white-space:pre}
 </style>
-  <script type="module" crossorigin src="./assets/index-glZsGmC6.js"></script>
+  <script type="module" crossorigin src="./assets/index-Bx6yRr6u.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
@@ -44,6 +45,7 @@ button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc
 <button id="rebuild">Rebuild topology + map</button><button id="regen">Regenerate map</button><button id="fly" aria-pressed="false">Cockpit view (F)</button><button id="ship" aria-pressed="false">Ship mode (G)</button><button id="collisions" aria-pressed="true">Collisions on (C)</button><button id="nodes" aria-pressed="false">Show nodes (N)</button>
 <p id="stats"></p>
 </section>
+<div id="fpsHud">fps: --.-&#10;&gt;20ms: 0</div>
 <div id="hint">Click air &middot; Ctrl+click rock &middot; Shift+click crystal &middot; drag orbit &middot; wheel zoom &middot; N nodes &middot; C collisions &middot; F cockpit &middot; G chase &middot; left-click gun &middot; right-click bomb &middot; mouse steer/look &middot; WASD/Space/Shift thrust</div>
 </body>
 </html>
