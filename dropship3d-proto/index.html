@@ -9,19 +9,30 @@
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070a10}
 canvas{display:block;width:100%;height:100%}
 #ui{position:fixed;z-index:2;left:12px;top:12px;width:min(370px,calc(100vw - 24px));padding:12px;border:1px solid #3b465b;border-radius:10px;background:rgba(7,10,16,.9);backdrop-filter:blur(8px)}
-h1{font-size:16px;margin:0 0 7px}p{font-size:12px;line-height:1.35;color:#bdc7d8;margin:6px 0}
+h1{font-size:16px;margin:0 30px 7px 0}p{font-size:12px;line-height:1.35;color:#bdc7d8;margin:6px 0}
 .row{display:grid;grid-template-columns:145px 1fr 52px;gap:8px;align-items:center;margin:7px 0;font-size:12px}
 input{width:100%}button{margin:6px 6px 0 0;padding:7px 10px;border-radius:7px;border:1px solid #53627d;background:#172139;color:#fff;cursor:pointer}
 button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc;background:#16486a}#stats{white-space:pre-wrap;font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:#dbe5f5}
+#panelClose,#panelOpen{display:grid;place-items:center;width:30px;height:30px;margin:0;padding:0}
+#panelClose{position:absolute;right:8px;top:8px}
+#panelOpen{position:fixed;z-index:2;left:12px;top:12px;background:rgba(7,10,16,.9);backdrop-filter:blur(8px)}
+#panelOpen[hidden]{display:none}
 .legend{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0 2px;font-size:11px;color:#c8d2e3}.legend span{display:flex;align-items:center;gap:4px}.sw{width:9px;height:9px;border-radius:50%;display:inline-block}
 #hint{position:fixed;right:12px;bottom:10px;color:#95a3b9;font-size:12px;text-shadow:0 1px 3px #000}
 #fpsHud{position:fixed;right:12px;bottom:32px;z-index:2;font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:#ffd84a;text-align:right;text-shadow:0 1px 3px #000;white-space:pre}
+#reticle{position:fixed;left:50%;top:50%;z-index:1;width:34px;height:34px;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
+#reticle::before,#reticle::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(170,235,255,.88)}
+#reticle::before{width:2px;height:34px;clip-path:polygon(0 0,100% 0,100% 11px,0 11px,0 23px,100% 23px,100% 100%,0 100%)}
+#reticle::after{width:34px;height:2px;clip-path:polygon(0 0,11px 0,11px 100%,23px 100%,23px 0,100% 0,100% 100%,0 100%)}
+#reticle i{position:absolute;left:50%;top:50%;width:12px;height:12px;border:1px solid rgba(170,235,255,.72);border-radius:50%;transform:translate(-50%,-50%)}
+#reticle[hidden]{display:none}
 </style>
-  <script type="module" crossorigin src="./assets/index-BoRaz-NC.js"></script>
+  <script type="module" crossorigin src="./assets/index-D5i4Vtgo.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
 <section id="ui">
+<button id="panelClose" type="button" aria-label="Hide controls">&times;</button>
 <h1>Layered tetrahedral planet</h1>
 <p>Each radius is a spherical layer with node count proportional to surface area. Adjacent layers are connected by tetrahedra with a 1:3 or 3:1 point split.</p>
 <div class="row"><label>Shell count</label><input id="shells" type="range" min="2" max="30" value="20"><output id="shellsOut">20</output></div>
@@ -45,6 +56,8 @@ button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc
 <button id="rebuild">Rebuild topology + map</button><button id="regen">Regenerate map</button><button id="fly" aria-pressed="false">Cockpit view (F)</button><button id="ship" aria-pressed="false">Ship mode (G)</button><button id="collisions" aria-pressed="true">Collisions on (C)</button><button id="nodes" aria-pressed="false">Show nodes (N)</button>
 <p id="stats"></p>
 </section>
+<button id="panelOpen" type="button" hidden aria-label="Show controls">&#9776;</button>
+<div id="reticle" hidden aria-hidden="true"><i></i></div>
 <div id="fpsHud">fps: --.-&#10;&gt;20ms: 0</div>
 <div id="hint">Click air &middot; Ctrl+click rock &middot; Shift+click ore &middot; Ctrl+Shift+click crystal &middot; drag orbit &middot; wheel/D-pad zoom &middot; F/B0 cockpit &middot; G/B1 chase &middot; B2 panel &middot; left-click/RT gun &middot; right-click/LT bomb &middot; mouse/right stick look &middot; WASD/left stick thrust &middot; Space/RB up &middot; Shift/LB down</div>
 </body>
