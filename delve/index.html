@@ -15,8 +15,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
     <title>Dwarven Descent Prototype</title>
-    <script type="module" crossorigin src="/delve/assets/index-DfQfoQVT.js"></script>
-    <link rel="stylesheet" crossorigin href="/delve/assets/index-Bx16NQtq.css">
+    <script type="module" crossorigin src="/delve/assets/index-VmFfOle9.js"></script>
+    <link rel="stylesheet" crossorigin href="/delve/assets/index-BA78J6Ci.css">
   </head>
   <body>
     <main id="app">
@@ -40,6 +40,34 @@
           <h1 id="game-over-title"></h1>
           <p>Press Esc or Start button to restart.</p>
         </div>
+        <aside id="lab" class="lab" aria-label="Scenario lab">
+          <div class="lab-row">
+            <select id="lab-scenario" aria-label="Scenario"></select>
+            <button type="button" data-lab-action="restart">Restart</button>
+            <button type="button" data-lab-action="normal">Normal</button>
+          </div>
+          <div id="lab-palette" class="lab-palette" aria-label="Paint tools"></div>
+          <fieldset class="lab-rules">
+            <legend id="lab-rules-title">Rules</legend>
+            <label><input type="checkbox" data-rule="solid" /> Solid</label>
+            <label><input type="checkbox" data-rule="actorFloor" /> Floor</label>
+            <label><input type="checkbox" data-rule="rigid" /> Rigid</label>
+            <label><input type="checkbox" data-rule="support" /> Support</label>
+            <label><input type="checkbox" data-rule="buriable" /> Buriable</label>
+            <label><input type="checkbox" data-rule="mineable" /> Mineable</label>
+            <label><input type="checkbox" data-rule="granular" /> Granular</label>
+            <label><input type="checkbox" data-rule="swimmable" /> Swim</label>
+            <label><input type="checkbox" data-rule="deadly" /> Deadly</label>
+            <label><input type="checkbox" data-rule="burns" /> Burns</label>
+          </fieldset>
+          <div class="lab-row">
+            <button type="button" data-lab-action="export">Export</button>
+            <button type="button" data-lab-action="apply">Apply Text</button>
+            <button type="button" data-lab-action="copy">Copy</button>
+          </div>
+          <textarea id="lab-map" class="lab-map" spellcheck="false" aria-label="Scenario text"></textarea>
+          <pre id="lab-hint" class="lab-hint"></pre>
+        </aside>
       </section>
     </main>
   </body>
