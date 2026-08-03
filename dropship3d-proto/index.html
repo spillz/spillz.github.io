@@ -23,11 +23,13 @@ button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc
 .legend{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0 2px;font-size:11px;color:#c8d2e3}.legend span{display:flex;align-items:center;gap:4px}.sw{width:9px;height:9px;border-radius:50%;display:inline-block}
 #hint{position:fixed;right:12px;bottom:10px;color:#95a3b9;font-size:12px;text-shadow:0 1px 3px #000}
 #fpsHud{position:fixed;right:12px;bottom:32px;z-index:2;font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:#ffd84a;text-align:right;text-shadow:0 1px 3px #000;white-space:pre}
-#combatHud{position:fixed;z-index:2;left:50%;top:12px;transform:translateX(-50%);width:min(260px,calc(100vw - 140px));height:12px;border:1px solid rgba(255,255,255,.52);background:rgba(7,10,16,.62)}
+#combatHud{position:fixed;z-index:2;left:50%;top:12px;transform:translateX(-50%);display:grid;grid-template-columns:48px minmax(110px,260px) 48px;gap:10px;align-items:center;width:min(390px,calc(100vw - 24px))}
+.hudCount{font:700 13px ui-monospace,SFMono-Regular,Consolas,monospace;text-shadow:0 1px 3px #000;white-space:nowrap}
+#minerCount{justify-self:end;color:#ffd84a}#enemyCount{justify-self:start;color:#ff3b30}
+#healthBar{height:12px;border:1px solid rgba(255,255,255,.52);background:rgba(7,10,16,.62)}
 #healthFill{display:block;height:100%;width:100%;background:#47ff7a;transform-origin:left center}
-.hudTarget{position:fixed;z-index:2;left:0;top:0;width:18px;height:18px;transform:translate(-50%,-50%) rotate(var(--angle,0rad)) scale(var(--scale,1));pointer-events:none;filter:drop-shadow(0 1px 3px #000)}
-.hudTarget::before{content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:16px solid var(--color)}
-.hudTarget::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border:2px solid var(--color);border-radius:50%;transform:translate(-50%,-50%)}
+.hudTarget{position:fixed;z-index:2;left:0;top:0;width:18px;height:18px;transform:translate(-50%,-50%) scale(var(--scale,1));pointer-events:none;filter:drop-shadow(0 1px 3px #000)}
+.hudTarget::before{content:"";position:absolute;inset:2px;border:2px solid var(--color);transform:rotate(45deg)}
 .hudTarget[hidden]{display:none}
 #minerHud{--color:#ffd84a}#enemyHud{--color:#ff3b30}
 #reticle{position:fixed;left:50%;top:50%;z-index:1;width:34px;height:34px;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
@@ -37,7 +39,7 @@ button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc
 #reticle i{position:absolute;left:50%;top:50%;width:12px;height:12px;border:1px solid rgba(170,235,255,.72);border-radius:50%;transform:translate(-50%,-50%)}
 #reticle[hidden]{display:none}
 </style>
-  <script type="module" crossorigin src="/dropship3d-proto/assets/index-DdCug-G6.js"></script>
+  <script type="module" crossorigin src="/dropship3d-proto/assets/index-BwShxjfk.js"></script>
 </head>
 <body>
 <canvas id="gl"></canvas>
@@ -67,7 +69,7 @@ button:hover{background:#22304e}button[aria-pressed="true"]{border-color:#7dd3fc
 <p id="stats"></p>
 </section>
 <button id="panelOpen" type="button" hidden aria-label="Show controls">&#9776;</button>
-<div id="combatHud" aria-label="Ship health"><span id="healthFill"></span></div>
+<div id="combatHud"><span id="minerCount" class="hudCount">0/0</span><div id="healthBar" aria-label="Ship health"><span id="healthFill"></span></div><span id="enemyCount" class="hudCount">0/0</span></div>
 <div id="minerHud" class="hudTarget" hidden aria-label="Closest miner"></div>
 <div id="enemyHud" class="hudTarget" hidden aria-label="Closest enemy"></div>
 <div id="reticle" hidden aria-hidden="true"><i></i></div>
