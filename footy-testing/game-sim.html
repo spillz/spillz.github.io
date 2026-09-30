@@ -260,6 +260,195 @@
       line-height: 1.45;
     }
 
+    .visualizer-panel {
+      display: grid;
+      gap: 16px;
+    }
+
+    .visualizer-heading,
+    .sim-toolbar,
+    .sim-timeline-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .visualizer-heading h2,
+    .visualizer-heading p {
+      margin: 0;
+    }
+
+    .visualizer-heading p {
+      color: var(--muted);
+      max-width: 760px;
+    }
+
+    .sim-toolbar {
+      justify-content: flex-start;
+    }
+
+    .sim-toolbar label {
+      display: flex;
+      align-items: center;
+      grid-template-columns: none;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .sim-toolbar select {
+      width: auto;
+      min-width: 90px;
+      padding: 9px 10px;
+    }
+
+    .sim-clipboard-layout {
+      display: grid;
+      grid-template-columns: minmax(480px, 1.45fr) minmax(330px, 0.75fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .sim-board-column,
+    .sim-inspector-column {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    #simClipboard {
+      display: block;
+      width: 100%;
+      max-height: 760px;
+      aspect-ratio: 760 / 820;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      background: #11191b;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #simClipboard:active {
+      cursor: grabbing;
+    }
+
+    .sim-timeline {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(11, 18, 21, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+    }
+
+    #simTimeline {
+      padding: 0;
+    }
+
+    .sim-match-readout {
+      display: grid;
+      gap: 2px;
+    }
+
+    #simMatchLabel {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    #simStateLabel,
+    #simFrameLabel {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .sim-inspector-box {
+      min-height: 180px;
+      max-height: 350px;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      background: rgba(8, 13, 15, 0.82);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .sim-inspector-column h3 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .sim-tree-group,
+    .sim-property-children {
+      display: grid;
+      gap: 4px;
+      padding: 5px 0 5px 12px;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sim-tree-object,
+    .sim-reference-link {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 7px;
+      text-align: left;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .sim-tree-object.selected {
+      background: rgba(183, 211, 107, 0.18);
+      border-color: var(--accent);
+    }
+
+    .sim-inspector-title {
+      margin-bottom: 8px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .sim-property-row {
+      display: grid;
+      grid-template-columns: minmax(95px, 0.7fr) minmax(100px, 1fr);
+      align-items: center;
+      gap: 8px;
+      min-height: 31px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    }
+
+    .sim-property-key {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .sim-property-input {
+      padding: 5px 7px;
+      min-width: 0;
+      border-radius: 7px;
+      font: inherit;
+    }
+
+    .sim-property-input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+    }
+
+    .sim-property-value {
+      color: #d2d9d1;
+      overflow-wrap: anywhere;
+    }
+
+    .sim-property-branch > summary,
+    .sim-inspector-box > details > summary {
+      padding: 6px 0;
+      cursor: pointer;
+      color: #dce6d9;
+    }
+
     @media (max-width: 940px) {
       body {
         padding: 16px;
@@ -271,11 +460,15 @@
       .control-row {
         grid-template-columns: 1fr;
       }
+
+      .sim-clipboard-layout {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
-  <script type="module" crossorigin src="/footy-testing/assets/gameSim-CY3resbe.js"></script>
+  <script type="module" crossorigin src="/footy-testing/assets/gameSim-Dq5_Ho6V.js"></script>
   <link rel="modulepreload" crossorigin href="/footy-testing/assets/gameplay-settings-CB9cU6nR.js">
-  <link rel="modulepreload" crossorigin href="/footy-testing/assets/career-BlAFuvyL.js">
+  <link rel="modulepreload" crossorigin href="/footy-testing/assets/game-sim-CpfrWk5E.js">
 <link rel="manifest" href="/footy-testing/manifest.json"></head>
 <body>
   <main>
@@ -454,6 +647,56 @@
           </div>
         </div>
       </section>
+    </section>
+
+    <section class="panel visualizer-panel">
+      <div class="visualizer-heading">
+        <div>
+          <div class="eyebrow">Editable Frame History</div>
+          <h2>Clipboard Visualizer</h2>
+        </div>
+        <p>Every simulation step is stored. Scrub to any frame, drag a player or the ball, or edit a property; the later timeline is then discarded and replaced as play continues.</p>
+      </div>
+      <div class="sim-toolbar">
+        <button id="simStart" class="primary">Start / Replace Simulation</button>
+        <button id="simPlay" class="secondary" disabled>Play</button>
+        <button id="simStep" class="secondary" disabled>Step</button>
+        <label>
+          Playback
+          <select id="simPlaybackRate">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+            <option value="10">10×</option>
+            <option value="25">25×</option>
+            <option value="100">100×</option>
+          </select>
+        </label>
+      </div>
+      <div class="sim-clipboard-layout">
+        <div class="sim-board-column">
+          <canvas id="simClipboard" width="760" height="820"></canvas>
+          <div class="sim-timeline">
+            <div class="sim-timeline-header">
+              <div class="sim-match-readout">
+                <span id="simMatchLabel">Start a simulation to create frame history.</span>
+                <span id="simStateLabel"></span>
+              </div>
+              <span id="simFrameLabel">No timeline</span>
+            </div>
+            <input id="simTimeline" type="range" min="0" max="0" value="0" step="1" disabled>
+          </div>
+        </div>
+        <aside class="sim-inspector-column">
+          <h3>Objects</h3>
+          <div id="simObjectTree" class="sim-inspector-box">Start a simulation to inspect objects.</div>
+          <h3>Inspector / Editor</h3>
+          <div id="simPropertyTree" class="sim-inspector-box">Select the ball or a player.</div>
+        </aside>
+      </div>
+      <div id="simVisualizerStatus" class="status">Uses the matchup, roster, quarter length, timestep, and base seed selected above.</div>
     </section>
   </main>
 </body>
